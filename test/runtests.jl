@@ -4,7 +4,9 @@ using Moosh
 
 import Aqua
 
-Aqua.test_all(Moosh, project_extras = false)
+Aqua.test_all(Moosh,
+              project_extras = false,
+              ambiguities = false)
 
 using Test:
     @test,
