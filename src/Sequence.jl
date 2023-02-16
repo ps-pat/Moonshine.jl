@@ -106,7 +106,7 @@ blocklength(n, blocksize, idx) =
     offsetidx(n, blocksize, 1) : zero(Int))
 
 
-## "Sequence" version of `nmarkers`, `blocksize`, `idx` functions.
+## "Sequence" versions
 for fun ∈ [:offsetidx,
            :blockidx,
            :posinblock,
