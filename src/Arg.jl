@@ -57,17 +57,34 @@ struct ArgCore{T}
     latitudes::Vector{Float64}
     sequences::Vector{Sequence{T}}
     nleaves::Int
-end
-
-function ArgCore(leaves::AbstractArray{Sequence{T}}) where T
-    n = length(leaves)
-    latitudes = sizehint!(zeros(Float64, n - 1), 10n)
-    sequences = sizehint!(leaves, 10n)
-
-    ArgCore{T}(SimpleDiGraph(n), latitudes, sequences, n)
+    positions::Vector{Float64}
 end
 
 ## TODO: Check performance impact of sizehint!.
+function ArgCore(leaves::AbstractArray{Sequence{T}},
+                 positions = []) where T
+    n = length(leaves)
+    latitudes = sizehint!(Float64[], 10n)
+    sequences = sizehint!(leaves, 10n)
+
+    nmarkers = (length ∘ first)(leaves)
+    if length(positions) != nmarkers || !issorted(positions)
+        @info((isempty(positions) ? "A" : "Invalid positions: a") *
+            "ssuming equally spaced markers")
+        positions = (collect ∘ range)(0, 1, length = nmarkers)
+    end
+    if minimum(positions) < 0
+        @info("First position is < 0: shifting positions right")
+        positions .-= minimum(positions)
+    end
+    if maximum(positions) > 1
+        @info("Last position is > 0: scaling positions")
+        positions ./= maximum(positions)
+    end
+
+    ArgCore{T}(SimpleDiGraph(n), latitudes, sequences, n, positions)
+end
+
 function ArgCore{T}(rng::AbstractRNG,
                     nmin::Integer, minlength::Integer,
                     nmax::Integer = 0, maxlength::Integer = 0) where T
@@ -96,8 +113,8 @@ mutable struct Arg{T} <: AbstractSimpleGraph{VertexType}
     logprob::BigFloat
 end
 
-Arg(seqs::AbstractArray{Sequence{T}}) where T =
-    Arg(ArgCore{T}(SimpleDiGraph(length(seqs)), Float64[], seqs), 0, zero(BigFloat))
+Arg(leaves::AbstractArray{Sequence{T}}, positions = []) where T =
+    Arg(ArgCore{T}(leaves, positions), 0, zero(BigFloat))
 
 function Arg{T}(rng::AbstractRNG,
                 nmin::Integer, minlength::Integer,
@@ -159,11 +176,14 @@ isleaf(arg, v) = v ∈ leaves(arg)
 
 nmarkers(arg) = (length ∘ first)(arg.core.sequences)
 sequences(arg) = arg.core.sequences
+latitudes(arg) = arg.core.latitudes
 latitude(arg, v) =
-    isleaf(v) ? zero(Float64) : arg.core.latitudes[v - nleaves(arg)]
+    isleaf(arg, v) ? zero(Float64) : arg.core.latitudes[v - nleaves(arg)]
 
-mrca(arg) = argmax(arg.core.latitudes)
-tmrca(arg) = maximum(arg.core.latitudes)
+mrca(arg) = isempty(arg.core.latitudes) ?
+    zero(Int) : argmax(arg.core.latitudes)
+tmrca(arg) = isempty(arg.core.latitudes) ?
+    zero(Float64) : maximum(arg.core.latitudes)
 
 children(arg, v) = outneighbors(arg, v)
 parents(arg, v) = inneighbors(arg, v)
@@ -261,9 +281,10 @@ function coalesce!(rng, arg, vertices, nlive)
           sequences(arg)[first(_children)] &
               sequences(arg)[last(_children)])
 
+    push!(latitudes(arg), latitude(arg, parent - 1) + Δ)
 
     @info("$(first(_children)) and $(last(_children)) \
-           coalesced into $parent")
+           coalesced into $parent at $(latitude(arg, parent))")
 end
 
 """
