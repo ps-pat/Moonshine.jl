@@ -94,6 +94,9 @@ for (fun, op) ∈ Dict(:blockidx => :÷, :posinblock => :%)
     end
 end
 
+actualpos(n, blocksize, block, pos) =
+    (block - 1) * blocksize + pos - offsetidx(n, blocksize, 1)
+
 """
     blocklength(seq, idx)
     blocklength(n, blocksize, idx)
@@ -104,7 +107,6 @@ index of the marker of interest, not of the block itself.
 blocklength(n, blocksize, idx) =
     blocksize - (blockidx(n, blocksize, idx) <= 1 ?
     offsetidx(n, blocksize, 1) : zero(Int))
-
 
 ## "Sequence" versions
 for fun ∈ [:offsetidx,

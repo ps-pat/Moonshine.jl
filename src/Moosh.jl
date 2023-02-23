@@ -1,5 +1,7 @@
 module Moosh
 
+using Base: Fix1
+
 include("Sequence.jl")
 
 export Sequence
@@ -18,9 +20,13 @@ export
     sequences,
     latitude,
     mrca,
-    tmrca
+    tmrca,
+    children,
+    parents
 
-export buildtree!
+export
+    buildtree!,
+    first_inconsistent_position
 
 export argplot
 

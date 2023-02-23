@@ -2,7 +2,8 @@ using Graphs:
     SimpleDiGraph,
     SimpleEdge,
     AbstractSimpleGraph,
-    degree
+    degree,
+    src, dst
 
 import Graphs:
     edges,
@@ -21,7 +22,8 @@ import Graphs:
 
 import Base:
     eltype,
-    show
+    show,
+    union, intersect
 
 using Random:
     AbstractRNG,
@@ -45,8 +47,12 @@ using Distributions:
     logccdf,
     logpdf
 
+using IntervalSets
+
 const VertexType = Int
 const EdgeType = SimpleEdge{VertexType}
+const Ω = Interval{:closed, :open, Float64}
+const ∞ = Inf
 
 ######################
 # ArgCore definition #
@@ -58,6 +64,8 @@ struct ArgCore{T}
     sequences::Vector{Sequence{T}}
     nleaves::Int
     positions::Vector{Float64}
+    ancestral_interval::Dict{EdgeType,
+                             Set{Interval{:closed, :open, Float64}}}
 end
 
 ## TODO: Check performance impact of sizehint!.
@@ -82,7 +90,7 @@ function ArgCore(leaves::AbstractArray{Sequence{T}},
         positions ./= maximum(positions)
     end
 
-    ArgCore{T}(SimpleDiGraph(n), latitudes, sequences, n, positions)
+    ArgCore{T}(SimpleDiGraph(n), latitudes, sequences, n, positions, Dict())
 end
 
 function ArgCore{T}(rng::AbstractRNG,
@@ -98,6 +106,19 @@ function ArgCore{T}(nmin::Integer, minlength::Integer,
                     nmax::Integer = 0, maxlength::Integer = 0) where T
     ArgCore{T}(GLOBAL_RNG, nmin, minlength, nmax, maxlength)
 end
+
+function union(x::T, xs::Set{T}) where T
+    Set([x]) ∪ xs
+end
+
+intersect(x::T, xs::Set{T}) where T =
+    (Set ∘ broadcast)(Fix1(intersect, x), xs)
+
+for fun ∈ [:union, :intersect]
+    @eval $fun(xs::Set{T}, x::T) where T = $fun(x, xs)
+end
+
+## TODO: simplify sets of intervals?
 
 #############################
 # End of ArgCore definition #
@@ -175,18 +196,73 @@ leaves(arg) = Base.OneTo(arg.core.nleaves)
 isleaf(arg, v) = v ∈ leaves(arg)
 
 nmarkers(arg) = (length ∘ first)(arg.core.sequences)
+
 sequences(arg) = arg.core.sequences
+sequences(arg, v) = sequences(arg)[v]
+
 latitudes(arg) = arg.core.latitudes
 latitude(arg, v) =
     isleaf(arg, v) ? zero(Float64) : arg.core.latitudes[v - nleaves(arg)]
 
 mrca(arg) = isempty(arg.core.latitudes) ?
-    zero(Int) : argmax(arg.core.latitudes)
+    zero(Int) : argmax(arg.core.latitudes) + nleaves(arg)
 tmrca(arg) = isempty(arg.core.latitudes) ?
     zero(Float64) : maximum(arg.core.latitudes)
 
+"""
+    children(arg, v, int = 0 .. ∞)
+    parent(arg, v, int = 0 .. ∞)
+
+Return the children/parents of a vertex. Optionally, only return those bearing
+ancestral material for a given interval.
+"""
+function children end,
+function parent end
+
 children(arg, v) = outneighbors(arg, v)
+
 parents(arg, v) = inneighbors(arg, v)
+
+for fun ∈ [:children, :parents]
+    @eval function $fun(arg, v, int)
+        filter($fun(arg, v)) do x
+            ancestral_intervals(arg, x) ∩ int |> !isempty
+        end
+    end
+end
+
+"""
+    idxtopos(arg, idx)
+
+Return the position of the marker given its index.
+"""
+idxtopos(arg, idx) = arg.core.positions[idx]
+
+"""
+    postoidx(arg, pos)
+
+Return the largest marker's index that is at a position lesser than the one
+given.
+"""
+function postoidx(arg, pos)
+    @inbounds for (k, p) ∈ enumerate(arg.core.positions)
+        p > pos && return k - 1
+    end
+
+    nmarkers(arg)
+end
+
+ancestral_intervals(arg, e::EdgeType) = arg.core.ancestral_interval[e]
+ancestral_intervals(arg, σ, δ) = ancestral_intervals(arg, EdgeType(σ, δ))
+
+function ancestral_intervals(arg, v::VertexType)
+    isleaf(arg, v) && return IntervalSet(Ω(0, ∞))
+    reduce(outneighbors(arg, v)) do x, y
+        ancestral_intervals(arg, v, x) ∪ ancestral_intervals(arg, v, y)
+    end
+end
+
+@generated blocksize(arg::Arg{T}) where T = blocksize(Sequence{T})
 
 #########################
 # End of Arg definition #
@@ -272,7 +348,10 @@ function coalesce!(rng, arg, vertices, nlive)
     _children = Vector{eltype(arg)}(undef, 2)
     for child ∈ 1:2
         _children[child] = pop!(vertices)
-        add_edge!(arg, parent, _children[child])
+        e = EdgeType(parent, _children[child])
+        add_edge!(arg, e)
+
+        arg.core.ancestral_interval[e] = Set([Ω(0, ∞)])
     end
 
     push!(vertices, parent)
@@ -340,3 +419,95 @@ buildtree!(arg::Arg, idx = 1) = buildtree!(GLOBAL_RNG, arg, idx)
 ###########################
 # End of ARG construction #
 ###########################
+
+#######
+# MMN #
+#######
+
+"""
+    mmn_blocks_idx(arg, e, int = Ω(0, ∞))
+
+Compute the indices of blocks to be used in a pass of the mmn algorithm.
+"""
+function mmn_blocks_idx end
+
+function mmn_blocks_idx(arg::Arg{T}, e::EdgeType, int = Ω(0, ∞)) where T
+    target_intervals = ancestral_intervals(arg, e) ∩ int
+
+    n = nmarkers(arg)
+    bs = blocksize(arg)
+
+    (sort ∘ mapreduce)(union, target_intervals, init = Int[]) do i
+        _endpoints = endpoints(i)
+
+        postoidx_arg = Fix1(postoidx, arg)
+        lbound = (postoidx_arg ∘ first)(_endpoints)
+        rbound = (postoidx_arg ∘ prevfloat ∘ last)(_endpoints)
+
+        blockidx(n, bs, lbound), blockidx(n, bs, rbound)
+    end
+end
+
+mmn_blocks_idx(arg, σ::VertexType, δ::VertexType, int = Ω(0, ∞)) =
+    mmn_blocks_idx(arg, EdgeType(σ, δ), int)
+
+function first_inconsistent_position(arg, int::Ω)
+    n = nmarkers(arg)
+    _mrca = mrca(arg)
+    (iszero(_mrca) || iszero(n)) && return ∞, EdgeType[]
+
+    ## Vertices to xor are stored in acc.
+    acc = zeros(VertexType, nv(arg))
+    acc_ptr = firstindex(acc)
+    acc[acc_ptr] = _mrca
+    acc_ptr += 1
+
+    ## Contains mutation edges.
+    mutation_edges = Dict{Int, Vector{EdgeType}}()
+
+    bs = blocksize(arg)
+    for k ∈ eachindex(acc)
+        vertex = acc[k]
+        iszero(vertex) && break
+
+        for e ∈ map(Fix1(EdgeType, vertex), children(arg, vertex))
+            blocks_idx = mmn_blocks_idx(arg, e, int)
+
+            ## Non ancestral edge.
+            isempty(blocks_idx) && continue
+
+            ## Add child to acc.
+            c = dst(e)
+            if !isleaf(arg, c)
+                (acc[acc_ptr] = dst(e))
+                acc_ptr += 1
+            end
+
+            xored_sequences =
+                sequences(arg, src(e)).data[blocks_idx] .⊻
+                sequences(arg, dst(e)).data[blocks_idx]
+            for (block_idx, block) ∈ zip(blocks_idx, xored_sequences)
+                first_set_bit = leading_zeros(block) + 1
+                if first_set_bit <= bs
+                    idx = actualpos(n, bs, block_idx, first_set_bit)
+                    haskey(mutation_edges, idx) || (mutation_edges[idx] = [])
+                    push!(mutation_edges[idx], e)
+                    break
+                end
+            end
+        end
+    end
+
+    inconsistent_idx =
+        minimum(p -> (length ∘ last)(p) > 1 ? first(p) : typemax(Int),
+                mutation_edges)
+
+    idxtopos(arg, inconsistent_idx), mutation_edges[inconsistent_idx]
+end
+
+first_inconsistent_position(arg, lbound::Real, ubound::Real = ∞) =
+    first_inconsistent_position(arg, Ω(lbound, ubound))
+
+##############
+# End of MMN #
+##############
