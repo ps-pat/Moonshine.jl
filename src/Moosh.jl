@@ -12,22 +12,6 @@ include("Arg.jl")
 
 export Arg
 
-export
-    nleaves,
-    leaves,
-    isleaf,
-    nmarkers,
-    sequences,
-    latitude,
-    mrca,
-    tmrca,
-    children,
-    parents
-
-export
-    buildtree!,
-    first_inconsistent_position
-
-export argplot
+include("ArgDensity.jl")
 
 end # module Moosh

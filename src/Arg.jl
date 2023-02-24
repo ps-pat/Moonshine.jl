@@ -63,14 +63,23 @@ struct ArgCore{T}
     latitudes::Vector{Float64}
     sequences::Vector{Sequence{T}}
     nleaves::Int
-    positions::Vector{Float64}
     ancestral_interval::Dict{EdgeType,
                              Set{Interval{:closed, :open, Float64}}}
+
+    positions::Vector{Float64}
+    seq_length::Float64
+    eff_popsize::Float64
+    μ_loc::Float64
+    ρ_loc::Float64
 end
 
 ## TODO: Check performance impact of sizehint!.
-function ArgCore(leaves::AbstractArray{Sequence{T}},
-                 positions = []) where T
+function ArgCore(leaves::AbstractArray{Sequence{T}};
+                 positions = [],
+                 seq_length = 1.0,
+                 effective_popsize = 1.0,
+                 μ_loc = 0.0,
+                 ρ_loc = 0.0) where T
     n = length(leaves)
     latitudes = sizehint!(Float64[], 10n)
     sequences = sizehint!(leaves, 10n)
@@ -90,21 +99,24 @@ function ArgCore(leaves::AbstractArray{Sequence{T}},
         positions ./= maximum(positions)
     end
 
-    ArgCore{T}(SimpleDiGraph(n), latitudes, sequences, n, positions, Dict())
+    ArgCore{T}(SimpleDiGraph(n), latitudes, sequences, n, Dict(),
+               positions, seq_length, effective_popsize, μ_loc, ρ_loc)
 end
 
 function ArgCore{T}(rng::AbstractRNG,
                     nmin::Integer, minlength::Integer,
-                    nmax::Integer = 0, maxlength::Integer = 0) where T
+                    nmax::Integer = 0, maxlength::Integer = 0;
+                    genpars...) where T
     n = iszero(nmax) ? nmin : rand(rng, nmin:nmax)
     nmarkers = iszero(maxlength) ? minlength : rand(rng, minlength:maxlength)
 
-    ArgCore([Sequence{T}(rng, nmarkers) for _ ∈ 1:n])
+    ArgCore([Sequence{T}(rng, nmarkers) for _ ∈ 1:n]; genpars...)
 end
 
 function ArgCore{T}(nmin::Integer, minlength::Integer,
-                    nmax::Integer = 0, maxlength::Integer = 0) where T
-    ArgCore{T}(GLOBAL_RNG, nmin, minlength, nmax, maxlength)
+                    nmax::Integer = 0, maxlength::Integer = 0;
+                    genpars...) where T
+    ArgCore{T}(GLOBAL_RNG, nmin, minlength, nmax, maxlength; genpars...)
 end
 
 function union(x::T, xs::Set{T}) where T
@@ -134,28 +146,33 @@ mutable struct Arg{T} <: AbstractSimpleGraph{VertexType}
     logprob::BigFloat
 end
 
-Arg(leaves::AbstractArray{Sequence{T}}, positions = []) where T =
-    Arg(ArgCore{T}(leaves, positions), 0, zero(BigFloat))
+Arg(leaves::AbstractArray{Sequence{T}}, genpars...) where T =
+    Arg(ArgCore{T}(leaves; genpars...), 0, zero(BigFloat))
 
 function Arg{T}(rng::AbstractRNG,
                 nmin::Integer, minlength::Integer,
-                nmax::Integer = 0, maxlength::Integer = 0) where T
-    Arg(ArgCore{T}(rng, nmin, minlength, nmax, maxlength), 0, zero(BigFloat))
+                nmax::Integer = 0, maxlength::Integer = 0;
+                genpars...) where T
+    Arg(ArgCore{T}(rng, nmin, minlength, nmax, maxlength; genpars...),
+        0, zero(BigFloat))
 end
 function Arg(rng::AbstractRNG,
              nmin::Integer, minlength::Integer,
-             nmax::Integer = 0, maxlength::Integer = 0)
-    Arg{UInt}(rng, nmin, minlength, nmax, maxlength)
+             nmax::Integer = 0, maxlength::Integer = 0;
+             genpars...)
+    Arg{UInt}(rng, nmin, minlength, nmax, maxlength; genpars...)
 end
 
 function Arg{T}(nmin::Integer, minlength::Integer,
-                nmax::Integer = 0, maxlength::Integer = 0) where T
-    Arg{T}(GLOBAL_RNG, nmin, minlength, nmax, maxlength)
+                nmax::Integer = 0, maxlength::Integer = 0;
+                genpars...) where T
+    Arg{T}(GLOBAL_RNG, nmin, minlength, nmax, maxlength; genpars...)
 end
 
 function Arg(nmin::Integer, minlength::Integer,
-             nmax::Integer = 0, maxlength::Integer = 0)
-    Arg{UInt}(nmin, minlength, nmax, maxlength)
+             nmax::Integer = 0, maxlength::Integer = 0;
+             genpars...)
+    Arg{UInt}(nmin, minlength, nmax, maxlength; genpars...)
 end
 
 ## AbstractGraph Interface.
@@ -191,19 +208,33 @@ let arg_edge = Expr(:(::), :e, EdgeType),
 end
 
 ## Simple methods.
-nleaves(arg) = arg.core.nleaves
+for field ∈ [:(:nleaves), :(:sequences), :(:latitudes),
+             :(:seq_length), :(:eff_popsize), :(:positions)]
+    fun_name = eval(field)
+    @eval begin
+        export $fun_name
+
+        function $fun_name(arg)
+            getfield(arg.core, $field)
+        end
+    end
+end
+
+nrecombinations(arg) = arg.nrecombinations
+
 leaves(arg) = Base.OneTo(arg.core.nleaves)
 isleaf(arg, v) = v ∈ leaves(arg)
 
 nmarkers(arg) = (length ∘ first)(arg.core.sequences)
 
-sequences(arg) = arg.core.sequences
-sequences(arg, v) = sequences(arg)[v]
+sequences(arg, v::VertexType) = sequences(arg)[v]
+sequences(arg, e::EdgeType) = [sequences(arg, src(e)), sequences(arg, dst(e))]
 
-latitudes(arg) = arg.core.latitudes
+export latitude
 latitude(arg, v) =
     isleaf(arg, v) ? zero(Float64) : arg.core.latitudes[v - nleaves(arg)]
 
+export mrca, tmrca
 mrca(arg) = isempty(arg.core.latitudes) ?
     zero(Int) : argmax(arg.core.latitudes) + nleaves(arg)
 tmrca(arg) = isempty(arg.core.latitudes) ?
@@ -211,13 +242,14 @@ tmrca(arg) = isempty(arg.core.latitudes) ?
 
 """
     children(arg, v, int = 0 .. ∞)
-    parent(arg, v, int = 0 .. ∞)
+    parents(arg, v, int = 0 .. ∞)
 
 Return the children/parents of a vertex. Optionally, only return those bearing
 ancestral material for a given interval.
 """
 function children end,
-function parent end
+function parents end
+export children, parents
 
 children(arg, v) = outneighbors(arg, v)
 
@@ -252,6 +284,16 @@ function postoidx(arg, pos)
     nmarkers(arg)
 end
 
+"""
+    ancestral_intervals(arg, e)
+    ancestral_intervals(arg, σ, δ)
+    ancestral_intervals(arg, v)
+
+Compute the interval for which an edge or a vertex is ancestral.
+"""
+function ancestral_intervals end
+export ancestral_intervals
+
 ancestral_intervals(arg, e::EdgeType) = arg.core.ancestral_interval[e]
 ancestral_intervals(arg, σ, δ) = ancestral_intervals(arg, EdgeType(σ, δ))
 
@@ -264,6 +306,38 @@ end
 
 @generated blocksize(arg::Arg{T}) where T = blocksize(Sequence{T})
 
+export nmutations
+nmutations(arg, e) = (count_ones ∘ xor)(sequences(arg, e)...)
+nmutations(arg) = mapreduce(Fix1(nmutations, arg), +, edges(arg))
+
+function branchlength_tree(arg)
+    lats = view(latitudes(arg), range(1, length = nleaves(arg) - 1))
+    sum(lats, init = last(lats))
+end
+
+export branchlength
+function branchlength(arg)
+    ν = nrecombinations(arg)
+    lats = view(latitudes(arg), range(nleaves(arg), length = 2ν))
+    rec_branchlength = mapreduce(vs -> last(vs) - first(vs), +,
+                                 Iterators.partition(lats, 2), init = 0.0)
+
+    branchlength_tree(arg) + rec_branchlength
+end
+
+for (fun, par) ∈ Dict(:mut_rate => :(:μ_loc), :rec_rate => :(:ρ_loc))
+    @eval begin
+        export $fun
+
+        function $fun(arg, scaled = true)
+            rate_loc = getfield(arg.core, $par)
+            mul = scaled ? 4eff_popsize(arg) : one(rate_loc)
+
+            mul * rate_loc
+        end
+    end
+end
+
 #########################
 # End of Arg definition #
 #########################
@@ -271,6 +345,9 @@ end
 ##############################
 # Plotting & pretty printing #
 ##############################
+
+function argplot end
+export argplot
 
 function argplot(arg, x;
                  arrow_show = true,
@@ -371,6 +448,9 @@ end
 
 Build a marginal tree consistent with a specific index.
 """
+function buildtree! end
+export buildtree!
+
 function buildtree!(rng::AbstractRNG, arg::Arg, idx = 1)
     nv(arg) > nleaves(arg) && @warn "ARG contains non-leaf vertices"
 
@@ -450,6 +530,9 @@ end
 
 mmn_blocks_idx(arg, σ::VertexType, δ::VertexType, int = Ω(0, ∞)) =
     mmn_blocks_idx(arg, EdgeType(σ, δ), int)
+
+function first_inconsistent_position end
+export first_inconsistent_position
 
 function first_inconsistent_position(arg, int::Ω)
     n = nmarkers(arg)

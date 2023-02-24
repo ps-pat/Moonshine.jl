@@ -1,7 +1,7 @@
 import Base:
     empty,
     similar,
-    ~, &, |, xor, >>>, <<,
+    ~, &, |, xor, >>>, <<, count_ones, count_zeros,
     ==,
     show,
     isempty,
@@ -194,6 +194,12 @@ function >>>(seq::Sequence{T}, shift) where T
 
     newseq
 end
+
+count_ones(seq::Sequence) = sum(count_ones, seq.data)
+count_zeros(seq::Sequence) = seq.n - count_ones(seq)
+
+## TODO: implement leading_* and trailing_*. This would simplify
+##       `first_inconsistent_position` and make everything more consistent.
 
 ==(seq1::Sequence, seq2::Sequence) =
     (seq1.n == seq2.n) && (seq1.data == seq2.data)
