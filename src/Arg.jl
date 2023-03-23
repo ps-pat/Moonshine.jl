@@ -132,10 +132,6 @@ end
 
 ## TODO: simplify sets of intervals?
 
-#############################
-# End of ArgCore definition #
-#############################
-
 ##################
 # Arg definition #
 ##################
@@ -345,10 +341,6 @@ for (fun, par) ∈ Dict(:mut_rate => :(:μ_loc), :rec_rate => :(:ρ_loc))
     end
 end
 
-#########################
-# End of Arg definition #
-#########################
-
 ##############################
 # Plotting & pretty printing #
 ##############################
@@ -407,10 +399,6 @@ function show(io::IO, arg::Arg)
     print(io, nmarkers(arg))
     print(io, " markers)")
 end
-
-#####################################
-# End of plotting & pretty printing #
-#####################################
 
 ####################
 # ARG construction #
@@ -503,10 +491,6 @@ function buildtree!(rng::AbstractRNG, arg::Arg, idx = 1)
 end
 buildtree!(arg::Arg, idx = 1) = buildtree!(GLOBAL_RNG, arg, idx)
 
-###########################
-# End of ARG construction #
-###########################
-
 #######
 # MMN #
 #######
@@ -597,7 +581,3 @@ end
 
 first_inconsistent_position(arg, lbound::Real, ubound::Real = ∞) =
     first_inconsistent_position(arg, Ω(lbound, ubound))
-
-##############
-# End of MMN #
-##############
