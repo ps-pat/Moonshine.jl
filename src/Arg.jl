@@ -145,6 +145,7 @@ mutable struct Arg{T} <: AbstractSimpleGraph{VertexType}
     nrecombinations::Int
     logprob::BigFloat
 end
+export Arg
 
 Arg(leaves::AbstractArray{Sequence{T}}, genpars...) where T =
     Arg(ArgCore{T}(leaves; genpars...), 0, zero(BigFloat))
@@ -223,7 +224,13 @@ end
 nrecombinations(arg) = arg.nrecombinations
 
 leaves(arg) = Base.OneTo(arg.core.nleaves)
-isleaf(arg, v) = v ∈ leaves(arg)
+isleaf(arg, v) = v <= nleaves(arg)
+
+function ivertices(arg)
+    n = nleaves(arg)
+    range(n + 1, length = n - 1)
+end
+nivertices(arg) = nleaves(arg) - 1
 
 nmarkers(arg) = (length ∘ first)(arg.core.sequences)
 

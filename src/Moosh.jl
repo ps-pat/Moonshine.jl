@@ -10,8 +10,6 @@ export fillseq
 
 include("Arg.jl")
 
-export Arg
-
 include("ArgDensity.jl")
 
 end # module Moosh
