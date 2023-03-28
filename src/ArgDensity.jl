@@ -85,12 +85,12 @@ Ancestral Recombination Graph.
 - `pars::Dict{Symbol, Any}`: Parameters.
 """
 struct FrechetCoalDensity{T} <: AbstractGraphDensity where T <: Real
-    leaves_phenotypes::Vector{T}
+    leaves_phenotypes::Vector{Union{Missing, T}}
 
     α::Function
     pars::Dict{Symbol, Any}
 
-    FrechetCoalDensity(leaves_phenotypes::Vector{T};
+    FrechetCoalDensity(leaves_phenotypes::Vector{Union{Missing, T}};
                        α = t -> 1 - exp(-t),
                        pars = Dict{Symbol, Any}()) where T =
                        new{T}(leaves_phenotypes, α, pars)
@@ -99,7 +99,8 @@ end
 q(ψ::Bool, x) = ψ + (ψ ? -1 : 1) * x
 
 """
-    joint_frechet(arg, parent, phenotypes, α, p; logscale = false)
+    joint_frechet(arg, parent, children, phenotypes, α, p; logscale = false)
+    joint_frechet(arg, parent, child, phenotypes, α, p; logscale = false)
     marginal_frechet(phenotype, p)
 
 Joint/marginal densities. The first one is the density of two
@@ -110,34 +111,62 @@ phenotype.
 `phenotypes` must be a `Vector{T}` of length 3 containing the phenotypes of the
 parent, left child and right child in that order.
 """
-function joint_frechet(arg, parent, children, phenotypes::AbstractVector{Bool},
-                       α, p;
-                       logscale = false)
+function dens_frechet end
+
+function dens_frechet(arg, parent, child::AbstractVector,
+                      phenotypes::AbstractVector{Bool},
+                      α, p;
+                      logscale = false)
     ϕp, Φc = first(phenotypes), last(phenotypes, 2)
     lat_parent = latitude(arg, parent)
 
-    Δs = map(c -> lat_parent - latitude(arg, c), children)
+    Δs = map(c -> lat_parent - latitude(arg, c), child)
 
     qϕ = Fix1(q, ϕp)
     probs = map(Δ -> qϕ(qϕ(p) * α(Δ)), Δs)
 
-    ret_log = sum(x -> log(1.0 - q(first(x), last(x))),
+    ret_log = sum(x -> (log ∘ q)(!first(x), last(x)),
                   zip(Φc, probs),
                   init = zero(Float64))
 
     logscale ? ret_log : exp(ret_log)
 end
 
-marginal_frechet(phenotype::Bool, p; logscale = false) =
-    phenotype ? p : 1.0 - p
+function dens_frechet(arg, parent, child, phenotypes::AbstractVector{Bool},
+                      α, p;
+                      logscale = false)
+    φp, φc = first(phenotypes), last(phenotypes)
+    Δt = latitude(arg, parent) - latitude(arg, child)
+
+    q_parent = Fix1(q, φp)
+    prob = q_parent(q_parent(p) * α(Δt))
+
+    ret_log = BigFloat((log ∘ q)(!φc, prob))
+
+    logscale ? ret_log : exp(ret_log)
+end
+
+function dens_frechet(phenotype::Bool, p; logscale = false)
+    ret_log = BigFloat(phenotype ? p : 1 - p)
+    logscale ? ret_log : exp(ret_log)
+end
+
+compute_integrand(arg, children, valuation, α, p) =
+    prod(children) do child
+        parent = (first ∘ parents)(arg, child)
+        φs = convert(Vector{Bool}, view(valuation, [parent, child]))
+        dens_frechet(arg, parent, child, φs, α, p)
+    end
 
 using Turing: @model, sample, MH, PG, SMC
 using Distributions: logpdf
 using Random: AbstractRNG, GLOBAL_RNG
-function (D::FrechetCoalDensity)(rng::AbstractRNG, arg;
-                                 logscale = false, M = 1000)
+using Statistics: mean
+function (D::FrechetCoalDensity{Bool})(rng::AbstractRNG, arg; M = 1000)
     p = D.pars[:p]::Float64
     α = D.α
+    leaves_phenotypes = D.leaves_phenotypes
+    missing_phenotypes = findall(ismissing,leaves_phenotypes)
     ni = nivertices(arg)
 
     ## Compute posterior density of the phenotypes of the coalescence vertices.
@@ -171,24 +200,32 @@ function (D::FrechetCoalDensity)(rng::AbstractRNG, arg;
     m = ivertices_pheno(arg, D.leaves_phenotypes, p)
     sampler = PG(20)
     ps_sample = sample(rng, m, sampler, M, discard_initial = 100)
-    ivaluations = convert(Matrix{Bool}, ps_sample.value[:, 1:end-1, 1].data)
+    ivaluations = convert(Matrix{eltype(leaves_phenotypes)},
+                          ps_sample.value[:, 1:end-2, 1].data)
 
-    ret_log = zero(Float64)
-    for ivaluation ∈ eachrow(ivaluations)
-        valuation = vcat(D.leaves_phenotypes, ivaluation)
-        ret_log += sum(ivertices(arg)) do ψ
-            _children = children(arg, ψ)
-            phenos = view(valuation, vcat(ψ, _children))
-            joint_frechet(arg, ψ, _children, phenos, α, p, logscale = true)::Float64
-        end
-        ret_log += marginal_frechet(valuation[mrca(arg)], p,
-                                    logscale = true)
+    int_partials::Vector{BigFloat} = map(eachrow(ivaluations)) do ivaluation
+        valuation = vcat(leaves_phenotypes, ivaluation)
+        vs = setdiff(vertices(arg), vcat(mrca(arg), missing_phenotypes))
+
+        compute_integrand(arg, vs, valuation, α, p) *
+            dens_frechet(Bool(valuation[mrca(arg)]), p)
     end
 
-    ret_log /= M
+    function(phenotypes; logscale = false)
+        φ_leaves = deepcopy(leaves_phenotypes)
+        φ_leaves[missing_phenotypes] .= phenotypes
 
-    logscale ? ret_log : exp(ret_log)
+        ret = mean(zip(int_partials, eachrow(ivaluations))) do x
+            int_partial, ivaluation = x
+
+            valuation = vcat(φ_leaves, ivaluation)
+            int_partial *
+                compute_integrand(arg, missing_phenotypes, valuation, α, p)
+        end
+
+        logscale ? log(ret) : ret
+    end
 end
 
-(D::FrechetCoalDensity)(arg; logscale = false, M = 1000) =
-    D(GLOBAL_RNG, arg, logscale = logscale, M = M)
+(D::FrechetCoalDensity)(arg; M = 1000) =
+    D(GLOBAL_RNG, arg, M = M)
