@@ -12,4 +12,6 @@ include("Arg.jl")
 
 include("ArgDensity.jl")
 
+include("ImportanceSampling.jl")
+
 end # module Moosh
