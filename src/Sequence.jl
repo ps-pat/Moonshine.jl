@@ -298,7 +298,7 @@ Construct an "and" mask for a sequence.
 """
 function andmask end
 
-function andmask(n::Integer, unmasked::UnitRange{Int})
+function andmask(n::Integer, unmasked::UnitRange)
     isempty(unmasked) && return fillseq(false, n)
 
     rshift = first(unmasked) - 1
@@ -308,6 +308,9 @@ function andmask(n::Integer, unmasked::UnitRange{Int})
 
     (seq << lshift) & (seq >>> rshift)
 end
+
+andmask(n::Integer, unmasked::Set{<:UnitRange}) =
+    mapreduce(Fix1(andmask, n), |, unmasked)
 
 ## TODO: Implement for StepRange.
 

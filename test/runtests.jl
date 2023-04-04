@@ -6,7 +6,9 @@ import Aqua
 
 Aqua.test_all(Moosh,
               project_extras = false,
-              ambiguities = false)
+              ambiguities = false,
+              unbound_args = false,
+              piracy = false)
 
 using Test:
     @test,

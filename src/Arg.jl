@@ -3,7 +3,8 @@ using Graphs:
     SimpleEdge,
     AbstractSimpleGraph,
     degree,
-    src, dst
+    src, dst,
+    Edge
 
 import Graphs:
     edges,
@@ -23,7 +24,8 @@ import Graphs:
 import Base:
     eltype,
     show,
-    union, intersect
+    union, intersect, in
+using Base: @invoke
 
 using Random:
     AbstractRNG,
@@ -49,6 +51,10 @@ using Distributions:
 
 using IntervalSets
 
+using StaticArrays:
+    SVector, MVector,
+    SA
+
 const VertexType = Int
 const EdgeType = SimpleEdge{VertexType}
 const Ω = Interval{:closed, :open, Float64}
@@ -63,8 +69,7 @@ struct ArgCore{T}
     latitudes::Vector{Float64}
     sequences::Vector{Sequence{T}}
     nleaves::Int
-    ancestral_interval::Dict{EdgeType,
-                             Set{Interval{:closed, :open, Float64}}}
+    ancestral_interval::Dict{EdgeType, Set{Ω}}
 
     positions::Vector{Float64}
     seq_length::Float64
@@ -74,21 +79,22 @@ struct ArgCore{T}
 end
 
 ## TODO: Check performance impact of sizehint!.
-function ArgCore(leaves::AbstractArray{Sequence{T}};
-                 positions = [],
-                 seq_length = 1.0,
-                 effective_popsize = 1.0,
-                 μ_loc = 0.0,
-                 ρ_loc = 0.0) where T
+function ArgCore{T}(leaves::AbstractVector{Sequence{T}};
+                    positions = [],
+                    seq_length = 1.0,
+                    effective_popsize = 1.0,
+                    μ_loc = 0.0,
+                    ρ_loc = 0.0) where T
     n = length(leaves)
     latitudes = sizehint!(Float64[], 10n)
-    sequences = sizehint!(leaves, 10n)
+    sequences = sizehint!(deepcopy(leaves), 10n)
 
     nmarkers = (length ∘ first)(leaves)
     if length(positions) != nmarkers || !issorted(positions)
         @info((isempty(positions) ? "A" : "Invalid positions: a") *
             "ssuming equally spaced markers")
-        positions = (collect ∘ range)(0, 1, length = nmarkers)
+        positions = isone(nmarkers) ?
+            [0.0] : (collect ∘ range)(0, 1, length = nmarkers)
     end
     if minimum(positions) < 0
         @info("First position is < 0: shifting positions right")
@@ -110,7 +116,7 @@ function ArgCore{T}(rng::AbstractRNG,
     n = iszero(nmax) ? nmin : rand(rng, nmin:nmax)
     nmarkers = iszero(maxlength) ? minlength : rand(rng, minlength:maxlength)
 
-    ArgCore([Sequence{T}(rng, nmarkers) for _ ∈ 1:n]; genpars...)
+    ArgCore{T}([Sequence{T}(rng, nmarkers) for _ ∈ 1:n]; genpars...)
 end
 
 function ArgCore{T}(nmin::Integer, minlength::Integer,
@@ -119,18 +125,46 @@ function ArgCore{T}(nmin::Integer, minlength::Integer,
     ArgCore{T}(GLOBAL_RNG, nmin, minlength, nmax, maxlength; genpars...)
 end
 
-function union(x::T, xs::Set{T}) where T
-    Set([x]) ∪ xs
+####################
+# Set of intervals #
+####################
+
+function simplify!(xs)
+    tmp = Set{eltype(xs)}()
+
+    while !isempty(xs)
+        @label main
+        x = pop!(xs)
+        isempty(x) && continue
+
+        for y ∈ xs
+            isempty(x ∩ y) && continue
+            push!(xs, x ∪ pop!(xs, y))
+            @goto main
+        end
+
+        push!(tmp, x)
+    end
+
+    while !isempty(tmp)
+        push!(xs, pop!(tmp))
+    end
+
+    xs
 end
 
+union(x::T, xs::Set{T}) where T =
+    simplify!(Set([x]) ∪ xs)
+
 intersect(x::T, xs::Set{T}) where T =
-    (Set ∘ broadcast)(Fix1(intersect, x), xs)
+    (simplify! ∘ Set ∘ broadcast)(Fix1(intersect, x), xs)
 
 for fun ∈ [:union, :intersect]
     @eval $fun(xs::Set{T}, x::T) where T = $fun(x, xs)
 end
 
-## TODO: simplify sets of intervals?
+union(x::Set{T}, y::Set{T}) where T<:Interval =
+    (simplify! ∘ invoke)(union, Tuple{Any, Any}, x, y)
 
 ##################
 # Arg definition #
@@ -143,7 +177,7 @@ mutable struct Arg{T} <: AbstractSimpleGraph{VertexType}
 end
 export Arg
 
-Arg(leaves::AbstractArray{Sequence{T}}, genpars...) where T =
+Arg(leaves::AbstractVector{Sequence{T}}, genpars...) where T =
     Arg(ArgCore{T}(leaves; genpars...), 0, zero(BigFloat))
 
 function Arg{T}(rng::AbstractRNG,
@@ -174,7 +208,7 @@ end
 
 ## AbstractGraph Interface.
 ## See https://juliagraphs.org/Graphs.jl/stable/ecosystem/interface/
-for fun ∈ [:edges, :vertices, :ne, :nv, :add_vertex!]
+for fun ∈ [:edges, :vertices, :ne, :nv]
     @eval function $fun(arg::Arg)
         $fun(arg.core.graph)
     end
@@ -192,8 +226,6 @@ end
 let arg_edge = Expr(:(::), :e, EdgeType),
     arg_vertex = Expr(:(::), :v, VertexType)
     for (fun, a) ∈ Dict(:has_edge => arg_edge,
-                        :add_edge! => arg_edge,
-                        :rem_edge! => arg_edge,
                         :has_vertex => arg_vertex,
                         :inneighbors => arg_vertex,
                         :outneighbors => arg_vertex)
@@ -202,6 +234,27 @@ let arg_edge = Expr(:(::), :e, EdgeType),
             $fun(arg.core.graph, $varname)
         end
     end
+end
+
+function add_vertex!(arg::Arg, seq = Sequence(), lat = ∞)
+    push!(arg.core.latitudes, lat)
+    push!(arg.core.sequences, seq)
+    add_vertex!(arg.core.graph)
+end
+
+function add_edge!(arg::Arg, e, ints::Set{Ω})
+    arg.core.ancestral_interval[e] = ints
+    add_edge!(arg.core.graph, e)
+end
+
+add_edge!(arg::Arg, e, int::Ω) =
+    add_edge!(arg, e, int ∩ ancestral_intervals(arg, dst(e)))
+
+add_edge!(arg::Arg, e) = add_edge!(arg, e, Ω(0, ∞))
+
+function rem_edge!(arg::Arg, e)
+    delete!(arg.core.ancestral_interval, e)
+    rem_edge!(arg.core.graph, e)
 end
 
 ## Simple methods.
@@ -213,6 +266,7 @@ for field ∈ [:(:nleaves), :(:sequences), :(:latitudes),
 
         function $fun_name(arg)
             getfield(arg.core, $field)
+
         end
     end
 end
@@ -298,13 +352,11 @@ function ancestral_intervals end
 export ancestral_intervals
 
 ancestral_intervals(arg, e::EdgeType) = arg.core.ancestral_interval[e]
-ancestral_intervals(arg, σ, δ) = ancestral_intervals(arg, EdgeType(σ, δ))
+ancestral_intervals(arg, σ, δ) = ancestral_intervals(arg, Edge(σ, δ))
 
 function ancestral_intervals(arg, v::VertexType)
-    isleaf(arg, v) && return IntervalSet(Ω(0, ∞))
-    reduce(outneighbors(arg, v)) do x, y
-        ancestral_intervals(arg, v, x) ∪ ancestral_intervals(arg, v, y)
-    end
+    isleaf(arg, v) && return Set([Ω(0, ∞)])
+    mapreduce(child -> ancestral_intervals(arg, v, child), ∪, children(arg, v))
 end
 
 @generated blocksize(arg::Arg{T}) where T = blocksize(Sequence{T})
@@ -340,6 +392,20 @@ for (fun, par) ∈ Dict(:mut_rate => :(:μ_loc), :rec_rate => :(:ρ_loc))
         end
     end
 end
+
+export subarg
+function subarg(arg, int)
+    newarg = deepcopy(arg)
+
+    for (e, int_set) ∈ pairs(newarg.core.ancestral_interval)
+        isempty(int ∩ int_set) || continue
+
+        rem_edge!(newarg, e)
+    end
+
+    newarg
+end
+
 
 ##############################
 # Plotting & pretty printing #
@@ -400,9 +466,9 @@ function show(io::IO, arg::Arg)
     print(io, " markers)")
 end
 
-####################
-# ARG construction #
-####################
+#####################
+# Tree construction #
+#####################
 
 function coalesce!(rng, arg, vertices, nlive)
     ## Select coalescing pair.
@@ -413,26 +479,24 @@ function coalesce!(rng, arg, vertices, nlive)
     Δdist = Exponential(inv(nlive))
     Δ = rand(rng, Δdist)
     arg.logprob += logccdf(Δdist, Δ)
+    newlat = latitude(arg, nv(arg)) + Δ
+
+    ## Sample children & compute sequence.
+    _children = SVector{2, VertexType}(pop!(vertices), pop!(vertices))
+    newseq = sequences(arg, first(_children)) & sequences(arg, last(_children))
 
     ## Perform the coalescence.
-    add_vertex!(arg) || @error "Could not add a vertex to ARG"
+    add_vertex!(arg, newseq, newlat) || @error "Could not add a vertex to ARG"
     parent = nv(arg)
-    _children = Vector{eltype(arg)}(undef, 2)
-    for child ∈ 1:2
-        _children[child] = pop!(vertices)
-        e = EdgeType(parent, _children[child])
-        add_edge!(arg, e)
 
+    for child ∈ _children
+        e = Edge(parent, child)
+        add_edge!(arg, e)
         arg.core.ancestral_interval[e] = Set([Ω(0, ∞)])
     end
 
+    ## Update live vertices.
     push!(vertices, parent)
-
-    push!(sequences(arg),
-          sequences(arg)[first(_children)] &
-              sequences(arg)[last(_children)])
-
-    push!(latitudes(arg), latitude(arg, parent - 1) + Δ)
 
     @info("$(first(_children)) and $(last(_children)) \
            coalesced into $parent at $(latitude(arg, parent))")
@@ -581,3 +645,88 @@ end
 
 first_inconsistent_position(arg, lbound::Real, ubound::Real = ∞) =
     first_inconsistent_position(arg, Ω(lbound, ubound))
+
+####################
+# ARG construction #
+####################
+
+"""
+    recombine!([rng = GLOBAL_RNG])
+"""
+function recombine! end
+export recombine!
+
+function recombine!(arg, redge, cedge, breakpoint, rlat, clat)
+    ## Recombination and recoalescence vertices.
+    rvertex, cvertex = nv(arg) .+ (1:2)
+
+    ## Record ancestral intervals
+    old_edges = SA[redge, cedge]
+    ints_redge, ints_cedge = Fix1(ancestral_intervals, arg).(old_edges)
+
+    ## Remove recombination and recoalescence edges.
+    Fix1(rem_edge!, arg).(old_edges)
+
+    ## Compute sequences.
+    rseq = deepcopy(sequences(arg, dst(redge)))
+    newseqs = SVector{2, eltype(sequences(arg))}(
+        rseq,
+        rseq & sequences(arg, dst(cedge)))
+
+    ## Add recombination and recoalescences vertices.
+    for (seq, lat) ∈ zip(newseqs, SA[rlat, clat])
+        add_vertex!(arg, seq, lat)
+    end
+
+    ## New edges. `dst(cedge)` should be equal to `mrca(arg)` if the
+    ## recoalescence happens above `arg` current MRCA. Additionaly,
+    ## `src(cedge)` should be lesser than or equal to 0.
+    add_edge!(arg, Edge(rvertex, dst(redge)), ints_redge) # Recombination vertex out
+    add_edge!(arg, Edge(src(redge), rvertex), Ω(0, breakpoint)) # Old tree
+    add_edge!(arg, Edge(cvertex, rvertex), Ω(breakpoint, ∞)) # New tree
+    add_edge!(arg, Edge(cvertex, dst(cedge)), ints_cedge) # Old tree
+    src(cedge) > 0 && add_edge!(arg, Edge(src(cedge), cvertex))
+
+    arg.nrecombinations += 1
+
+    update_upstream!(arg, rvertex)
+
+    arg
+end
+
+update_sequence!(arg, v) =
+    arg.core.sequences[v] = mapreduce(&, children(arg, v)) do child
+        mask = mapreduce(&, ancestral_intervals(arg, v, child)) do int
+            endpos = broadcast(Fix1(postoidx, arg), endpoints(int))
+            ~andmask(nmarkers(arg), UnitRange(endpos...))
+        end
+
+        sequences(arg, child) | mask
+    end
+
+update_intervals!(arg, e, ints_ubound) =
+    arg.core.ancestral_interval[e] =
+    (simplify! ∘ mapreduce)(Fix1(∩, ints_ubound), ∪,
+                            arg.core.ancestral_interval[e])
+
+function update_upstream!(arg, v)
+    vstack = Set{eltype(arg)}(parents(arg, v))
+    while !isempty(vstack)
+        v = pop!(vstack)
+
+        old_sequence = sequences(arg, v)
+        old_sequence == update_sequence!(arg, v) ||
+            push!(vstack, parents(arg, v)...)
+
+        for parent ∈ parents(arg, v)
+            e = Edge(parent, v)
+            ints_ubound = ancestral_intervals(arg, v)
+
+            old_ints = ancestral_intervals(arg, e)
+            old_ints == update_intervals!(arg, e, ints_ubound) ||
+                push!(vstack, parent)
+        end
+    end
+
+    arg
+end

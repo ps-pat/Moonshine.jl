@@ -84,16 +84,16 @@ Ancestral Recombination Graph.
 - `α::Function`: Function mapping the positive real numbers to [0, 1].
 - `pars::Dict{Symbol, Any}`: Parameters.
 """
-struct FrechetCoalDensity{T} <: AbstractGraphDensity where T <: Real
+struct FrechetCoalDensity{T} <: AbstractGraphDensity
     leaves_phenotypes::Vector{Union{Missing, T}}
 
     α::Function
     pars::Dict{Symbol, Any}
 
-    FrechetCoalDensity(leaves_phenotypes::Vector{Union{Missing, T}};
+    FrechetCoalDensity(leaves_phenotypes::Vector{Union{Missing, S}};
                        α = t -> 1 - exp(-t),
-                       pars = Dict{Symbol, Any}()) where T =
-                       new{T}(leaves_phenotypes, α, pars)
+                       pars = Dict{Symbol, Any}()) where S =
+                       new{S}(leaves_phenotypes, α, pars)
 end
 
 q(ψ::Bool, x) = ψ + (ψ ? -1 : 1) * x
