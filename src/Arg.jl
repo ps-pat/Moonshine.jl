@@ -60,6 +60,8 @@ const EdgeType = SimpleEdge{VertexType}
 const Ω = Interval{:closed, :open, Float64}
 const ∞ = Inf
 
+export Ω
+
 ######################
 # ArgCore definition #
 ######################
@@ -72,6 +74,7 @@ struct ArgCore{T}
     ancestral_interval::Dict{EdgeType, Set{Ω}}
 
     positions::Vector{Float64}
+    recombinations_position::Vector{Float64}
     seq_length::Float64
     eff_popsize::Float64
     μ_loc::Float64
@@ -106,7 +109,7 @@ function ArgCore{T}(leaves::AbstractVector{Sequence{T}};
     end
 
     ArgCore{T}(SimpleDiGraph(n), latitudes, sequences, n, Dict(),
-               positions, seq_length, effective_popsize, μ_loc, ρ_loc)
+               positions, [], seq_length, effective_popsize, μ_loc, ρ_loc)
 end
 
 function ArgCore{T}(rng::AbstractRNG,
@@ -166,13 +169,14 @@ end
 union(x::Set{T}, y::Set{T}) where T<:Interval =
     (simplify! ∘ invoke)(union, Tuple{Any, Any}, x, y)
 
+in(x::T, s::Set{<:AbstractInterval{T}}) where T = any(int -> x ∈ int, s)
+
 ##################
 # Arg definition #
 ##################
 
 mutable struct Arg{T} <: AbstractSimpleGraph{VertexType}
     core::ArgCore{T}
-    nrecombinations::Int
     logprob::BigFloat
 end
 export Arg
@@ -185,7 +189,7 @@ function Arg{T}(rng::AbstractRNG,
                 nmax::Integer = 0, maxlength::Integer = 0;
                 genpars...) where T
     Arg(ArgCore{T}(rng, nmin, minlength, nmax, maxlength; genpars...),
-        0, zero(BigFloat))
+        zero(BigFloat))
 end
 function Arg(rng::AbstractRNG,
              nmin::Integer, minlength::Integer,
@@ -259,7 +263,8 @@ end
 
 ## Simple methods.
 for field ∈ [:(:nleaves), :(:sequences), :(:latitudes),
-             :(:seq_length), :(:eff_popsize), :(:positions)]
+             :(:seq_length), :(:eff_popsize), :(:positions),
+             :(:recombinations_position)]
     fun_name = eval(field)
     @eval begin
         export $fun_name
@@ -271,7 +276,7 @@ for field ∈ [:(:nleaves), :(:sequences), :(:latitudes),
     end
 end
 
-nrecombinations(arg) = arg.nrecombinations
+nrecombinations(arg) = length(arg.core.recombinations_position)
 
 leaves(arg) = Base.OneTo(arg.core.nleaves)
 isleaf(arg, v) = v <= nleaves(arg)
@@ -282,14 +287,22 @@ function ivertices(arg)
 end
 nivertices(arg) = nleaves(arg) - 1
 
+"""
+    nmarkers(arg)
+
+Number of markers of the sequences in an ARG.
+"""
 nmarkers(arg) = (length ∘ first)(arg.core.sequences)
+export nmarkers
 
 sequences(arg, v::VertexType) = sequences(arg)[v]
 sequences(arg, e::EdgeType) = [sequences(arg, src(e)), sequences(arg, dst(e))]
 
-export latitude
 latitude(arg, v) =
     isleaf(arg, v) ? zero(Float64) : arg.core.latitudes[v - nleaves(arg)]
+export latitude
+
+edge_length(arg, e) = latitude(arg, src(e)) - latitude(arg, dst(e))
 
 export mrca, tmrca
 mrca(arg) = isempty(arg.core.latitudes) ?
@@ -298,26 +311,35 @@ tmrca(arg) = isempty(arg.core.latitudes) ?
     zero(Float64) : maximum(arg.core.latitudes)
 
 """
-    children(arg, v, int = 0 .. ∞)
-    parents(arg, v, int = 0 .. ∞)
+    children(arg, v, int = Ω(0, ∞))
+    parents(arg, v, int = Ω(0, ∞))
+    siblings(arg, v, int = Ω(0, ∞))
 
-Return the children/parents of a vertex. Optionally, only return those bearing
-ancestral material for a given interval.
+Return the children/parents/siblings of a vertex bearing ancestral material for
+a given interval.
 """
 function children end,
-function parents end
-export children, parents
+function parents end,
+function siblings end
+export children, parents, siblings
 
 children(arg, v) = outneighbors(arg, v)
 
 parents(arg, v) = inneighbors(arg, v)
 
+function siblings(arg, v, int = Ω(0, ∞))
+    ret = mapreduce(p -> children(arg, p, int), ∪, parents(arg, v, int),
+                    init = eltype(arg)[])
+
+    v_idx = findfirst(==(v), ret)
+    isnothing(v_idx) && return ret
+
+    @inbounds ret[setdiff(eachindex(ret), v_idx)]
+end
+
 for fun ∈ [:children, :parents]
-    @eval function $fun(arg, v, int)
-        filter($fun(arg, v)) do x
-            ancestral_intervals(arg, x) ∩ int |> !isempty
-        end
-    end
+    @eval $fun(arg, v, int) =
+        filter(x -> !isempty(ancestral_intervals(arg, x) ∩ int), $fun(arg, v))
 end
 
 """
@@ -359,7 +381,7 @@ function ancestral_intervals(arg, v::VertexType)
     mapreduce(child -> ancestral_intervals(arg, v, child), ∪, children(arg, v))
 end
 
-@generated blocksize(arg::Arg{T}) where T = blocksize(Sequence{T})
+@generated blocksize(::Arg{T}) where T = blocksize(Sequence{T})
 
 export nmutations
 nmutations(arg, e) = (count_ones ∘ xor)(sequences(arg, e)...)
@@ -419,6 +441,7 @@ function argplot(arg, x;
                  wild_color = :blue,
                  derived_color = :red,
                  attributes...)
+
     n = nv(arg)
     nedges = ne(arg)
 
@@ -593,20 +616,16 @@ function first_inconsistent_position(arg, int::Ω)
     n = nmarkers(arg)
     _mrca = mrca(arg)
     (iszero(_mrca) || iszero(n)) && return ∞, EdgeType[]
+    bs = blocksize(arg)
 
     ## Vertices to xor are stored in acc.
-    acc = zeros(VertexType, nv(arg))
-    acc_ptr = firstindex(acc)
-    acc[acc_ptr] = _mrca
-    acc_ptr += 1
+    acc = Set(_mrca)
 
     ## Contains mutation edges.
     mutation_edges = Dict{Int, Vector{EdgeType}}()
 
-    bs = blocksize(arg)
-    for k ∈ eachindex(acc)
-        vertex = acc[k]
-        iszero(vertex) && break
+    while !isempty(acc)
+        vertex = pop!(acc)
 
         for e ∈ map(Fix1(EdgeType, vertex), children(arg, vertex))
             blocks_idx = mmn_blocks_idx(arg, e, int)
@@ -616,19 +635,17 @@ function first_inconsistent_position(arg, int::Ω)
 
             ## Add child to acc.
             c = dst(e)
-            if !isleaf(arg, c)
-                (acc[acc_ptr] = dst(e))
-                acc_ptr += 1
-            end
+            isleaf(arg, c) || push!(acc, c)
 
             xored_sequences =
-                sequences(arg, src(e)).data[blocks_idx] .⊻
-                sequences(arg, dst(e)).data[blocks_idx]
+                (sequences(arg, src(e)).data[blocks_idx] .⊻
+                sequences(arg, dst(e)).data[blocks_idx]) .&
+                ancestral_mask(arg, e).data[blocks_idx]
             for (block_idx, block) ∈ zip(blocks_idx, xored_sequences)
                 first_set_bit = leading_zeros(block) + 1
                 if first_set_bit <= bs
                     idx = actualpos(n, bs, block_idx, first_set_bit)
-                    haskey(mutation_edges, idx) || (mutation_edges[idx] = [])
+                    haskey(mutation_edges, idx) || (mutation_edges[idx] = EdgeType[])
                     push!(mutation_edges[idx], e)
                     break
                 end
@@ -636,11 +653,12 @@ function first_inconsistent_position(arg, int::Ω)
         end
     end
 
+    ## Compute the first inconsistent position.
     inconsistent_idx =
         minimum(p -> (length ∘ last)(p) > 1 ? first(p) : typemax(Int),
                 mutation_edges)
 
-    idxtopos(arg, inconsistent_idx), mutation_edges[inconsistent_idx]
+    idxtopos(arg, inconsistent_idx), Set(mutation_edges[inconsistent_idx])
 end
 
 first_inconsistent_position(arg, lbound::Real, ubound::Real = ∞) =
@@ -651,12 +669,18 @@ first_inconsistent_position(arg, lbound::Real, ubound::Real = ∞) =
 ####################
 
 """
-    recombine!([rng = GLOBAL_RNG])
+    recombine!(arg, redge, cedge, breakpoint, rlat, clat)
+    recombine!([rng = GLOBAL_RNG], arg, redge, other_mutation_edges, breakpoint, α = ∞)
+
+Create recombination/recoalescence events on an ARG. The coalescence edge is
+returned.
 """
 function recombine! end
 export recombine!
 
-function recombine!(arg, redge, cedge, breakpoint, rlat, clat)
+function recombine!(arg::Arg, redge, cedge, breakpoint, rlat, clat)
+    @info "Recombination $(nrecombinations(arg) + 1)" redge = redge cedge = cedge
+
     ## Recombination and recoalescence vertices.
     rvertex, cvertex = nv(arg) .+ (1:2)
 
@@ -687,21 +711,187 @@ function recombine!(arg, redge, cedge, breakpoint, rlat, clat)
     add_edge!(arg, Edge(cvertex, dst(cedge)), ints_cedge) # Old tree
     src(cedge) > 0 && add_edge!(arg, Edge(src(cedge), cvertex))
 
-    arg.nrecombinations += 1
+    push!(arg.core.recombinations_position, breakpoint)
 
     update_upstream!(arg, rvertex)
 
-    arg
+    cedge
 end
+
+function recombine!(rng::AbstractRNG, arg, redge,
+                    other_mutation_edges, breakpoint; α = ∞)
+    ## Sample a recombination latitude uniformly on the recombination edge.
+    rlat_dist = Uniform(latitude(arg, dst(redge)), latitude(arg, src(redge)))
+    rlat = rand(rng, rlat_dist)
+    arg.logprob += logccdf(rlat_dist, rlat)
+
+    ## Sample an exponential recoalescence latitude.
+    derived_recombination =
+        sequences(arg, dst(redge))[postoidx(arg, breakpoint) + 1]
+
+    clat_ubound = derived_recombination ?
+        maximum((Fix1(latitude, arg) ∘ src).(other_mutation_edges)) :
+        Inf
+
+    Δlat_dist = truncated(Exponential(nblive(arg, rlat, breakpoint)),
+                          upper = clat_ubound - rlat)
+    Δlat = rand(rng, Δlat_dist)
+    arg.logprob += logccdf(Δlat_dist, Δlat)
+    clat = rlat + Δlat
+
+    if derived_recombination
+        possible_cedges = possible_cedges_derived(arg, clat, breakpoint,
+                                                  dst.(other_mutation_edges),
+                                                  α)
+        if isempty(possible_cedges)
+            @info "No possible coalescence edges" rlat = rlat clat = clat
+            return arg
+        end
+    end
+
+    arg.logprob -= log(length(possible_cedges))
+    recombine!(arg, redge, rand(rng, possible_cedges), breakpoint, rlat, clat)
+end
+
+recombine!(arg::Arg, redge, other_mutation_edges, breakpoint; α = ∞) =
+    recombine!(GLOBAL_RNG, arg, redge, other_mutation_edges, breakpoint, α = α)
+
+"""
+    nblive(arg, latitude, pos)
+
+Compute the number of live vertices.
+"""
+function nblive(arg, lat, pos)
+    lat > tmrca(arg) && return one(Int)
+
+    (length ∘ filter)(arg.core.ancestral_interval) do π
+        e, int = π
+
+        pos ∈ int || return false
+        latitude(arg, dst(e)) <= lat <= latitude(arg, src(e)) || return false
+
+        true
+    end
+end
+export nblive
+
+"""
+    possible_cedges_derived(arg, clat, breakpoint, seeds = [mrca(arg)], α = ∞)
+
+Compute possible coalescence edges for a derived recoalescence. Two conditions
+must be met for an edge `e` to be admissible:
+1. `e` must be ancestral for a position in [`breakpoint - α`, `breakpoint`)
+2. `clat` ∈ [`dst(e)`, `src(e)`].
+
+The search for coalescence edges goes downward from the vertices in `seeds`.
+"""
+function possible_cedges_derived(arg, clat, breakpoint,
+                                 seeds = [mrca(arg)], α = ∞)
+    idx = postoidx(arg, breakpoint) + 1
+    cedges = Set{EdgeType}()
+    ancestral_int = Ω(clamp(breakpoint - α, 0, breakpoint), breakpoint)
+
+    acc = Set(seeds)
+    while !isempty(acc)
+        v = pop!(acc)
+
+        if sequences(arg, v)[idx]
+            ## Vertex is derived.
+            for parent ∈ parents(arg, v, ancestral_int)
+                if latitude(arg, v) ≤ clat ≤ latitude(arg, parent)
+                    push!(cedges, Edge(parent, v))
+                elseif latitude(arg, v) > clat
+                    for child ∈ children(arg, v)
+                        push!(acc, child)
+                    end
+                end
+            end
+        else
+            ## Vertex is wild.
+            for child ∈ children(arg, v)
+                push!(acc, child)
+            end
+        end
+    end
+    cedges
+end
+
+# function possible_cedges_wild(arg, clat, breakpoint, α = ∞)
+#     acc = Set(mrca(arg))
+# end
+
+## TODO: allow wild recombinations.
+"""
+    make_consistent!([rng = GLOBAL_RNG], arg, pos, mutation_edges; α = ∞)
+
+Modifies an ARG with a sequence of recombination/recoalescence events in order
+to make it consistent with a given position.
+"""
+function make_consistent! end
+export make_consistent!
+
+function make_consistent!(rng, arg, pos, mutation_edges; α = ∞)
+    while length(mutation_edges) > 1
+        ## Sample recombination breakpoint.
+        bp_lbound = isempty(recombinations_position(arg)) ?
+            0 : last(recombinations_position(arg))
+        Δbp_dist = truncated(Exponential(rec_rate(arg)), upper = pos - bp_lbound)
+        Δbp = rand(rng, Δbp_dist)
+        arg.logprob += logccdf(Δbp_dist, Δbp)
+        breakpoint = bp_lbound + Δbp
+
+        ## Sample a recombination edge.
+        redge = sample_edge(rng, arg, collect(mutation_edges))
+
+        ## Recombination/recoalescence
+        cedge = recombine!(rng, arg, redge, mutation_edges, breakpoint, α = α)
+
+        ## Update the set of mutation edges.
+        delete!(mutation_edges, redge)
+        delete!(mutation_edges, cedge)
+        push!(mutation_edges, upstream_mutation_edge(arg, pos, breakpoint))
+    end
+end
+
+function sample_edge(rng, arg, edges)
+    edges_weights = map(Fix1(edge_length, arg), edges)
+    redge_dist = Categorical(edges_weights / sum(edges_weights))
+    redge_idx = rand(rng, redge_dist)
+    arg.logprob += logpdf(redge_dist, redge_idx)
+
+    edges[redge_idx]
+end
+
+function upstream_mutation_edge(arg, pos, breakpoint)
+    idx = postoidx(arg, pos)
+    child = nv(arg)
+    parent = (first ∘ parents)(arg, child, Ω(breakpoint, ∞))
+
+    while sequences(arg, parent)[idx]
+        child = parent
+        parent = (first ∘ parents)(arg, child, Ω(breakpoint, ∞))
+    end
+
+    Edge(parent, child)
+end
+
+"""
+    ancestral_mask(arg, x)
+
+Mask non ancestral positions to 0.
+"""
+ancestral_mask(arg, x::Set{Ω}) = mapreduce(|, x) do int
+    endidx = broadcast(Fix1(postoidx, arg), endpoints(int))
+    andmask(nmarkers(arg), UnitRange(endidx...))
+end
+
+ancestral_mask(arg, x::EdgeType) =
+    ancestral_mask(arg, ancestral_intervals(arg, x))
 
 update_sequence!(arg, v) =
     arg.core.sequences[v] = mapreduce(&, children(arg, v)) do child
-        mask = mapreduce(&, ancestral_intervals(arg, v, child)) do int
-            endpos = broadcast(Fix1(postoidx, arg), endpoints(int))
-            ~andmask(nmarkers(arg), UnitRange(endpos...))
-        end
-
-        sequences(arg, child) | mask
+        mask = ancestral_mask(arg, Edge(v, child))
+        sequences(arg, child) | ~mask
     end
 
 update_intervals!(arg, e, ints_ubound) =

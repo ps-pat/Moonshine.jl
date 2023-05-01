@@ -10,7 +10,7 @@ import Base:
 
 using Random: GLOBAL_RNG, AbstractRNG
 
-"Efficient storage of marker data."
+## "Efficient storage of marker data."
 struct Sequence{T <: Unsigned}
     data::Vector{T}
     n::Int
@@ -279,7 +279,7 @@ convert(::Type{Sequence}, str::AbstractString) = convert(Sequence{UInt}, str)
 Create a sequence of length `n` filled exclusively with 0s or 1s.
 """
 function fillseq(derived, n, blocktype = UInt)
-    iszero(n) && return Sequence{blocktype}([], 0)
+    iszero(n) && return Sequence{blocktype}(blocktype[], 0)
 
     blocksize = 8sizeof(blocktype)
     nb = nblocks(n, blocksize)
