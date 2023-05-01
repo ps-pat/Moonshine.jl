@@ -441,13 +441,21 @@ function argplot(arg, x;
                  wild_color = :blue,
                  derived_color = :red,
                  attributes...)
+    newarg = deepcopy(arg)
+    n = nv(newarg)
 
-    n = nv(arg)
-    nedges = ne(arg)
+    ## Remove non ancestral edges.
+    pos = idxtopos(arg, x)
+    for (e, int) ∈ newarg.core.ancestral_interval
+        pos ∈ int && continue
+        rem_edge!(newarg, e)
+    end
+
+    nedges = ne(newarg)
 
     edgecolor = fill(:gray, nedges)
 
-    nodecolor = map(sequences(arg)) do vertex
+    nodecolor = map(sequences(newarg)) do vertex
         vertex[x] ? derived_color : wild_color
     end
 
@@ -455,7 +463,7 @@ function argplot(arg, x;
 
     node_sizes = fill(25.0, n)
 
-    p = graphplot(arg,
+    p = graphplot(newarg,
                   nlabels = node_labels,
                   nlabels_distance = 10,
                   node_size = node_sizes,
