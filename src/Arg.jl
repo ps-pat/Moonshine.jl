@@ -38,6 +38,8 @@ using GraphMakie:
     deregister_interaction!,
     NodeDrag,
     NodeHoverHighlight
+using LayeredLayouts
+using GeometryBasics: Point
 
 using Distributions:
     Bernoulli,
@@ -159,15 +161,18 @@ end
 union(x::T, xs::Set{T}) where T =
     simplify!(Set([x]) ∪ xs)
 
+union(x::Set{T}, y::Set{T}) where T<:Interval =
+    (simplify! ∘ invoke)(union, Tuple{Any, Any}, x, y)
+
 intersect(x::T, xs::Set{T}) where T =
     (simplify! ∘ Set ∘ broadcast)(Fix1(intersect, x), xs)
+
+intersect(xs::Set{T}, ys::Set{T}) where T =
+    (simplify! ∘ mapreduce)(x -> intersect(x, ys), ∪, xs)
 
 for fun ∈ [:union, :intersect]
     @eval $fun(xs::Set{T}, x::T) where T = $fun(x, xs)
 end
-
-union(x::Set{T}, y::Set{T}) where T<:Interval =
-    (simplify! ∘ invoke)(union, Tuple{Any, Any}, x, y)
 
 in(x::T, s::Set{<:AbstractInterval{T}}) where T = any(int -> x ∈ int, s)
 
@@ -337,9 +342,11 @@ function siblings(arg, v, int = Ω(0, ∞))
     @inbounds ret[setdiff(eachindex(ret), v_idx)]
 end
 
-for fun ∈ [:children, :parents]
+for (fun, edge_fun) ∈ Dict(:children => (x, y) -> Edge(x, y),
+                           :parents => (x, y) -> Edge(y, x))
     @eval $fun(arg, v, int) =
-        filter(x -> !isempty(ancestral_intervals(arg, x) ∩ int), $fun(arg, v))
+        filter(x -> !isempty(ancestral_intervals(arg, $edge_fun(v, x)) ∩ int),
+               $fun(arg, v))
 end
 
 """
@@ -428,15 +435,40 @@ function subarg(arg, int)
     newarg
 end
 
+"""
+    maxdepth(arg, v, pos, depth = 0)
+
+Compute the depth of a vertex, that is the number of egdes between it and the
+arg's mrca.
+"""
+function maxdepth(arg, v, int, depth = 0)
+    _parents = parents(arg, v, int)
+    isempty(_parents) && return depth
+
+    mapreduce(parent -> maxdepth(arg, parent, int, depth + 1), max, _parents)
+end
+
 
 ##############################
 # Plotting & pretty printing #
 ##############################
 
+ArgLayout(int) = function(arg)
+    ## Force leaves to be in last layer.
+    lastlayer = maximum(v -> maxdepth(arg, v, int), leaves(arg)) + 1
+
+    xs, ys, _ = solve_positions(Zarate(),
+                                arg.core.graph,
+                                force_layer = Pair.(leaves(arg), lastlayer))
+
+    ## Rotate by -π/2.
+    Point.(zip(ys, -xs))
+end
+
 function argplot end
 export argplot
 
-function argplot(arg, x;
+function argplot(arg, int::Ω;
                  arrow_show = true,
                  wild_color = :blue,
                  derived_color = :red,
@@ -445,9 +477,8 @@ function argplot(arg, x;
     n = nv(newarg)
 
     ## Remove non ancestral edges.
-    pos = idxtopos(arg, x)
-    for (e, int) ∈ newarg.core.ancestral_interval
-        pos ∈ int && continue
+    for (e, eint) ∈ newarg.core.ancestral_interval
+        isempty(int ∩ eint) || continue
         rem_edge!(newarg, e)
     end
 
@@ -455,8 +486,9 @@ function argplot(arg, x;
 
     edgecolor = fill(:gray, nedges)
 
+    idx = range(postoidx(arg, int.left), postoidx(arg, int.right))
     nodecolor = map(sequences(newarg)) do vertex
-        vertex[x] ? derived_color : wild_color
+        any(vertex[idx]) ? derived_color : wild_color
     end
 
     node_labels = string.(1:n)
@@ -464,6 +496,7 @@ function argplot(arg, x;
     node_sizes = fill(25.0, n)
 
     p = graphplot(newarg,
+                  layout = ArgLayout(int),
                   nlabels = node_labels,
                   nlabels_distance = 10,
                   node_size = node_sizes,
@@ -529,7 +562,7 @@ function coalesce!(rng, arg, vertices, nlive)
     ## Update live vertices.
     push!(vertices, parent)
 
-    @info("$(first(_children)) and $(last(_children)) \
+    @debug("$(first(_children)) and $(last(_children)) \
            coalesced into $parent at $(latitude(arg, parent))")
 end
 
@@ -841,8 +874,9 @@ export make_consistent!
 function make_consistent!(rng, arg, pos, mutation_edges; α = ∞)
     while length(mutation_edges) > 1
         ## Sample recombination breakpoint.
-        bp_lbound = isempty(recombinations_position(arg)) ?
-            0 : last(recombinations_position(arg))
+        bp_lbound = isempty(recombinations_position(arg)) ? 0 :
+            max(idxtopos(arg, max(1, postoidx(arg, pos) - 1)),
+                last(recombinations_position(arg)))
         Δbp_dist = truncated(Exponential(rec_rate(arg)), upper = pos - bp_lbound)
         Δbp = rand(rng, Δbp_dist)
         arg.logprob += logccdf(Δbp_dist, Δbp)
@@ -850,14 +884,15 @@ function make_consistent!(rng, arg, pos, mutation_edges; α = ∞)
 
         ## Sample a recombination edge.
         redge = sample_edge(rng, arg, collect(mutation_edges))
+        delete!(mutation_edges, redge)
 
         ## Recombination/recoalescence
         cedge = recombine!(rng, arg, redge, mutation_edges, breakpoint, α = α)
+        delete!(mutation_edges, cedge)
 
         ## Update the set of mutation edges.
-        delete!(mutation_edges, redge)
-        delete!(mutation_edges, cedge)
         push!(mutation_edges, upstream_mutation_edge(arg, pos, breakpoint))
+        println("loop")
     end
 end
 
@@ -889,8 +924,16 @@ end
 Mask non ancestral positions to 0.
 """
 ancestral_mask(arg, x::Set{Ω}) = mapreduce(|, x) do int
-    endidx = broadcast(Fix1(postoidx, arg), endpoints(int))
-    andmask(nmarkers(arg), UnitRange(endidx...))
+    lpos, rpos = endpoints(int)
+
+    lidx = 1
+    while lpos > arg.core.positions[lidx]
+        lidx += 1
+    end
+
+    ridx = postoidx(arg, rpos)
+
+    andmask(nmarkers(arg), UnitRange(lidx, ridx))
 end
 
 ancestral_mask(arg, x::EdgeType) =
@@ -913,8 +956,10 @@ function update_upstream!(arg, v)
         v = pop!(vstack)
 
         old_sequence = sequences(arg, v)
-        old_sequence == update_sequence!(arg, v) ||
-            push!(vstack, parents(arg, v)...)
+        if old_sequence != update_sequence!(arg, v)
+            _parents = parents(arg, v)
+            isempty(_parents) || push!(vstack, _parents...)
+        end
 
         for parent ∈ parents(arg, v)
             e = Edge(parent, v)
