@@ -186,8 +186,8 @@ mutable struct Arg{T} <: AbstractSimpleGraph{VertexType}
 end
 export Arg
 
-Arg(leaves::AbstractVector{Sequence{T}}, genpars...) where T =
-    Arg(ArgCore{T}(leaves; genpars...), 0, zero(BigFloat))
+Arg(leaves::AbstractVector{Sequence{T}}; genpars...) where T =
+    Arg(ArgCore{T}(leaves; genpars...), zero(BigFloat))
 
 function Arg{T}(rng::AbstractRNG,
                 nmin::Integer, minlength::Integer,
