@@ -5,6 +5,7 @@ abstract type AbstractGraphDensity <: AbstractDensity end
 # Coalescent #
 ##############
 
+export CoalDensity
 struct CoalDensity <: AbstractGraphDensity
     ## Number of leaves.
     n::Int
@@ -43,6 +44,7 @@ end
 # Coalescent with mutation #
 ############################
 
+export CoalMutDensity
 struct CoalMutDensity <: AbstractGraphDensity
     dens_coal::CoalDensity
 
@@ -95,6 +97,7 @@ struct FrechetCoalDensity{T} <: AbstractGraphDensity
                        pars = Dict{Symbol, Any}()) where S =
                        new{S}(leaves_phenotypes, α, pars)
 end
+export FrechetCoalDensity
 
 q(ψ::Bool, x) = ψ + (ψ ? -1 : 1) * x
 

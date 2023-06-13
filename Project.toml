@@ -1,7 +1,7 @@
 name = "Moosh"
 uuid = "99b31415-443e-43a2-8bf4-ca532bb4a161"
 authors = ["Patrick Fournier <p_fournier@hushmail.com>"]
-version = "0.1.0"
+version = "0.1.1"
 
 [deps]
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
