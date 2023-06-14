@@ -135,6 +135,7 @@ function dens_frechet(arg, parent, child::AbstractVector,
     logscale ? ret_log : exp(ret_log)
 end
 
+## For a parent-child pair (eq. 6 of the paper).
 function dens_frechet(arg, parent, child, phenotypes::AbstractVector{Bool},
                       α, p;
                       logscale = false)
@@ -154,12 +155,15 @@ function dens_frechet(phenotype::Bool, p; logscale = false)
     logscale ? ret_log : exp(ret_log)
 end
 
-compute_integrand(arg, children, valuation, α, p) =
-    prod(children) do child
+function compute_integrand(arg, children, valuation, α, p; logscale = false)
+    ret_log = sum(children) do child
         parent = (first ∘ parents)(arg, child)
         φs = convert(Vector{Bool}, view(valuation, [parent, child]))
-        dens_frechet(arg, parent, child, φs, α, p)
+        dens_frechet(arg, parent, child, φs, α, p, logscale = true)
     end
+
+    logscale ? ret_log : exp(ret_log)
+end
 
 using Turing: @model, sample, MH, PG, SMC
 using Distributions: logpdf
@@ -206,27 +210,28 @@ function (D::FrechetCoalDensity{Bool})(rng::AbstractRNG, arg; M = 1000)
     ivaluations = convert(Matrix{eltype(leaves_phenotypes)},
                           ps_sample.value[:, 1:end-2, 1].data)
 
-    int_partials::Vector{BigFloat} = map(eachrow(ivaluations)) do ivaluation
+    int_partials_log::Vector{BigFloat} = map(eachrow(ivaluations)) do ivaluation
         valuation = vcat(leaves_phenotypes, ivaluation)
         vs = setdiff(vertices(arg), vcat(mrca(arg), missing_phenotypes))
 
-        compute_integrand(arg, vs, valuation, α, p) *
-            dens_frechet(Bool(valuation[mrca(arg)]), p)
+        compute_integrand(arg, vs, valuation, α, p, logscale = true) +
+            dens_frechet(Bool(valuation[mrca(arg)]), p, logscale = true)
     end
 
     function(phenotypes; logscale = false)
         φ_leaves = deepcopy(leaves_phenotypes)
         φ_leaves[missing_phenotypes] .= phenotypes
 
-        ret = mean(zip(int_partials, eachrow(ivaluations))) do x
-            int_partial, ivaluation = x
+        ret_log = mean(zip(int_partials_log, eachrow(ivaluations))) do x
+            int_partial_log, ivaluation = x
 
             valuation = vcat(φ_leaves, ivaluation)
-            int_partial *
-                compute_integrand(arg, missing_phenotypes, valuation, α, p)
+            int_partial_log +
+                compute_integrand(arg, missing_phenotypes, valuation, α, p,
+                                  logscale = true)
         end
 
-        logscale ? log(ret) : ret
+        logscale ? ret_log : exp(ret_log)
     end
 end
 
