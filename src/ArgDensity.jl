@@ -218,7 +218,12 @@ function (D::FrechetCoalDensity{Bool})(rng::AbstractRNG, arg; M = 1000)
             dens_frechet(Bool(valuation[mrca(arg)]), p, logscale = true)
     end
 
-    function(phenotypes; logscale = false)
+    function(phenotypes = nothing; logscale = false)
+        if isnothing(phenotypes)
+            ret_log = mean(int_partials_log)
+            return logscale ? ret_log : exp(ret_log)
+        end
+
         φ_leaves = deepcopy(leaves_phenotypes)
         φ_leaves[missing_phenotypes] .= phenotypes
 
