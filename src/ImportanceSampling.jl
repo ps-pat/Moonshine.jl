@@ -21,6 +21,7 @@ using RandomNumbers.PCG: PCGStateSetseq
 
 ## Ugly circular reference hack, sorry!
 
+export IsChain
 struct IsChain{H<:AbstractGraphDensity, P<:AbstractGraphDensity, T, R}
     dens_haps::H
     dens_phenos::P
