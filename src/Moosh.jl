@@ -16,6 +16,10 @@ include("ArgDensity.jl")
 
 include("ImportanceSampling.jl")
 
+include("CheapStack.jl")
+
+include("KhatriRaoProd.jl")
+
 ## Precompilation.
 @setup_workload begin
     using Random: Xoshiro

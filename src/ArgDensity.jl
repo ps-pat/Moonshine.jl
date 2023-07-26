@@ -1,3 +1,5 @@
+using StaticArrays: SA
+
 abstract type AbstractDensity <: Function end
 abstract type AbstractGraphDensity <: AbstractDensity end
 
@@ -137,108 +139,108 @@ end
 
 ## For a parent-child pair (eq. 6 of the paper).
 function dens_frechet(arg, parent, child, phenotypes::AbstractVector{Bool},
-                      α, p;
-                      logscale = false)
+                      α, p)
     φp, φc = first(phenotypes), last(phenotypes)
     Δt = latitude(arg, parent) - latitude(arg, child)
 
     q_parent = Fix1(q, φp)
     prob = q_parent(q_parent(p) * α(Δt))
 
-    ret_log = BigFloat((log ∘ q)(!φc, prob))
-
-    logscale ? ret_log : exp(ret_log)
+    BigFloat(q(!φc, prob))
 end
 
-function dens_frechet(phenotype::Bool, p; logscale = false)
-    ret_log = BigFloat(phenotype ? p : 1 - p)
-    logscale ? ret_log : exp(ret_log)
-end
+dens_frechet(phenotype::Bool, p) = BigFloat(phenotype ? p : 1 - p)
 
-function compute_integrand(arg, children, valuation, α, p; logscale = false)
-    ret_log = sum(children) do child
-        parent = (first ∘ parents)(arg, child)
-        φs = convert(Vector{Bool}, view(valuation, [parent, child]))
-        dens_frechet(arg, parent, child, φs, α, p, logscale = true)
+## Root.
+cmatrix_frechet(arg, p) =
+    reshape([dens_frechet(φ, p) for φ ∈ SA[false, true]], 2, 1)
+
+## This method assumes that both vectors of phenotypes are sorted
+## (false < true).
+cmatrix_frechet(arg, σ, φs_σ, δ, φs_δ, α, p) =
+    map(Iterators.product(φs_σ, φs_δ)) do (φ_σ, φ_δ)
+        dens_frechet(arg, δ, σ, SA[φ_δ, φ_σ], α, p)
     end
 
-    logscale ? ret_log : exp(ret_log)
+function cmatrix_frechet(arg, phenotypes::AbstractVector{Union{Missing, Bool}},
+                         σ, α, p)
+    _parents = parents(arg, σ)
+    δ = isempty(_parents) ? (zero ∘ eltype)(arg) : first(_parents)
+
+    ## Root
+    iszero(δ) && return cmatrix_frechet(arg, p)
+
+    ## Assume that the phenotype of δ is unknown since it is an
+    ## internal vertex.
+    φs_δ = [false, true]
+
+    ## The phenotype of σ might be known if it is a leaf.
+    if isleaf(arg, σ)
+        φ_σ = phenotypes[σ]
+        φs_σ = ismissing(φ_σ) ? [false, true] : [φ_σ]
+    else # non-root internal vertex
+        φs_σ = [false, true]
+    end
+
+    cmatrix_frechet(arg, σ, φs_σ, δ, φs_δ, α, p)
 end
 
-using Turing: @model, sample, MH, PG, SMC
-using Distributions: logpdf
-using Random: AbstractRNG, GLOBAL_RNG
-using Statistics: mean
-function (D::FrechetCoalDensity{Bool})(rng::AbstractRNG, arg; M = 1000)
+function (D::FrechetCoalDensity{Bool})(arg)
     p = D.pars[:p]::Float64
     α = D.α
     leaves_phenotypes = D.leaves_phenotypes
-    missing_phenotypes = findall(ismissing,leaves_phenotypes)
+    missing_phenotypes = findall(ismissing, leaves_phenotypes)
     ni = nivertices(arg)
+    nmiss = length(missing_phenotypes)
 
-    ## Compute posterior density of the phenotypes of the coalescence vertices.
-    @model function ivertices_pheno(arg, φ, p)
-        n = nleaves(arg)
+    ## Only 1 vertex in ARG.
+    iszero(ni) && return first(leaves_phenotype) ? p : 1 - p
 
-        ψ = Vector{Bool}(undef, ni)
+    ## Belief propagation through postorder traversal.
 
-        ψ[mrca(arg) - n] ~ Bernoulli(p)
+    ## Stack used to compute the postorder traversal.
+    vertices_stack = CheapStack(eltype(arg), nv(arg))
 
-        vstack = Int[]
-        push!(vstack, mrca(arg))
-        while !isempty(vstack)
-            parent = pop!(vstack)
-            q_parent = q(ψ[parent - n], p)
-            t_parent = latitude(arg, parent)
+    ## Stack used to store messages. The first `nmiss` dimensions are
+    ## indexed by the missing phenotypes. The last dimension is
+    ## indexed by the current phenotype.
+    messages_stack = CheapStack(Matrix{BigFloat}, nv(arg))
 
-            for child ∈ children(arg, parent)
-                Δt = t_parent - latitude(arg, child)
+    push!(vertices_stack, (minimum ∘ children)(arg, mrca(arg)))
+    push!(vertices_stack, mrca(arg))
+    v = (maximum ∘ children)(arg, mrca(arg))
 
-                if isleaf(arg, child)
-                    φ[child] ~ Bernoulli(q(ψ[parent - n], q_parent * α(Δt)))
-                else
-                    ψ[child - n] ~ Bernoulli(q(ψ[parent - n], q_parent * α(Δt)))
-                    push!(vstack, child)
-                end
+    res = zero(BigFloat)
+    while !isempty(vertices_stack)
+        while !iszero(v)
+            if !isleaf(arg, v)
+                v_children = children(arg, v)
+                push!(vertices_stack, minimum(v_children))
+                push!(vertices_stack, v)
+
+                v = maximum(v_children)
+            else
+                push!(vertices_stack, v)
+                v = zero(v)
             end
         end
-    end
 
-    m = ivertices_pheno(arg, D.leaves_phenotypes, p)
-    sampler = PG(20)
-    ps_sample = sample(rng, m, sampler, M, discard_initial = 100)
-    ivaluations = convert(Matrix{eltype(leaves_phenotypes)},
-                          ps_sample.value[:, 1:end-2, 1].data)
+        v = pop!(vertices_stack)
+        if !isleaf(arg, v) && (first ∘ children)(arg, v) == first(vertices_stack)
+            v2 = pop!(vertices_stack)
+            push!(vertices_stack, v)
+            v = v2
+        else # Compute message!
 
-    int_partials_log::Vector{BigFloat} = map(eachrow(ivaluations)) do ivaluation
-        valuation = vcat(leaves_phenotypes, ivaluation)
-        vs = setdiff(vertices(arg), vcat(mrca(arg), missing_phenotypes))
+            μ = cmatrix_frechet(arg, leaves_phenotypes, v, α, p)
+            if !isleaf(arg, v)
+                μ = (pop!(messages_stack) ⊙ pop!(messages_stack)) * μ
+            end
+            push!(messages_stack, μ)
 
-        compute_integrand(arg, vs, valuation, α, p, logscale = true) +
-            dens_frechet(Bool(valuation[mrca(arg)]), p, logscale = true)
-    end
-
-    function(phenotypes = nothing; logscale = false)
-        if isnothing(phenotypes)
-            ret_log = mean(int_partials_log)
-            return logscale ? ret_log : exp(ret_log)
+            v = zero(v)
         end
-
-        φ_leaves = deepcopy(leaves_phenotypes)
-        φ_leaves[missing_phenotypes] .= phenotypes
-
-        ret_log = mean(zip(int_partials_log, eachrow(ivaluations))) do x
-            int_partial_log, ivaluation = x
-
-            valuation = vcat(φ_leaves, ivaluation)
-            int_partial_log +
-                compute_integrand(arg, missing_phenotypes, valuation, α, p,
-                                  logscale = true)
-        end
-
-        logscale ? ret_log : exp(ret_log)
     end
+
+    pop!(messages_stack)
 end
-
-(D::FrechetCoalDensity)(arg; M = 1000) =
-    D(GLOBAL_RNG, arg, M = M)
