@@ -201,6 +201,7 @@ function (D::FrechetCoalDensity{Bool})(arg)
     ## Stack used to compute the postorder traversal.
     vertices_stack = CheapStack(eltype(arg), nv(arg))
 
+    ## TODO: update explanations.
     ## Stack used to store messages. The first `nmiss` dimensions are
     ## indexed by the missing phenotypes. The last dimension is
     ## indexed by the current phenotype.
