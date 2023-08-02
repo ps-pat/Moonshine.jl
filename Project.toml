@@ -15,7 +15,6 @@ Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 RandomNumbers = "e6cf234a-135c-5ec9-84dd-332b85af5143"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
-Turing = "fce5fe82-541a-59a6-adf8-730c64b5f9a0"
 
 [compat]
 Distributions = "0.25"
@@ -24,5 +23,4 @@ Graphs = "1.8"
 IntervalSets = "0.7.4"
 Random = "1.8"
 StaticArrays = "1.5"
-Turing = "0.25"
 julia = "1.8"
