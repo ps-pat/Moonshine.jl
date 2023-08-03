@@ -546,11 +546,13 @@ function coalesce!(rng, arg, vertices, nlive)
     newlat = latitude(arg, nv(arg)) + Δ
 
     ## Sample children & compute sequence.
-    _children = SVector{2, VertexType}(pop!(vertices), pop!(vertices))
-    newseq = sequences(arg, first(_children)) & sequences(arg, last(_children))
+    _children = SA[pop!(vertices), pop!(vertices)]
+    newseq = sequences(arg, first(_children)) &
+        sequences(arg, last(_children))
 
     ## Perform the coalescence.
-    add_vertex!(arg, newseq, newlat) || @error "Could not add a vertex to ARG"
+    add_vertex!(arg, newseq, newlat) ||
+        @error "Could not add a vertex to ARG"
     parent = nv(arg)
 
     for child ∈ _children
@@ -577,15 +579,11 @@ export buildtree!
 function buildtree!(rng::AbstractRNG, arg::Arg, idx = 1)
     nv(arg) > nleaves(arg) && @warn "ARG contains non-leaf vertices"
 
-    ## Group wild/derived sequences together to make the algorithm simpler.
-    sort!(sequences(arg), lt = (x, y) -> x[idx] <= y[idx])
+    derived = findall(σ -> getindex(σ, idx), sequences(arg))
+    wild = setdiff(range(1, length = length(sequences(arg))), derived)
 
     nlive = nleaves(arg)
-    nlive_wild = map(s -> s[idx], sequences(arg)) .|> iszero |> sum
-    nlive_derived = nlive - nlive_wild
-
-    wild = (collect ∘ range)(1, length = nlive_wild)
-    derived = (collect ∘ range)(nlive_wild + 1, length = nlive_derived)
+    nlive_derived, nlive_wild = length(derived), length(wild)
 
     ## While there are more than 1 live derived vertex, we build two
     ## distinct subtrees.
