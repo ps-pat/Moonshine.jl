@@ -92,7 +92,11 @@ function ArgCore{T}(leaves::AbstractVector{Sequence{T}};
                     ρ_loc = 0.0) where T
     n = length(leaves)
     latitudes = sizehint!(Float64[], 10n)
-    sequences = sizehint!(deepcopy(leaves), 10n)
+
+    sequences = sizehint!(similar(leaves, Sequence{T}, n), 10n)
+    for (k, leaf) ∈ enumerate(leaves)
+        sequences[k] = leaf
+    end
 
     nmarkers = (length ∘ first)(leaves)
     if length(positions) != nmarkers || !issorted(positions)
@@ -403,7 +407,7 @@ end
 @generated blocksize(::Arg{T}) where T = blocksize(Sequence{T})
 
 export nmutations
-nmutations(arg, e) = (count_ones ∘ xor)(sequences(arg, e)...)
+nmutations(arg, e) = count_ones(xor(sequences(arg, e)...))
 nmutations(arg) = mapreduce(Fix1(nmutations, arg), +, edges(arg))
 
 function branchlength_tree(arg)
