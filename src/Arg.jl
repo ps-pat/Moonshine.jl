@@ -408,7 +408,9 @@ end
 
 export nmutations
 nmutations(arg, e) = count_ones(xor(sequences(arg, e)...))
-nmutations(arg) = mapreduce(Fix1(nmutations, arg), +, edges(arg))
+
+nmutations(arg) = mapreduce(e -> nmutations(arg, e), +, edges(arg),
+                            init = zero(Int))
 
 function branchlength_tree(arg)
     lats = view(latitudes(arg), range(1, length = nleaves(arg) - 1))
