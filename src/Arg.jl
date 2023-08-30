@@ -161,8 +161,18 @@ end
 union(x::T, xs::Set{T}) where T =
     simplify!(Set([x]) ∪ xs)
 
-union(x::Set{T}, y::Set{T}) where T<:Interval =
-    (simplify! ∘ invoke)(union, Tuple{Any, Any}, x, y)
+function union(x::Set{T}, y::Set{T}) where T<:Interval
+    ret = empty(x)
+    for el ∈ x
+        push!(ret, el)
+    end
+
+    for el ∈ y
+        push!(ret, el)
+    end
+
+    simplify!(ret)
+end
 
 intersect(x::T, xs::Set{T}) where T =
     (simplify! ∘ Set ∘ broadcast)(Fix1(intersect, x), xs)
@@ -385,6 +395,8 @@ ancestral_intervals(arg, σ, δ) = ancestral_intervals(arg, Edge(σ, δ))
 
 function ancestral_intervals(arg, v::VertexType)
     isleaf(arg, v) && return Set([Ω(0, ∞)])
+
+
     mapreduce(child -> ancestral_intervals(arg, v, child), ∪, children(arg, v))
 end
 
