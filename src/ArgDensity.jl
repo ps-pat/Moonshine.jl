@@ -24,15 +24,15 @@ struct CoalDensity <: AbstractGraphDensity
 end
 
 function (D::CoalDensity)(arg::Arg; logscale = false)
-    n = big(D.n)
+    n = D.n
     iter = enumerate((diff ∘ latitudes)(arg))
-    init = latitude(arg, n + 1) * log(n) * log(n - one(n)) / BigFloat(2)
+    init = latitude(arg, n + 1) * log(n) * log(n - one(n)) / 2
 
     plat_log = mapreduce(+, iter, init = init) do p
-        k, Δ = big(first(p)), big(last(p))
+        k, Δ = first(p), last(p)
 
         l = 2n - k
-        λ = l * (l + one(l)) / BigFloat(2)
+        λ = l * (l + one(l)) / 2
 
         log(λ) - λ * Δ
     end
@@ -64,10 +64,10 @@ function (D::CoalMutDensity)(arg::Arg; logscale = false)
     μ = D.μ
     l = D.seq_length
 
-    m = (BigFloat ∘ nmutations)(arg)
-    bl = (big ∘ branchlength_tree)(arg)
+    m = nmutations(arg)
+    bl = branchlength_tree(arg)
 
-    pmut_log = m * log(μ) - big(0.5) * μ * l * bl - (log ∘ factorial)(m)
+    pmut_log = m * log(μ) - 0.5 * μ * l * bl - (log ∘ factorial)(m)
     ret = dens_coal(arg, logscale = true) + pmut_log
 
     logscale ? ret : exp(ret)
