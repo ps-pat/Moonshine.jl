@@ -95,7 +95,7 @@ struct FrechetCoalDensity{T} <: AbstractGraphDensity
     pars::Dict{Symbol, Any}
 
     FrechetCoalDensity(leaves_phenotypes::Vector{Union{Missing, S}};
-                       α = (t, λ) -> 1 - exp(- λ * t),
+                       α = (t, λ) -> 1 - exp(-t / λ),
                        pars = Dict{Symbol, Any}()) where S =
                        new{S}(leaves_phenotypes, α, pars)
 end
