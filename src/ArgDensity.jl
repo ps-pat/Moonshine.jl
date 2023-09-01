@@ -95,7 +95,7 @@ struct FrechetCoalDensity{T} <: AbstractGraphDensity
     pars::Dict{Symbol, Any}
 
     FrechetCoalDensity(leaves_phenotypes::Vector{Union{Missing, S}};
-                       α = t -> 1 - exp(-t),
+                       α = (t, λ) -> 1 - exp(- λ * t),
                        pars = Dict{Symbol, Any}()) where S =
                        new{S}(leaves_phenotypes, α, pars)
 end
@@ -170,6 +170,8 @@ function cmatrix_frechet(arg, phenotypes::AbstractVector{Union{Missing, Bool}},
     ## Root
     iszero(δ) && return cmatrix_frechet(arg, p)
 
+    α_scaled = t -> α(t, 2 * nleaves(arg) - δ)
+
     ## Assume that the phenotype of δ is unknown since it is an
     ## internal vertex.
     φs_δ = [false, true]
@@ -182,7 +184,7 @@ function cmatrix_frechet(arg, phenotypes::AbstractVector{Union{Missing, Bool}},
         φs_σ = [false, true]
     end
 
-    cmatrix_frechet(arg, σ, φs_σ, δ, φs_δ, α, p)
+    cmatrix_frechet(arg, σ, φs_σ, δ, φs_δ, α_scaled, p)
 end
 
 function (D::FrechetCoalDensity{Bool})(arg)
@@ -232,8 +234,8 @@ function (D::FrechetCoalDensity{Bool})(arg)
             push!(vertices_stack, v)
             v = v2
         else # Compute message!
-
             μ = cmatrix_frechet(arg, leaves_phenotypes, v, α, p)
+
             if !isleaf(arg, v)
                 μ = (pop!(messages_stack) ⊙ pop!(messages_stack)) * μ
             end
