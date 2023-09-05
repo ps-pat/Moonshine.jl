@@ -378,7 +378,7 @@ given.
 """
 function postoidx(arg, pos)
     @inbounds for (k, p) ∈ enumerate(arg.core.positions)
-        p > pos && return k - 1
+        p >= pos && return k - 1
     end
 
     nmarkers(arg)
@@ -504,9 +504,9 @@ function argplot(arg, int::Ω;
 
     edgecolor = fill(:gray, nedges)
 
-    idx = range(postoidx(arg, int.left), postoidx(arg, int.right))
-    nodecolor = map(sequences(newarg)) do vertex
-        any(vertex[idx]) ? derived_color : wild_color
+    mask = ancestral_mask(arg, int)
+    nodecolor = map(sequences(newarg)) do σ
+        any(σ & mask) ? derived_color : wild_color
     end
 
     node_labels = string.(1:n)
@@ -736,7 +736,7 @@ function recombine! end
 export recombine!
 
 function recombine!(arg::Arg, redge, cedge, breakpoint, rlat, clat)
-    @info "Recombination $(nrecombinations(arg) + 1)" redge = redge cedge = cedge
+    @debug "Recombination $(nrecombinations(arg) + 1)" redge = redge cedge = cedge
 
     ## Recombination and recoalescence vertices.
     rvertex, cvertex = nv(arg) .+ (1:2)
@@ -951,6 +951,8 @@ ancestral_mask(arg, x::Set{Ω}) = mapreduce(|, x) do int
 
     andmask(nmarkers(arg), UnitRange(lidx, ridx))
 end
+
+ancestral_mask(arg, x::Ω) = ancestral_mask(arg, Set([x]))
 
 ancestral_mask(arg, x::EdgeType) =
     ancestral_mask(arg, ancestral_intervals(arg, x))
