@@ -1,8 +1,8 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.9.2"
+julia_version = "1.9.3"
 manifest_format = "2.0"
-project_hash = "6453c407f70508f4679ee261217523c3002a86a7"
+project_hash = "a49d4fc242a56e16714b7460d63407d192021c3a"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -140,6 +140,11 @@ deps = ["LinearAlgebra"]
 git-tree-sha1 = "f641eb0a4f00c343bbc32346e1217b86f3ce9dad"
 uuid = "49dc2e85-a5d0-5ad3-a950-438e2897f1b9"
 version = "0.5.1"
+
+[[deps.Chain]]
+path = "/home/pfournier/Projets/julia/Chain"
+uuid = "8be319e6-bccf-4806-a6f7-6fae938471bc"
+version = "0.5.0"
 
 [[deps.ChainRulesCore]]
 deps = ["Compat", "LinearAlgebra", "SparseArrays"]

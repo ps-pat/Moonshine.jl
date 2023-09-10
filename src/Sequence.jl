@@ -6,7 +6,8 @@ import Base:
     show,
     isempty,
     string,
-    convert
+    convert,
+    hash
 
 using Random: GLOBAL_RNG, AbstractRNG
 
@@ -14,6 +15,15 @@ using Random: GLOBAL_RNG, AbstractRNG
 struct Sequence{T <: Unsigned}
     data::Vector{T}
     n::Int
+end
+
+function hash(x::Sequence, h::UInt)
+    ret = hash(x.n, h)
+    for el ∈ x.data
+        ret = hash(el, ret)
+    end
+
+    ret
 end
 
 isempty(seq::Sequence) = iszero(length(seq))

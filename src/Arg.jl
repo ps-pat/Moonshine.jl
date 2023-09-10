@@ -57,10 +57,14 @@ using StaticArrays:
     SVector, MVector,
     SA
 
+using Combinatorics: permutations
+
 const VertexType = Int
 const EdgeType = SimpleEdge{VertexType}
 const Ω = Interval{:closed, :open, Float64}
 const ∞ = Inf
+
+Ω(x) = Ω(x, ∞)
 
 export Ω
 
@@ -316,6 +320,9 @@ export nmarkers
 
 sequences(arg, v::VertexType) = sequences(arg)[v]
 sequences(arg, e::EdgeType) = [sequences(arg, src(e)), sequences(arg, dst(e))]
+
+sequences(arg, vs::AbstractArray{VertexType}) =
+    Iterators.map(v -> sequences(arg, v), vs)
 
 latitude(arg, v) =
     isleaf(arg, v) ? zero(Float64) : arg.core.latitudes[v - nleaves(arg)]
@@ -635,6 +642,32 @@ function buildtree!(rng::AbstractRNG, arg::Arg, idx = 1)
 end
 buildtree!(arg::Arg, idx = 1) = buildtree!(GLOBAL_RNG, arg, idx)
 
+export leavesperm
+"""
+    leavesperm(arg)
+
+Compute every leaves permutation consistent with an ARG.
+"""
+leavesperm(arg) = @chain quotient_leaves(arg) begin
+    Iterators.map(permutations, _)
+    ## TODO: ugly, change if Chain.jl#52 is accepted.
+    Iterators.product(_...)
+    Iterators.map(p -> vcat(p...), _)
+    Iterators.map(p -> getindex(p, invperm(first(_))), _)
+end
+
+function quotient_leaves(arg::Arg{T}) where T
+    RetEltype = Vector{eltype(arg)}
+    d = Dict{Sequence{T}, RetEltype}()
+
+    for (v, σ) ∈ enumerate(sequences(arg, leaves(arg)))
+        haskey(d, σ) || setindex!(d, RetEltype(), σ)
+        push!(d[σ], v)
+    end
+
+    (collect ∘ values)(d)
+end
+
 #######
 # MMN #
 #######
@@ -908,7 +941,6 @@ function make_consistent!(rng, arg, pos, mutation_edges; α = ∞)
 
         ## Update the set of mutation edges.
         push!(mutation_edges, upstream_mutation_edge(arg, pos, breakpoint))
-        println("loop")
     end
 end
 

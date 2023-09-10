@@ -2,6 +2,8 @@ module Moosh
 
 using Base: Fix1
 
+using Chain: @chain
+
 using PrecompileTools
 
 include("Sequence.jl")
