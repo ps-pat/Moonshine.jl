@@ -187,10 +187,10 @@ function cmatrix_frechet(arg, phenotypes::AbstractVector{Union{Missing, Bool}},
     cmatrix_frechet(arg, σ, φs_σ, δ, φs_δ, α_scaled, p)
 end
 
-function (D::FrechetCoalDensity{Bool})(arg)
+function (D::FrechetCoalDensity{Bool})(arg, perm = 1:nleaves(arg))
     p = D.pars[:p]::Float64
     α = D.α
-    leaves_phenotypes = D.leaves_phenotypes
+    leaves_phenotypes = D.leaves_phenotypes[perm]
     missing_phenotypes = findall(ismissing, leaves_phenotypes)
     ni = nivertices(arg)
     nmiss = length(missing_phenotypes)
