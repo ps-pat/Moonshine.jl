@@ -89,15 +89,16 @@ Ancestral Recombination Graph.
 - `pars::Dict{Symbol, Any}`: Parameters.
 """
 struct FrechetCoalDensity{T} <: AbstractGraphDensity
-    leaves_phenotypes::Vector{Union{Missing, T}}
+    leaves_phenotypes::Vector{Union{Missing,T}}
 
     α::Function
-    pars::Dict{Symbol, Any}
+    pars::Dict{Symbol,Any}
 
-    FrechetCoalDensity(leaves_phenotypes::Vector{Union{Missing, S}};
-                       α = (t, λ) -> 1 - exp(-t / λ),
-                       pars = Dict{Symbol, Any}()) where S =
-                       new{S}(leaves_phenotypes, α, pars)
+    function FrechetCoalDensity(leaves_phenotypes::Vector{Union{Missing,S}};
+                                α = (t, λ) -> 1 - exp(-t / λ),
+                                pars = Dict{Symbol,Any}()) where {S}
+        new{S}(leaves_phenotypes, α, pars)
+    end
 end
 export FrechetCoalDensity
 
@@ -152,17 +153,19 @@ end
 dens_frechet(phenotype::Bool, p) = BigFloat(phenotype ? p : 1 - p)
 
 ## Root.
-cmatrix_frechet(arg, p) =
-    reshape([dens_frechet(φ, p) for φ ∈ SA[false, true]], 2, 1)
+function cmatrix_frechet(arg, p)
+    reshape([dens_frechet(φ, p) for φ in SA[false, true]], 2, 1)
+end
 
 ## This method assumes that both vectors of phenotypes are sorted
 ## (false < true).
-cmatrix_frechet(arg, σ, φs_σ, δ, φs_δ, α, p) =
+function cmatrix_frechet(arg, σ, φs_σ, δ, φs_δ, α, p)
     map(Iterators.product(φs_σ, φs_δ)) do (φ_σ, φ_δ)
         dens_frechet(arg, δ, σ, SA[φ_δ, φ_σ], α, p)
     end
+end
 
-function cmatrix_frechet(arg, phenotypes::AbstractVector{Union{Missing, Bool}},
+function cmatrix_frechet(arg, phenotypes::AbstractVector{Union{Missing,Bool}},
                          σ, α, p)
     _parents = parents(arg, σ)
     δ = isempty(_parents) ? (zero ∘ eltype)(arg) : first(_parents)
@@ -229,7 +232,8 @@ function (D::FrechetCoalDensity{Bool})(arg, perm = 1:nleaves(arg))
         end
 
         v = pop!(vertices_stack)
-        if !isleaf(arg, v) && (first ∘ children)(arg, v) == first(vertices_stack)
+        if !isleaf(arg, v) &&
+           (first ∘ children)(arg, v) == first(vertices_stack)
             v2 = pop!(vertices_stack)
             push!(vertices_stack, v)
             v = v2
