@@ -57,8 +57,6 @@ using StaticArrays:
     SVector, MVector,
     SA
 
-using Combinatorics: permutations
-
 const VertexType = Int
 const EdgeType = SimpleEdge{VertexType}
 const Ω = Interval{:closed, :open, Float64}
@@ -642,20 +640,7 @@ function buildtree!(rng::AbstractRNG, arg::Arg, idx = 1)
 end
 buildtree!(arg::Arg, idx = 1) = buildtree!(GLOBAL_RNG, arg, idx)
 
-export leavesperm
-"""
-    leavesperm(arg)
-
-Compute every leaves permutation consistent with an ARG.
-"""
-leavesperm(arg) = @chain quotient_leaves(arg) begin
-    Iterators.map(permutations, _)
-    ## TODO: ugly, change if Chain.jl#52 is accepted.
-    Iterators.product(_...)
-    Iterators.map(p -> vcat(p...), _)
-    Iterators.map(p -> getindex(p, invperm(first(_))), _)
-end
-
+export quotient_leaves
 function quotient_leaves(arg::Arg{T}) where T
     RetEltype = Vector{eltype(arg)}
     d = Dict{Sequence{T}, RetEltype}()
