@@ -1008,3 +1008,29 @@ function update_upstream!(arg, v)
 
     arg
 end
+
+export highest_under
+"""
+    highest_under(arg, lat)
+
+Find the set S of vertices of `arg` such that:
+1. Every vertices of S has a latitude <= to `lat`;
+2. Every leaves of `arg` has an ancestor in S;
+3. The cardinality of S is minimal.
+"""
+function highest_under(arg, lat)
+    ret = CheapStack(eltype(arg), nleaves(arg))
+
+    acc = CheapStack(eltype(arg), nleaves(arg))
+    push!(acc, mrca(arg))
+    while !isempty(acc)
+        v = pop!(acc)
+        if latitude(arg, v) <= lat
+            push!(ret, v)
+            continue
+        end
+        push!(acc, children(arg, v)...)
+    end
+
+    ret
+end

@@ -5,7 +5,9 @@ import Base:
     first,
     length,
     pop!,
-    push!
+    push!,
+    show,
+    iterate
 
 mutable struct CheapStack{T}
     const store::Vector{T}
@@ -14,8 +16,6 @@ end
 
 CheapStack(T, n) =
     CheapStack{T}(Vector{T}(undef, n), 0)
-
-eltype(::Type{CheapStack{T}}) where T = T
 
 isempty(s::CheapStack) = iszero(s.ptr)
 
@@ -40,3 +40,33 @@ function push!(s::CheapStack, x)
 
     s
 end
+
+function push!(s::CheapStack, xs...)
+    for x ∈ xs
+        push!(s, x)
+    end
+    s
+end
+
+#############
+# Iteration #
+#############
+
+iterate(s::CheapStack) = isempty(s) ? nothing : (first(s.store), 1)
+function iterate(s::CheapStack, state)
+    state += 1
+    state ≤ s.ptr ? (s.store[state], state) : nothing
+end
+
+@generated eltype(::Type{CheapStack{T}}) where T = T
+@generated eltype(::CheapStack{T}) where T = eltype(CheapStack{T})
+
+###################
+# Pretty printing #
+###################
+
+show(io::IO, s::CheapStack) =
+    join(io, s, ", ")
+
+show(io::IO, ::MIME"text/plain", s::CheapStack{T}) where T =
+    print(io, "CheapStack{$T}:\n", s)
