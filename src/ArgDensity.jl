@@ -173,8 +173,6 @@ function cmatrix_frechet(arg, phenotypes::AbstractVector{Union{Missing,Bool}},
     ## Root
     iszero(δ) && return cmatrix_frechet(arg, p)
 
-    α_scaled = t -> α(t, 2 * nleaves(arg) - δ)
-
     ## Assume that the phenotype of δ is unknown since it is an
     ## internal vertex.
     φs_δ = [false, true]
@@ -187,7 +185,7 @@ function cmatrix_frechet(arg, phenotypes::AbstractVector{Union{Missing,Bool}},
         φs_σ = [false, true]
     end
 
-    cmatrix_frechet(arg, σ, φs_σ, δ, φs_δ, α_scaled, p)
+    cmatrix_frechet(arg, σ, φs_σ, δ, φs_δ, α, p)
 end
 
 function (D::FrechetCoalDensity{Bool})(arg, perm = 1:nleaves(arg))
