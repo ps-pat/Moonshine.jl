@@ -95,7 +95,7 @@ struct FrechetCoalDensity{T} <: AbstractGraphDensity
     pars::Dict{Symbol,Any}
 
     function FrechetCoalDensity(leaves_phenotypes::Vector{Union{Missing,S}};
-                                α = (t, λ) -> 1 - exp(-t / λ),
+                                α = (t, p) -> -expm1(-1 / (1 + 1 / (2 * t^2 * p * (1 - p)))),
                                 pars = Dict{Symbol,Any}()) where {S}
         new{S}(leaves_phenotypes, α, pars)
     end
@@ -129,7 +129,7 @@ function dens_frechet(arg, parent, child::AbstractVector,
     Δs = map(c -> lat_parent - latitude(arg, c), child)
 
     qϕ = Fix1(q, ϕp)
-    probs = map(Δ -> qϕ(qϕ(p) * α(Δ)), Δs)
+    probs = map(Δ -> qϕ(qϕ(p) * α(Δ, p)), Δs)
 
     ret_log = sum(x -> (log ∘ q)(!first(x), last(x)),
                   zip(Φc, probs),
@@ -145,7 +145,7 @@ function dens_frechet(arg, parent, child, phenotypes::AbstractVector{Bool},
     Δt = latitude(arg, parent) - latitude(arg, child)
 
     q_parent = Fix1(q, φp)
-    prob = q_parent(q_parent(p) * α(Δt))
+    prob = q_parent(q_parent(p) * α(Δt, p))
 
     BigFloat(q(!φc, prob))
 end
