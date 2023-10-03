@@ -95,7 +95,7 @@ struct FrechetCoalDensity{T} <: AbstractGraphDensity
     pars::Dict{Symbol,Any}
 
     function FrechetCoalDensity(leaves_phenotypes::Vector{Union{Missing,S}};
-                                α = (t, p) -> -expm1(-1 / (1 + 1 / (2 * t^2 * p * (1 - p)))),
+                                α = t -> -expm1(-t),
                                 pars = Dict{Symbol,Any}()) where {S}
         new{S}(leaves_phenotypes, α, pars)
     end
@@ -119,38 +119,20 @@ parent, left child and right child in that order.
 """
 function dens_frechet end
 
-function dens_frechet(arg, parent, child::AbstractVector,
-                      phenotypes::AbstractVector{Bool},
-                      α, p;
-                      logscale = false)
-    ϕp, Φc = first(phenotypes), last(phenotypes, 2)
-    lat_parent = latitude(arg, parent)
-
-    Δs = map(c -> lat_parent - latitude(arg, c), child)
-
-    qϕ = Fix1(q, ϕp)
-    probs = map(Δ -> qϕ(qϕ(p) * α(Δ, p)), Δs)
-
-    ret_log = sum(x -> (log ∘ q)(!first(x), last(x)),
-                  zip(Φc, probs),
-                  init = zero(Float64))
-
-    logscale ? ret_log : exp(ret_log)
-end
-
 ## For a parent-child pair (eq. 6 of the paper).
 function dens_frechet(arg, parent, child, phenotypes::AbstractVector{Bool},
                       α, p)
     φp, φc = first(phenotypes), last(phenotypes)
     Δt = latitude(arg, parent) - latitude(arg, child)
 
-    q_parent = Fix1(q, φp)
-    prob = q_parent(q_parent(p) * α(Δt, p))
+    α_scaled = t -> α(1 / (1 + 2 / ((1 - q(φc, p)) * t^2)))
 
-    BigFloat(q(!φc, prob))
+    prob = q(φp, p) * α_scaled(Δt)
+
+    q(iszero((φp + φc) % 2), prob)
 end
 
-dens_frechet(phenotype::Bool, p) = BigFloat(phenotype ? p : 1 - p)
+dens_frechet(phenotype::Bool, p) = phenotype ? p : 1 - p
 
 ## Root.
 function cmatrix_frechet(arg, p)
@@ -208,13 +190,13 @@ function (D::FrechetCoalDensity{Bool})(arg, perm = 1:nleaves(arg))
     ## Stack used to store messages. The first `nmiss` dimensions are
     ## indexed by the missing phenotypes. The last dimension is
     ## indexed by the current phenotype.
-    messages_stack = CheapStack(Matrix{BigFloat}, nv(arg))
+    messages_stack = CheapStack(Matrix{Float64}, nv(arg))
 
     push!(vertices_stack, (minimum ∘ children)(arg, mrca(arg)))
     push!(vertices_stack, mrca(arg))
     v = (maximum ∘ children)(arg, mrca(arg))
 
-    res = zero(BigFloat)
+    res = zero(Float64)
     while !isempty(vertices_stack)
         while !iszero(v)
             if !isleaf(arg, v)
