@@ -94,7 +94,8 @@ struct FrechetCoalDensity{T} <: AbstractGraphDensity
     pars::Dict{Symbol,Any}
 
     function FrechetCoalDensity(leaves_phenotypes::Vector{Union{Missing, S}};
-                                α = (t, λ) -> 1 - exp(-t / λ),
+                                α = t -> -expm1(-t),
+                                scale_α = false,
                                 pars = Dict{Symbol,Any}()) where {S}
         new{S}(leaves_phenotypes, α, pars)
     end
@@ -120,13 +121,15 @@ function dens_frechet end
 
 ## For a parent-child pair (eq. 6 of the paper).
 function dens_frechet(arg, parent, child, phenotypes::AbstractVector{Bool},
-                      α, p)
+                      α, p; scale_α = false)
     φp, φc = first(phenotypes), last(phenotypes)
     Δt = latitude(arg, parent) - latitude(arg, child)
 
-    α_scaled = t -> α(1 / (1 + 2 / ((1 - q(φc, p)) * t^2)))
+    if scale_α
+        α = t -> α(1 / (1 + 2 / ((1 - q(φc, p)) * t^2)))
+    end
 
-    prob = q(φp, p) * α_scaled(Δt)
+    prob = q(φp, p) * α(Δt)
 
     q(iszero((φp + φc) % 2), prob)
 end
