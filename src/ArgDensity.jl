@@ -17,7 +17,7 @@ struct CoalDensity <: AbstractGraphDensity
 
     function CoalDensity(n)
         N = big(n)
-        ptopo_log = (log ∘ factorial)(N - 1) - (log ∘ factorial)(2(N - 1))
+        ptopo_log = log(N) + (N - 1) * log(2) - 2 * sum(log, 2:N)
 
         new(n, ptopo_log)
     end
@@ -25,19 +25,18 @@ end
 
 function (D::CoalDensity)(arg::Arg; logscale = false)
     n = D.n
+
+    ## Probability of the first coalescence.
+    plat1_log = logccdf(Exponential(inv(n - 1)), first(latitudes(arg)))
+
     iter = enumerate((diff ∘ latitudes)(arg))
-    init = latitude(arg, n + 1) * log(n) * log(n - one(n)) / 2
+    plat_log = mapreduce(+, iter, init = zero(Float64)) do p
+        k, Δ = first(p) + 1, last(p)
 
-    plat_log = mapreduce(+, iter, init = init) do p
-        k, Δ = first(p), last(p)
-
-        l = 2n - k
-        λ = l * (l + one(l)) / 2
-
-        log(λ) - λ * Δ
+        logccdf(Exponential(inv(n - k)), Δ)
     end
 
-    ret = D.ptopo_log + plat_log
+    ret = D.ptopo_log + plat1_log + plat_log
 
     logscale ? ret : exp(ret)
 end
@@ -94,7 +93,7 @@ struct FrechetCoalDensity{T} <: AbstractGraphDensity
     α::Function
     pars::Dict{Symbol,Any}
 
-    function FrechetCoalDensity(leaves_phenotypes::Vector{Union{Missing,S}};
+    function FrechetCoalDensity(leaves_phenotypes::Vector{Union{Missing, S}};
                                 α = (t, λ) -> 1 - exp(-t / λ),
                                 pars = Dict{Symbol,Any}()) where {S}
         new{S}(leaves_phenotypes, α, pars)
