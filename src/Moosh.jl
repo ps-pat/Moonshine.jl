@@ -20,7 +20,7 @@ include("ImportanceSampling.jl")
 
 include("CheapStack.jl")
 
-include("KhatriRaoProd.jl")
+include("tools.jl")
 
 ## Precompilation.
 @setup_workload begin

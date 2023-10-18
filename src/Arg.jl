@@ -557,38 +557,41 @@ end
 # Tree construction #
 #####################
 
-function coalesce!(rng, arg, vertices, nlive)
+function coalesce!(rng::AbstractRNG, arg, vertices, nlive)
     ## Select coalescing pair.
     arg.logprob += (log ∘ inv ∘ binomial)(length(vertices), 2)
     shuffle!(rng, vertices)
 
     ## Sample a latitude for the coalescence event.
-    Δdist = Exponential(inv(nlive))
+    Δdist = Exponential(inv(nlive - 1))
     Δ = rand(rng, Δdist)
     arg.logprob += logccdf(Δdist, Δ)
     newlat = latitude(arg, nv(arg)) + Δ
 
-    ## Sample children & compute sequence.
-    _children = SA[pop!(vertices), pop!(vertices)]
-    newseq = sequences(arg, first(_children)) &
-        sequences(arg, last(_children))
-
     ## Perform the coalescence.
-    add_vertex!(arg, newseq, newlat) ||
-        @error "Could not add a vertex to ARG"
-    parent = nv(arg)
-
-    for child ∈ _children
-        e = Edge(parent, child)
-        add_edge!(arg, e)
-        arg.core.ancestral_interval[e] = Set([Ω(0, ∞)])
-    end
+    parent = coalesce!(arg, pop!(vertices), pop!(vertices), newlat)
 
     ## Update live vertices.
     push!(vertices, parent)
 
     @debug("$(first(_children)) and $(last(_children)) \
            coalesced into $parent at $(latitude(arg, parent))")
+end
+
+function coalesce!(arg::Arg, v1, v2, lat)
+    newseq = sequences(arg, v1) & sequences(arg, v2)
+
+    add_vertex!(arg, newseq, lat) ||
+        @error "Could not add a vertex to ARG"
+    parent = nv(arg)
+
+    for child ∈ SA[v1, v2]
+        e = Edge(parent, child)
+        add_edge!(arg, e)
+        arg.core.ancestral_interval[e] = Set([Ω(0, ∞)])
+    end
+
+    parent
 end
 
 """
