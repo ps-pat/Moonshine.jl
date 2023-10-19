@@ -128,6 +128,8 @@ function dens_frechet(arg, parent, child, phenotypes::AbstractVector{Bool},
 
     if scale_α
         α_final = t -> α(1 / (1 + 2 / ((1 - q(φc, p)) * t^2)))
+    else
+        α_final = α
     end
 
     prob = q(φp, p) * α_final(Δt)
