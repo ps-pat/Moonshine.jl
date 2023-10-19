@@ -91,13 +91,14 @@ struct FrechetCoalDensity{T} <: AbstractGraphDensity
     leaves_phenotypes::Vector{Union{Missing,T}}
 
     α::Function
+    scale_α::Bool
     pars::Dict{Symbol,Any}
 
     function FrechetCoalDensity(leaves_phenotypes::Vector{Union{Missing, S}};
                                 α = t -> -expm1(-t),
                                 scale_α = false,
                                 pars = Dict{Symbol,Any}()) where {S}
-        new{S}(leaves_phenotypes, α, pars)
+        new{S}(leaves_phenotypes, α, scale_α, pars)
     end
 end
 export FrechetCoalDensity
@@ -126,10 +127,10 @@ function dens_frechet(arg, parent, child, phenotypes::AbstractVector{Bool},
     Δt = latitude(arg, parent) - latitude(arg, child)
 
     if scale_α
-        α = t -> α(1 / (1 + 2 / ((1 - q(φc, p)) * t^2)))
+        α_final = t -> α(1 / (1 + 2 / ((1 - q(φc, p)) * t^2)))
     end
 
-    prob = q(φp, p) * α(Δt)
+    prob = q(φp, p) * α_final(Δt)
 
     q(iszero((φp + φc) % 2), prob)
 end
@@ -143,14 +144,15 @@ end
 
 ## This method assumes that both vectors of phenotypes are sorted
 ## (false < true).
-function cmatrix_frechet(arg, σ, φs_σ, δ, φs_δ, α, p)
+function cmatrix_frechet(arg, σ, φs_σ, δ, φs_δ, α, p; scale_α = false)
     map(Iterators.product(φs_σ, φs_δ)) do (φ_σ, φ_δ)
-        dens_frechet(arg, δ, σ, SA[φ_δ, φ_σ], α, p)
+        dens_frechet(arg, δ, σ, SA[φ_δ, φ_σ], α, p, scale_α = scale_α)
     end
 end
 
-function cmatrix_frechet(arg, phenotypes::AbstractVector{Union{Missing,Bool}},
-                         σ, α, p)
+function cmatrix_frechet(arg,
+                         phenotypes::AbstractVector{Union{Missing,Bool}},
+                         σ, α, p; scale_α = false)
     _parents = parents(arg, σ)
     δ = isempty(_parents) ? (zero ∘ eltype)(arg) : first(_parents)
 
@@ -169,12 +171,13 @@ function cmatrix_frechet(arg, phenotypes::AbstractVector{Union{Missing,Bool}},
         φs_σ = [false, true]
     end
 
-    cmatrix_frechet(arg, σ, φs_σ, δ, φs_δ, α, p)
+    cmatrix_frechet(arg, σ, φs_σ, δ, φs_δ, α, p, scale_α = scale_α)
 end
 
 function (D::FrechetCoalDensity{Bool})(arg, perm = 1:nleaves(arg))
     p = D.pars[:p]::Float64
     α = D.α
+    scale_α = D.scale_α
     leaves_phenotypes = D.leaves_phenotypes[perm]
     missing_phenotypes = findall(ismissing, leaves_phenotypes)
     ni = nivertices(arg)
@@ -220,7 +223,8 @@ function (D::FrechetCoalDensity{Bool})(arg, perm = 1:nleaves(arg))
             push!(vertices_stack, v)
             v = v2
         else # Compute message!
-            μ = cmatrix_frechet(arg, leaves_phenotypes, v, α, p)
+            μ = cmatrix_frechet(arg, leaves_phenotypes, v, α, p,
+                                scale_α = scale_α)
 
             if !isleaf(arg, v)
                 μ = (pop!(messages_stack) ⊙ pop!(messages_stack)) * μ
