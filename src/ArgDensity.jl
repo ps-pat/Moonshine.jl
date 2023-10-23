@@ -1,5 +1,7 @@
 using StaticArrays: SA
 
+using Distributions: logpdf
+
 abstract type AbstractDensity <: Function end
 abstract type AbstractGraphDensity <: AbstractDensity end
 
@@ -27,13 +29,13 @@ function (D::CoalDensity)(arg::Arg; logscale = false)
     n = D.n
 
     ## Probability of the first coalescence.
-    plat1_log = logccdf(Exponential(inv(n - 1)), first(latitudes(arg)))
+    plat1_log = logpdf(Exponential(inv(n - 1)), first(latitudes(arg)))
 
     iter = enumerate((diff ∘ latitudes)(arg))
     plat_log = mapreduce(+, iter, init = zero(Float64)) do p
         k, Δ = first(p) + 1, last(p)
 
-        logccdf(Exponential(inv(n - k)), Δ)
+        logpdf(Exponential(inv(n - k)), Δ)
     end
 
     ret = D.ptopo_log + plat1_log + plat_log

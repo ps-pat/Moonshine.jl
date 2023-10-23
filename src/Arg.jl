@@ -565,7 +565,7 @@ function coalesce!(rng::AbstractRNG, arg, vertices, nlive)
     ## Sample a latitude for the coalescence event.
     Δdist = Exponential(inv(nlive - 1))
     Δ = rand(rng, Δdist)
-    arg.logprob += logccdf(Δdist, Δ)
+    arg.logprob += logpdf(Δdist, Δ)
     newlat = latitude(arg, nv(arg)) + Δ
 
     ## Perform the coalescence.
