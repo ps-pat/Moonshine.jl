@@ -7,15 +7,21 @@ import Base:
     pop!,
     push!,
     show,
-    iterate
+    iterate,
+    vec
 
 mutable struct CheapStack{T}
     const store::Vector{T}
     ptr::Int
 end
 
+## TODO: Get rid of this constructor.
 CheapStack(T, n) =
     CheapStack{T}(Vector{T}(undef, n), 0)
+
+function CheapStack{T}(n) where T
+    CheapStack{T}(Vector{T}(undef, n), 0)
+end
 
 isempty(s::CheapStack) = iszero(s.ptr)
 
@@ -70,3 +76,9 @@ show(io::IO, s::CheapStack) =
 
 show(io::IO, ::MIME"text/plain", s::CheapStack{T}) where T =
     print(io, "CheapStack{$T}:\n", s)
+
+##############
+# Conversion #
+##############
+
+vec(s::CheapStack) = resize!(s.store, length(s))
