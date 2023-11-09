@@ -12,6 +12,10 @@ export Sequence
 
 export fillseq
 
+include("tools.jl")
+
+include("Genealogy.jl")
+
 include("Arg.jl")
 
 include("ArgDensity.jl")

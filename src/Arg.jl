@@ -23,8 +23,8 @@ import Graphs:
 
 import Base:
     eltype,
-    show,
-    union, intersect, in
+    show
+
 using Base: @invoke
 
 using Random:
@@ -32,8 +32,9 @@ using Random:
     GLOBAL_RNG,
     shuffle!
 
+import GraphMakie: graphplot
+
 using GraphMakie:
-    graphplot,
     register_interaction!,
     deregister_interaction!,
     NodeDrag,
@@ -56,15 +57,6 @@ using IntervalSets
 using StaticArrays:
     SVector, MVector,
     SA
-
-const VertexType = Int
-const EdgeType = SimpleEdge{VertexType}
-const Ω = Interval{:closed, :open, Float64}
-const ∞ = Inf
-
-Ω(x) = Ω(x, ∞)
-
-export Ω
 
 ######################
 # ArgCore definition #
@@ -101,20 +93,7 @@ function ArgCore{T}(leaves::AbstractVector{Sequence{T}};
     end
 
     nmarkers = (length ∘ first)(leaves)
-    if length(positions) != nmarkers || !issorted(positions)
-        @info((isempty(positions) ? "A" : "Invalid positions: a") *
-            "ssuming equally spaced markers")
-        positions = isone(nmarkers) ?
-            [0.0] : (collect ∘ range)(0, 1, length = nmarkers)
-    end
-    if minimum(positions) < 0
-        @info("First position is < 0: shifting positions right")
-        positions .-= minimum(positions)
-    end
-    if maximum(positions) > 1
-        @info("Last position is > 0: scaling positions")
-        positions ./= maximum(positions)
-    end
+    positions = validate_positions(positions, nmarkers)
 
     ArgCore{T}(SimpleDiGraph(n), latitudes, sequences, n, Dict(),
                positions, [], seq_length, effective_popsize, μ_loc, ρ_loc)
@@ -140,7 +119,7 @@ end
 # Arg definition #
 ##################
 
-mutable struct Arg{T} <: AbstractSimpleGraph{VertexType}
+mutable struct Arg{T} <: AbstractGenealogy
     core::ArgCore{T}
     logprob::BigFloat
 end
@@ -175,35 +154,27 @@ function Arg(nmin::Integer, minlength::Integer,
     Arg{UInt}(nmin, minlength, nmax, maxlength; genpars...)
 end
 
-## AbstractGraph Interface.
-## See https://juliagraphs.org/Graphs.jl/stable/ecosystem/interface/
-for fun ∈ [:edges, :vertices, :ne, :nv]
-    @eval function $fun(arg::Arg)
-        $fun(arg.core.graph)
-    end
-end
+###############################
+# AbstractGenealogy Interface #
+###############################
 
-for (fun, ret) ∈ Dict(:eltype => VertexType,
-                      :edgetype => EdgeType,
-                      :is_directed => :true)
-    @eval begin
-        @generated $fun(::Type{Arg}) = $ret
-        @generated $fun(::Arg) = $fun(Arg)
-    end
-end
+describe(::Arg, long = true) = long ? "Ancestral Recombination Graph" : "ARG"
 
-let arg_edge = Expr(:(::), :e, EdgeType),
-    arg_vertex = Expr(:(::), :v, VertexType)
-    for (fun, a) ∈ Dict(:has_edge => arg_edge,
-                        :has_vertex => arg_vertex,
-                        :inneighbors => arg_vertex,
-                        :outneighbors => arg_vertex)
-        varname = first(a.args)
-        @eval function $fun(arg::Arg, $a)
-            $fun(arg.core.graph, $varname)
-        end
-    end
-end
+latitudes(arg::Arg, ivs) = getindex(latitudes(arg), ivs)
+
+latitude(arg::Arg, v) =
+    isleaf(arg, v) ? zero(Float64) : latitudes(arg)[v - nleaves(arg)]
+
+leaves(arg::Arg) = Base.OneTo(nleaves(arg))
+
+ivertices(arg::Arg) = range(nleaves(arg) + 1, nv(arg))
+
+mrca(arg::Arg) = isempty(arg.core.latitudes) ?
+    zero(Int) : argmax(arg.core.latitudes) + nleaves(arg)
+
+###########################
+# AbstractGraph Interface #
+###########################
 
 function add_vertex!(arg::Arg, seq = Sequence(), lat = ∞)
     push!(arg.core.latitudes, lat)
@@ -226,77 +197,27 @@ function rem_edge!(arg::Arg, e)
     rem_edge!(arg.core.graph, e)
 end
 
-## Simple methods.
-for field ∈ [:(:nleaves), :(:sequences), :(:latitudes),
+##################
+# Simple Methods #
+##################
+
+for field ∈ [:(:nleaves), :(:sequences), :(:latitudes), :(:graph),
              :(:seq_length), :(:eff_popsize), :(:positions),
              :(:recombinations_position)]
     fun_name = eval(field)
     @eval begin
         export $fun_name
 
-        function $fun_name(arg)
+        function $fun_name(arg::Arg)
             getfield(arg.core, $field)
-
         end
     end
 end
 
 nrecombinations(arg) = length(arg.core.recombinations_position)
 
-leaves(arg) = Base.OneTo(arg.core.nleaves)
-isleaf(arg, v) = v <= nleaves(arg)
-
-function ivertices(arg)
-    n = nleaves(arg)
-    range(n + 1, length = n - 1)
-end
-nivertices(arg) = nleaves(arg) - 1
-
-"""
-    nmarkers(arg)
-
-Number of markers of the sequences in an ARG.
-"""
-nmarkers(arg) = (length ∘ first)(arg.core.sequences)
-export nmarkers
-
-sequences(arg, v::VertexType) = sequences(arg)[v]
-sequences(arg, e::EdgeType) = [sequences(arg, src(e)), sequences(arg, dst(e))]
-
-sequences(arg, vs::AbstractArray{VertexType}) =
-    Iterators.map(v -> sequences(arg, v), vs)
-
-latitude(arg, v) =
-    isleaf(arg, v) ? zero(Float64) : arg.core.latitudes[v - nleaves(arg)]
-export latitude
-
-edge_length(arg, e) = latitude(arg, src(e)) - latitude(arg, dst(e))
-
-export mrca, tmrca
-mrca(arg) = isempty(arg.core.latitudes) ?
-    zero(Int) : argmax(arg.core.latitudes) + nleaves(arg)
-tmrca(arg) = isempty(arg.core.latitudes) ?
-    zero(Float64) : maximum(arg.core.latitudes)
-
-"""
-    children(arg, v, int = Ω(0, ∞))
-    parents(arg, v, int = Ω(0, ∞))
-    siblings(arg, v, int = Ω(0, ∞))
-
-Return the children/parents/siblings of a vertex bearing ancestral material for
-a given interval.
-"""
-function children end,
-function parents end,
-function siblings end
-export children, parents, siblings
-
-children(arg, v) = outneighbors(arg, v)
-
-parents(arg, v) = inneighbors(arg, v)
-
-function siblings(arg, v, int = Ω(0, ∞))
-    ret = mapreduce(p -> children(arg, p, int), ∪, parents(arg, v, int),
+function siblings(arg::Arg, v, int)
+    ret = mapreduce(p -> children(arg, p, int), ∪, dads(arg, v, int),
                     init = eltype(arg)[])
 
     v_idx = findfirst(==(v), ret)
@@ -306,31 +227,10 @@ function siblings(arg, v, int = Ω(0, ∞))
 end
 
 for (fun, edge_fun) ∈ Dict(:children => (x, y) -> Edge(x, y),
-                           :parents => (x, y) -> Edge(y, x))
-    @eval $fun(arg, v, int) =
+                           :dads => (x, y) -> Edge(y, x))
+    @eval $fun(arg::Arg, v, int) =
         filter(x -> !isempty(ancestral_intervals(arg, $edge_fun(v, x)) ∩ int),
                $fun(arg, v))
-end
-
-"""
-    idxtopos(arg, idx)
-
-Return the position of the marker given its index.
-"""
-idxtopos(arg, idx) = arg.core.positions[idx]
-
-"""
-    postoidx(arg, pos)
-
-Return the largest marker's index that is at a position lesser than the one
-given.
-"""
-function postoidx(arg, pos)
-    @inbounds for (k, p) ∈ enumerate(arg.core.positions)
-        p >= pos && return k - 1
-    end
-
-    nmarkers(arg)
 end
 
 """
@@ -354,27 +254,6 @@ function ancestral_intervals(arg, v::VertexType)
 end
 
 @generated blocksize(::Arg{T}) where T = blocksize(Sequence{T})
-
-export nmutations
-nmutations(arg, e) = count_ones(xor(sequences(arg, e)...))
-
-nmutations(arg) = mapreduce(e -> nmutations(arg, e), +, edges(arg),
-                            init = zero(Int))
-
-function branchlength_tree(arg)
-    lats = view(latitudes(arg), range(1, length = nleaves(arg) - 1))
-    sum(lats, init = last(lats))
-end
-
-export branchlength
-function branchlength(arg)
-    ν = nrecombinations(arg)
-    lats = view(latitudes(arg), range(nleaves(arg), length = 2ν))
-    rec_branchlength = mapreduce(vs -> last(vs) - first(vs), +,
-                                 Iterators.partition(lats, 2), init = 0.0)
-
-    branchlength_tree(arg) + rec_branchlength
-end
 
 for (fun, par) ∈ Dict(:mut_rate => :(:μ_loc), :rec_rate => :(:ρ_loc))
     @eval begin
@@ -402,44 +281,21 @@ function subarg(arg, int)
     newarg
 end
 
-"""
-    maxdepth(arg, v, pos, depth = 0)
+function maxdepth(arg::Arg, v, int, depth = 0)
+    _dads = dads(arg, v, int)
+    isempty(_dads) && return depth
 
-Compute the depth of a vertex, that is the number of egdes between it and the
-arg's mrca.
-"""
-function maxdepth(arg, v, int, depth = 0)
-    _parents = parents(arg, v, int)
-    isempty(_parents) && return depth
-
-    mapreduce(parent -> maxdepth(arg, parent, int, depth + 1), max, _parents)
+    mapreduce(dad -> maxdepth(arg, dad, int, depth + 1), max, _dads)
 end
-
 
 ##############################
 # Plotting & pretty printing #
 ##############################
 
-ArgLayout(int) = function(arg)
-    ## Force leaves to be in last layer.
-    lastlayer = maximum(v -> maxdepth(arg, v, int), leaves(arg)) + 1
-
-    xs, ys, _ = solve_positions(Zarate(),
-                                arg.core.graph,
-                                force_layer = Pair.(leaves(arg), lastlayer))
-
-    ## Rotate by -π/2.
-    Point.(zip(ys, -xs))
-end
-
-function argplot end
-export argplot
-
-function argplot(arg, int::Ω;
-                 arrow_show = true,
-                 wild_color = :blue,
-                 derived_color = :red,
-                 attributes...)
+function graphplot(arg::Arg, int::Ω;
+                   wild_color = :blue,
+                   derived_color = :red,
+                   attributes...)
     newarg = deepcopy(arg)
     n = nv(newarg)
 
@@ -449,59 +305,27 @@ function argplot(arg, int::Ω;
         rem_edge!(newarg, e)
     end
 
-    nedges = ne(newarg)
-
-    edgecolor = fill(:gray, nedges)
-
     mask = ancestral_mask(arg, int)
     nodecolor = map(sequences(newarg)) do σ
         any(σ & mask) ? derived_color : wild_color
     end
 
-    node_labels = string.(1:n)
+    lastlayer = maximum(v -> maxdepth(arg, v, int), leaves(arg)) + 1
 
-    node_sizes = fill(25.0, n)
-
-    p = graphplot(newarg,
-                  layout = ArgLayout(int),
-                  nlabels = node_labels,
-                  nlabels_distance = 10,
-                  node_size = node_sizes,
-                  node_color = nodecolor,
-                  edge_color = edgecolor,
-                  edge_width = fill(3, nedges),
-                  elabels = nothing,
-                  arrow_show = arrow_show,
-                  attributes...)
-
-
-    deregister_interaction!(p.axis, :rectanglezoom)
-    register_interaction!(p.axis, :nodedrag, NodeDrag(p.plot))
-    register_interaction!(p.axis, :nodehover, NodeHoverHighlight(p.plot))
-
-    p
+    invoke(graphplot, Tuple{AbstractGenealogy}, newarg;
+           layout = GenLayout(lastlayer, leaves(newarg)),
+           node_color = nodecolor,
+           elabels = nothing,
+           attributes...)
 end
 
-function show(io::IO, ::MIME"text/plain", arg::Arg)
-    println(io, "Ancestral recombination graph:")
-    println(io, nleaves(arg), " leaves, ",
-            nmarkers(arg), " markers")
-    print(io, "tMRCA: ", tmrca(arg))
-end
-
-function show(io::IO, arg::Arg)
-    print(io, "ARG(")
-    print(io, nleaves(arg))
-    print(io, " leaves, ")
-    print(io, nmarkers(arg))
-    print(io, " markers)")
-end
+graphplot(arg::Arg; attributes...) = graphplot(arg, Ω(0); attributes...)
 
 #####################
 # Tree construction #
 #####################
 
-function coalesce!(rng::AbstractRNG, arg, vertices, nlive)
+function coalesce!(rng::AbstractRNG, arg::Arg, vertices, nlive)
     ## Select coalescing pair.
     arg.logprob += (log ∘ inv ∘ binomial)(length(vertices), 2)
     shuffle!(rng, vertices)
@@ -513,29 +337,13 @@ function coalesce!(rng::AbstractRNG, arg, vertices, nlive)
     newlat = latitude(arg, nv(arg)) + Δ
 
     ## Perform the coalescence.
-    parent = coalesce!(arg, pop!(vertices), pop!(vertices), newlat)
+    dad = coalesce!(arg, pop!(vertices), pop!(vertices), newlat)
 
     ## Update live vertices.
-    push!(vertices, parent)
+    push!(vertices, dad)
 
     @debug("$(first(_children)) and $(last(_children)) \
-           coalesced into $parent at $(latitude(arg, parent))")
-end
-
-function coalesce!(arg::Arg, v1, v2, lat)
-    newseq = sequences(arg, v1) & sequences(arg, v2)
-
-    add_vertex!(arg, newseq, lat) ||
-        @error "Could not add a vertex to ARG"
-    parent = nv(arg)
-
-    for child ∈ SA[v1, v2]
-        e = Edge(parent, child)
-        add_edge!(arg, e)
-        arg.core.ancestral_interval[e] = Set([Ω(0, ∞)])
-    end
-
-    parent
+           coalesced into $dad at $(latitude(arg, dad))")
 end
 
 """
@@ -660,8 +468,8 @@ function first_inconsistent_position(arg, int::Ω)
             isleaf(arg, c) || push!(acc, c)
 
             xored_sequences =
-                (sequences(arg, src(e)).data[blocks_idx] .⊻
-                sequences(arg, dst(e)).data[blocks_idx]) .&
+                (sequence(arg, src(e)).data[blocks_idx] .⊻
+                sequence(arg, dst(e)).data[blocks_idx]) .&
                 ancestral_mask(arg, e).data[blocks_idx]
             for (block_idx, block) ∈ zip(blocks_idx, xored_sequences)
                 first_set_bit = leading_zeros(block) + 1
@@ -714,10 +522,10 @@ function recombine!(arg::Arg, redge, cedge, breakpoint, rlat, clat)
     Fix1(rem_edge!, arg).(old_edges)
 
     ## Compute sequences.
-    rseq = deepcopy(sequences(arg, dst(redge)))
+    rseq = deepcopy(sequence(arg, dst(redge)))
     newseqs = SVector{2, eltype(sequences(arg))}(
         rseq,
-        rseq & sequences(arg, dst(cedge)))
+        rseq & sequence(arg, dst(cedge)))
 
     ## Add recombination and recoalescences vertices.
     for (seq, lat) ∈ zip(newseqs, SA[rlat, clat])
@@ -749,7 +557,7 @@ function recombine!(rng::AbstractRNG, arg, redge,
 
     ## Sample an exponential recoalescence latitude.
     derived_recombination =
-        sequences(arg, dst(redge))[postoidx(arg, breakpoint) + 1]
+        sequence(arg, dst(redge))[postoidx(arg, breakpoint) + 1]
 
     clat_ubound = derived_recombination ?
         maximum((Fix1(latitude, arg) ∘ src).(other_mutation_edges)) :
@@ -817,11 +625,11 @@ function possible_cedges_derived(arg, clat, breakpoint,
     while !isempty(acc)
         v = pop!(acc)
 
-        if sequences(arg, v)[idx]
+        if sequence(arg, v)[idx]
             ## Vertex is derived.
-            for parent ∈ parents(arg, v, ancestral_int)
-                if latitude(arg, v) ≤ clat ≤ latitude(arg, parent)
-                    push!(cedges, Edge(parent, v))
+            for dad ∈ dads(arg, v, ancestral_int)
+                if latitude(arg, v) ≤ clat ≤ latitude(arg, dad)
+                    push!(cedges, Edge(dad, v))
                 elseif latitude(arg, v) > clat
                     for child ∈ children(arg, v)
                         push!(acc, child)
@@ -888,14 +696,14 @@ end
 function upstream_mutation_edge(arg, pos, breakpoint)
     idx = postoidx(arg, pos)
     child = nv(arg)
-    parent = (first ∘ parents)(arg, child, Ω(breakpoint, ∞))
+    dad = (first ∘ dads)(arg, child, Ω(breakpoint, ∞))
 
-    while sequences(arg, parent)[idx]
-        child = parent
-        parent = (first ∘ parents)(arg, child, Ω(breakpoint, ∞))
+    while sequence(arg, dad)[idx]
+        child = dad
+        dad = (first ∘ dads)(arg, child, Ω(breakpoint, ∞))
     end
 
-    Edge(parent, child)
+    Edge(dad, child)
 end
 
 """
@@ -924,7 +732,7 @@ ancestral_mask(arg, x::EdgeType) =
 update_sequence!(arg, v) =
     arg.core.sequences[v] = mapreduce(&, children(arg, v)) do child
         mask = ancestral_mask(arg, Edge(v, child))
-        sequences(arg, child) | ~mask
+        sequence(arg, child) | ~mask
     end
 
 update_intervals!(arg, e, ints_ubound) =
@@ -933,23 +741,23 @@ update_intervals!(arg, e, ints_ubound) =
                             arg.core.ancestral_interval[e])
 
 function update_upstream!(arg, v)
-    vstack = Set{eltype(arg)}(parents(arg, v))
+    vstack = Set{eltype(arg)}(dads(arg, v))
     while !isempty(vstack)
         v = pop!(vstack)
 
-        old_sequence = sequences(arg, v)
+        old_sequence = sequence(arg, v)
         if old_sequence != update_sequence!(arg, v)
-            _parents = parents(arg, v)
-            isempty(_parents) || push!(vstack, _parents...)
+            _dads = dads(arg, v)
+            isempty(_dads) || push!(vstack, _dads...)
         end
 
-        for parent ∈ parents(arg, v)
-            e = Edge(parent, v)
+        for dad ∈ dads(arg, v)
+            e = Edge(dad, v)
             ints_ubound = ancestral_intervals(arg, v)
 
             old_ints = ancestral_intervals(arg, e)
             old_ints == update_intervals!(arg, e, ints_ubound) ||
-                push!(vstack, parent)
+                push!(vstack, dad)
         end
     end
 
