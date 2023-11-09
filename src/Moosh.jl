@@ -24,7 +24,7 @@ include("ImportanceSampling.jl")
 
 include("CheapStack.jl")
 
-include("tools.jl")
+include("Tree.jl")
 
 ## Precompilation.
 @setup_workload begin
