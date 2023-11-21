@@ -25,13 +25,13 @@ struct CoalDensity <: AbstractGraphDensity
     end
 end
 
-function (D::CoalDensity)(arg::Arg; logscale = false)
+function (D::CoalDensity)(tree::Tree; logscale = false)
     n = D.n
 
     ## Probability of the first coalescence.
-    plat1_log = logpdf(Exponential(inv(n - 1)), first(latitudes(arg)))
+    plat1_log = logpdf(Exponential(inv(n - 1)), first(latitudes(tree)))
 
-    iter = enumerate((diff ∘ latitudes)(arg))
+    iter = enumerate((diff ∘ latitudes)(tree))
     plat_log = mapreduce(+, iter, init = zero(Float64)) do p
         k, Δ = first(p) + 1, last(p)
 
@@ -60,16 +60,16 @@ struct CoalMutDensity <: AbstractGraphDensity
     CoalMutDensity(n, μ, seq_length) = new(CoalDensity(n), μ, seq_length)
 end
 
-function (D::CoalMutDensity)(arg::Arg; logscale = false)
+function (D::CoalMutDensity)(tree::Tree; logscale = false)
     dens_coal = D.dens_coal
     μ = D.μ
     l = D.seq_length
 
-    m = nmutations(arg)
-    bl = branchlength_tree(arg)
+    m = nmutations(tree)
+    bl = branchlength(tree)
 
-    pmut_log = m * log(μ) - 0.5 * μ * l * bl - (log ∘ factorial)(m)
-    ret = dens_coal(arg, logscale = true) + pmut_log
+    pmut_log = m * log(μ) - 0.5 * μ * l * bl - sum(log, 2:m)
+    ret = dens_coal(tree, logscale = true) + pmut_log
 
     logscale ? ret : exp(ret)
 end
