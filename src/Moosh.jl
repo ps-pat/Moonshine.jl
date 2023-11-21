@@ -2,8 +2,6 @@ module Moosh
 
 using Base: Fix1
 
-using Chain: @chain
-
 using PrecompileTools
 
 include("Sequence.jl")
@@ -14,17 +12,19 @@ export fillseq
 
 include("tools.jl")
 
+include("CheapStack.jl")
+
 include("Genealogy.jl")
 
 include("Arg.jl")
+
+include("Tree.jl")
 
 include("ArgDensity.jl")
 
 include("ImportanceSampling.jl")
 
-include("CheapStack.jl")
-
-include("Tree.jl")
+include("Copulas/Copulas.jl")
 
 ## Precompilation.
 @setup_workload begin

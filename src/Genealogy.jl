@@ -131,6 +131,18 @@ function mrca(genealogy, vs)
     something(μ)
 end
 
+export distance
+"""
+    distance(genealogy, v1, v2)
+
+Distance between two vertices.
+
+# Implementation,
+
+Only mandatory if copulas are to be fitted on the genealogy.
+See [`loglikelihood`](@ref).
+"""
+
 #############
 # Utilities #
 #############
@@ -350,6 +362,7 @@ branchlength(genealogy, e) =
 branchlength(genealogy) =
     mapreduce(e -> branchlength(genealogy, e), +, edges(genealogy))
 
+export tmrca
 function tmrca(genealogy)
     _mrca = mrca(genealogy)
     iszero(_mrca) && return zero(Float64)

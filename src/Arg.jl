@@ -40,7 +40,6 @@ using GraphMakie:
     NodeDrag,
     NodeHoverHighlight
 using LayeredLayouts
-using GeometryBasics: Point
 
 using Distributions:
     Bernoulli,

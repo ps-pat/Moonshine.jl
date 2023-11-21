@@ -66,7 +66,7 @@ mutable struct Tree{T} <: AbstractGenealogy
     nextvertex::Int
 end
 
-Tree(leaves::AbstractVector{Sequence{T}}, genpars...) where T =
+Tree(leaves::AbstractVector{Sequence{T}}; genpars...) where T =
     Tree(TreeCore{T}(leaves; genpars...), zero(BigFloat), one(Int))
 
 function Tree{T}(rng::AbstractRNG,
@@ -266,3 +266,6 @@ function build!(rng, tree::Tree, idx = 1)
 end
 
 build!(tree::Tree, idx = 1) = build!(GLOBAL_RNG, tree, idx)
+
+distance(tree::Tree, v1, v2) =
+    2tmrca(tree, (v1, v2)) - latitude(tree, v1) - latitude(tree, v2)
