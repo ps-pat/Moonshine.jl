@@ -20,11 +20,9 @@ include("Arg.jl")
 
 include("Tree.jl")
 
-include("ArgDensity.jl")
-
-include("ImportanceSampling.jl")
-
 include("Copulas/Copulas.jl")
+
+include("ArgDensity.jl")
 
 ## Precompilation.
 @setup_workload begin
