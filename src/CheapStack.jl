@@ -1,14 +1,13 @@
-import Base:
-    eltype,
-    isempty,
-    empty!,
-    first,
-    length,
-    pop!,
-    push!,
-    show,
-    iterate,
-    vec
+import Base: eltype,
+             isempty,
+             empty!,
+             first,
+             length,
+             pop!,
+             push!,
+             show,
+             iterate,
+             vec
 
 mutable struct CheapStack{T}
     const store::Vector{T}
@@ -16,8 +15,7 @@ mutable struct CheapStack{T}
 end
 
 ## TODO: Get rid of this constructor.
-CheapStack(T, n) =
-    CheapStack{T}(Vector{T}(undef, n), 0)
+CheapStack(T, n) = CheapStack{T}(Vector{T}(undef, n), 0)
 
 function CheapStack{T}(n) where T
     CheapStack{T}(Vector{T}(undef, n), 0)
@@ -71,11 +69,11 @@ end
 # Pretty printing #
 ###################
 
-show(io::IO, s::CheapStack) =
-    join(io, s, ", ")
+show(io::IO, s::CheapStack) = join(io, s, ", ")
 
-show(io::IO, ::MIME"text/plain", s::CheapStack{T}) where T =
+function show(io::IO, ::MIME"text/plain", s::CheapStack{T}) where T
     print(io, "CheapStack{$T}:\n", s)
+end
 
 ##############
 # Conversion #

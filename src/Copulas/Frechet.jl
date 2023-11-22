@@ -1,10 +1,10 @@
 export FrechetCopula
 
-struct FrechetCopula{P, A, N} <: AbstractΦCopula{P, A, N}
+struct FrechetCopula{P,A,N} <: AbstractΦCopula{P,A,N}
     α::A
-    parameters::NTuple{N, Float64}
+    parameters::NTuple{N,Float64}
 
-    FrechetCopula(P, α, pars...) = new{P, typeof(α), npars(P)}(α, pars)
+    FrechetCopula(P, α, pars...) = new{P,typeof(α),npars(P)}(α, pars)
 end
 
 ####################

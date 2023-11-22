@@ -1,13 +1,11 @@
-using Graphs:
-    SimpleEdge,
-    AbstractSimpleGraph,
-    diameter,
-    indegree, outdegree
+using Graphs: SimpleEdge,
+              AbstractSimpleGraph,
+              diameter,
+              indegree, outdegree
 
-import Graphs:
-    edges, vertices, ne, nv,
-    eltype, edgetype, is_directed,
-    has_edge, has_vertex, inneighbors, outneighbors
+import Graphs: edges, vertices, ne, nv,
+               eltype, edgetype, is_directed,
+               has_edge, has_vertex, inneighbors, outneighbors
 
 import GraphMakie: graphplot
 
@@ -22,7 +20,7 @@ const EdgeType = SimpleEdge{VertexType}
 const ∞ = Inf
 
 export Ω
-const Ω = Interval{:closed, :open, Float64}
+const Ω = Interval{:closed,:open,Float64}
 Ω(x) = Ω(x, ∞)
 
 abstract type AbstractGenealogy <: AbstractSimpleGraph{VertexType} end
@@ -93,6 +91,7 @@ vertices is specified, return the sequences associated with these vertices.
 See also [`sequence`](@ref) to get the sequence associated with a vertex.
 
 # Implementation
+
 Custom types only need to implement `sequences(::T)`.
 """
 function sequences end
@@ -111,6 +110,7 @@ of the whole genealogy.
 See also [`tmrca`](@ref) for the time to the most recent common ancestor.
 
 # Implementation
+
 Custom type only need to implement `mrca(::T)`.
 """
 function mrca end
@@ -159,9 +159,9 @@ of uniformly spaced positions if it cannot be fixed.
 function validate_positions(positions, nmarkers)
     if length(positions) != nmarkers || !issorted(positions)
         @info((isempty(positions) ? "A" : "Invalid positions: a") *
-            "ssuming equally spaced markers")
+              "ssuming equally spaced markers")
         positions = isone(nmarkers) ?
-            [0.0] : (collect ∘ range)(0, 1, length = nmarkers)
+                    [0.0] : (collect ∘ range)(0, 1, length = nmarkers)
     end
     if minimum(positions) < 0
         @info("First position is < 0: shifting positions right")
@@ -238,6 +238,7 @@ end
 
 let genealogy_edge = Expr(:(::), :e, EdgeType),
     genealogy_vertex = Expr(:(::), :v, VertexType)
+
     for (fun, a) ∈ Dict(:has_edge => genealogy_edge,
                         :has_vertex => genealogy_vertex,
                         :inneighbors => genealogy_vertex,
@@ -272,7 +273,7 @@ end
 Layout function designed to plot genealogies. Leaves are all placed on the
 same layer.
 """
-GenLayout(leaveslayer, leaves) = function(genealogy_graph)
+GenLayout(leaveslayer, leaves) = function (genealogy_graph)
     xs, ys, _ = solve_positions(Zarate(),
                                 genealogy_graph,
                                 force_layer = Pair.(leaves, leaveslayer))
@@ -288,7 +289,6 @@ function graphplot(genealogy::AbstractGenealogy;
                    node_color = :black,
                    layout = nothing,
                    attributes...)
-
     if isnothing(layout)
         lastlayer = maximum(v -> maxdepth(genealogy, v), leaves(genealogy)) + 1
         layout = GenLayout(lastlayer, leaves(genealogy))
@@ -297,7 +297,7 @@ function graphplot(genealogy::AbstractGenealogy;
     graphplot(graph(genealogy),
               layout = layout,
               ilabels = string.(range(1, nv(genealogy))),
-              ilabels_color= :white,
+              ilabels_color = :white,
               edge_color = edge_color,
               edge_width = edge_width,
               arrow_show = arrow_show,
@@ -370,11 +370,9 @@ of that edge.
 """
 function branchlength end
 
-branchlength(genealogy, e) =
-    latitude(genealogy, src(e)) - latitude(genealogy, dst(e))
+branchlength(genealogy, e) = latitude(genealogy, src(e)) - latitude(genealogy, dst(e))
 
-branchlength(genealogy) =
-    mapreduce(e -> branchlength(genealogy, e), +, edges(genealogy))
+branchlength(genealogy) = mapreduce(e -> branchlength(genealogy, e), +, edges(genealogy))
 
 export tmrca
 function tmrca(genealogy)
@@ -436,14 +434,15 @@ export nmutations
 
 Number of mutation on a genealogy. If an edge is specified, return only the
 number of mutations on that edge.
-    """
+"""
 function nmutations end
 
 nmutations(genealogy, e) = count_ones(xor(sequences(genealogy, e)...))
 
-nmutations(genealogy) =
+function nmutations(genealogy)
     mapreduce(e -> nmutations(genealogy, e), +, edges(genealogy),
               init = zero(Int))
+end
 
 ## Edge functions.
 for fun ∈ [:branchlength, :nmutations]

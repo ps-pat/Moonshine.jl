@@ -85,11 +85,12 @@ export PhenotypeDensity
 Density of a vector of phenotypes of type `T` conditional on a genealogy.
 
 # Fields
-- `Φ::Vector{Union{Missing, T}}`: entry `k` is the phenotype of leaf `k`
-- `copula::C`: `<:AbstractΦCopula`
+
+  - `Φ::Vector{Union{Missing, T}}`: entry `k` is the phenotype of leaf `k`
+  - `copula::C`: `<:AbstractΦCopula`
 """
-struct PhenotypeDensity{T, C<:AbstractΦCopula} <: AbstractGraphDensity
-    Φ::Vector{Union{Missing, T}}
+struct PhenotypeDensity{T,C<:AbstractΦCopula} <: AbstractGraphDensity
+    Φ::Vector{Union{Missing,T}}
     copula::C
 end
 
@@ -131,7 +132,7 @@ function (D::PhenotypeDensity)(tree::Tree)
 
         v = pop!(vertices_stack)
         if !isleaf(tree, v) &&
-            (first ∘ children)(tree, v) == first(vertices_stack)
+           (first ∘ children)(tree, v) == first(vertices_stack)
             v2 = pop!(vertices_stack)
             push!(vertices_stack, v)
             v = v2
@@ -162,7 +163,6 @@ function cmatrix(tree::Tree, copula::AbstractΦCopula{PhenotypeBinary}, σ, phen
 
     δ = dad(tree, σ)
 
-
     ## Assume that the phenotype of δ is unknown since it is an
     ## internal vertex.
     φsδ = (false, true)
@@ -177,7 +177,8 @@ function cmatrix(tree::Tree, copula::AbstractΦCopula{PhenotypeBinary}, σ, phen
     cmatrix(tree, copula, σ, φsσ, δ, φsδ)
 end
 
-cmatrix(tree::Tree, copula::AbstractΦCopula{PhenotypeBinary}, σ, φsσ, δ, φsδ) =
+function cmatrix(tree::Tree, copula::AbstractΦCopula{PhenotypeBinary}, σ, φsσ, δ, φsδ)
     map(Iterators.product(φsσ, φsδ)) do (φσ, φδ)
         conditional_pdf(copula, φσ, φδ, distance(tree, σ, δ))
     end
+end

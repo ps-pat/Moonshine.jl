@@ -1,18 +1,17 @@
-import Base:
-    empty,
-    similar,
-    ~, &, |, xor, >>>, <<, count_ones, count_zeros,
-    ==,
-    show,
-    isempty,
-    string,
-    convert,
-    hash
+import Base: empty,
+             similar,
+             ~, &, |, xor, >>>, <<, count_ones, count_zeros,
+             ==,
+             show,
+             isempty,
+             string,
+             convert,
+             hash
 
 using Random: GLOBAL_RNG, AbstractRNG
 
 ## "Efficient storage of marker data."
-struct Sequence{T <: Unsigned}
+struct Sequence{T<:Unsigned}
     data::Vector{T}
     n::Int
 end
@@ -67,7 +66,6 @@ function blocksize end
 
 Offset the index of a marker to account for the fact that the number
 of markers is not necessarily a multiple of the size of a block.
-
 """
 function offsetidx end
 
@@ -104,8 +102,9 @@ for (fun, op) ∈ Dict(:blockidx => :÷, :posinblock => :%)
     end
 end
 
-actualpos(n, blocksize, block, pos) =
+function actualpos(n, blocksize, block, pos)
     (block - 1) * blocksize + pos - offsetidx(n, blocksize, 1)
+end
 
 """
     blocklength(seq, idx)
@@ -114,9 +113,8 @@ actualpos(n, blocksize, block, pos) =
 Return the actual number of markers stored in a block. `idx` is the
 index of the marker of interest, not of the block itself.
 """
-blocklength(n, blocksize, idx) =
-    blocksize - (blockidx(n, blocksize, idx) <= 1 ?
-    offsetidx(n, blocksize, 1) : zero(Int))
+blocklength(n, blocksize, idx) = blocksize - (blockidx(n, blocksize, idx) <= 1 ?
+                                              offsetidx(n, blocksize, 1) : zero(Int))
 
 ## "Sequence" versions
 for fun ∈ [:offsetidx,
@@ -167,7 +165,7 @@ function <<(seq::Sequence{T}, shift) where T
 
     @inbounds @simd for k ∈ range(1, n - intershift - 1)
         newseq.data[k] = (seq.data[k + intershift] << intrashift) |
-            (seq.data[k + intershift + 1] << (intrashift - bs))
+                         (seq.data[k + intershift + 1] << (intrashift - bs))
     end
 
     newseq.data[n - intershift] = (seq.data[n] << intrashift)
@@ -199,7 +197,7 @@ function >>>(seq::Sequence{T}, shift) where T
 
     @inbounds @simd for k ∈ range(intershift + 2, n)
         newseq.data[k] = (seq.data[k - intershift] >>> intrashift) |
-            (seq.data[k - intershift - 1] >>> (intrashift - bs))
+                         (seq.data[k - intershift - 1] >>> (intrashift - bs))
     end
 
     newseq
@@ -211,8 +209,7 @@ count_zeros(seq::Sequence) = seq.n - count_ones(seq)
 ## TODO: implement leading_* and trailing_*. This would simplify
 ##       `first_inconsistent_position` and make everything more consistent.
 
-==(seq1::Sequence, seq2::Sequence) =
-    (seq1.n == seq2.n) && (seq1.data == seq2.data)
+==(seq1::Sequence, seq2::Sequence) = (seq1.n == seq2.n) && (seq1.data == seq2.data)
 ==(seq::Sequence, str::AbstractString) = string(seq) == str
 ==(str::AbstractString, seq::Sequence) = seq == str
 
@@ -222,32 +219,34 @@ count_zeros(seq::Sequence) = seq.n - count_ones(seq)
     Sequence(data, n)
     Sequence(rng = GLOBAL_RNG, minlength, maxlength = 0)
 
-- `Sequence{T <: Unsigned}()`: empty sequence.
-- `Sequence{T <: Unsigned}(undef, n)`: Uninitialized sequence of length `n`.
-- `Sequence{T <: Unsigned}(data, n)`: sequence of `n` markers containing `data`.
-- `Sequence{T <: Unsigned}(rng, minlength, maxlength)`: random sequence of
-  length uniformly sampled in `minlength:maxlength`. If `iszero(maxlength)`,
-  `maxlength = minlength`.
+  - `Sequence{T <: Unsigned}()`: empty sequence.
+  - `Sequence{T <: Unsigned}(undef, n)`: Uninitialized sequence of length `n`.
+  - `Sequence{T <: Unsigned}(data, n)`: sequence of `n` markers containing `data`.
+  - `Sequence{T <: Unsigned}(rng, minlength, maxlength)`: random sequence of
+    length uniformly sampled in `minlength:maxlength`. If `iszero(maxlength)`,
+    `maxlength = minlength`.
 
 # Arguments
-- `T`: DataType used to store data. If unspecified, defaults to `UInt`.
-- `n`: Number of markers.
-- `data`: Vector containing data.
-- `rng::Random.AbstractRNG`: random number generator.
-- `minLength, maxLength`: bounds for sequence length.
+
+  - `T`: DataType used to store data. If unspecified, defaults to `UInt`.
+  - `n`: Number of markers.
+  - `data`: Vector containing data.
+  - `rng::Random.AbstractRNG`: random number generator.
+  - `minLength, maxLength`: bounds for sequence length.
 """
 function Sequence end
 
 @generated Sequence{T}() where T = Sequence(T[], 0)
 @generated Sequence() = Sequence{UInt}()
 
-Sequence{T}(::UndefInitializer, n) where T <: Unsigned =
+function Sequence{T}(::UndefInitializer, n) where T<:Unsigned
     Sequence(Vector{T}(undef, nblocks(n, 8sizeof(T))), n)
+end
 Sequence(::UndefInitializer, n) = Sequence{UInt}(undef, n)
 
 function Sequence{T}(rng::AbstractRNG,
                      minlength::Integer,
-                     maxlength::Integer = 0) where T <: Unsigned
+                     maxlength::Integer = 0) where T<:Unsigned
     blocksize = 8sizeof(T)
     n = iszero(maxlength) ? minlength : rand(rng, minlength:maxlength)
     nb = nblocks(n, blocksize)
@@ -256,25 +255,24 @@ function Sequence{T}(rng::AbstractRNG,
     data = rand(rng, T, nb)
     Sequence{T}((Sequence{T}(data, actual_n) >>> (actual_n - n)).data, n)
 end
-Sequence(rng::AbstractRNG, minlength::Integer, maxlength::Integer = 0) =
+function Sequence(rng::AbstractRNG, minlength::Integer, maxlength::Integer = 0)
     Sequence{UInt}(rng, minlength, maxlength)
+end
 
-
-Sequence{T}(minlength::Integer, maxlength::Integer = 0) where T <: Unsigned =
+function Sequence{T}(minlength::Integer, maxlength::Integer = 0) where T<:Unsigned
     Sequence{T}(GLOBAL_RNG, minlength, maxlength)
-Sequence(minlength::Integer, maxlength::Integer = 0) =
-    Sequence{UInt}(minlength, maxlength)
+end
+Sequence(minlength::Integer, maxlength::Integer = 0) = Sequence{UInt}(minlength, maxlength)
 
 function convert(::Type{Sequence{T}}, str::AbstractString) where T
     n = length(str)
     bs = 8sizeof(T)
     nb = nblocks(n, bs)
 
-    data::Vector{UInt} =
-        [chop(str, tail = Int(block .* 64)) |>
-         σ -> last(σ, 64) |>
-         σ -> parse(T, σ, base = 2)
-         for block ∈ range(nb - 1, 0, step = -1)]
+    data::Vector{UInt} = [(σ -> (σ -> parse(T, σ, base = 2))(last(σ, 64)))(chop(str,
+                                                                                tail = Int(block .*
+                                                                                           64)))
+                          for block ∈ range(nb - 1, 0, step = -1)]
 
     n = isempty(data) ? 0 : n
 
@@ -319,8 +317,7 @@ function andmask(n::Integer, unmasked::UnitRange)
     (seq << lshift) & (seq >>> rshift)
 end
 
-andmask(n::Integer, unmasked::Set{<:UnitRange}) =
-    mapreduce(Fix1(andmask, n), |, unmasked)
+andmask(n::Integer, unmasked::Set{<:UnitRange}) = mapreduce(Fix1(andmask, n), |, unmasked)
 
 ## TODO: Implement for StepRange.
 
@@ -337,8 +334,7 @@ for par ∈ [:(UnitRange{<:Integer}), :Integer]
     end
 end
 
-andmask(T::Type{<:Unsigned}, unmasked::Integer) =
-    one(T) << (8sizeof(T) - unmasked)
+andmask(T::Type{<:Unsigned}, unmasked::Integer) = one(T) << (8sizeof(T) - unmasked)
 
 """
     derivedpos(seq)
@@ -351,12 +347,12 @@ function ancestralpos end
 
 derivedpos(seq::Sequence) = findall(collect(seq))
 
-ancestralpos(seq::Sequence) =
-    setdiff(range(1, length = length(seq)), derivedpos(seq))
+ancestralpos(seq::Sequence) = setdiff(range(1, length = length(seq)), derivedpos(seq))
 
 ## Iteration.
-Base.iterate(seq::Sequence, state = 1) =
+function Base.iterate(seq::Sequence, state = 1)
     state > lastindex(seq) ? nothing : (seq[state], state + 1)
+end
 
 @generated Base.eltype(::Type{Sequence}) = Bool
 
@@ -371,11 +367,11 @@ Base.firstindex(seq::Sequence) = length(seq) > 0 ? 1 : 0
 
 Base.lastindex(seq::Sequence) = length(seq)
 
-Base.getindex(seq::Sequence{T}, i) where T =
+function Base.getindex(seq::Sequence{T}, i) where T
     seq.data[blockidx(seq, i)] & andmask(T, posinblock(seq, i)) > 0
+end
 
-Base.getindex(seq::Sequence, rng::UnitRange) =
-    map(idx -> getindex(seq, idx), rng)
+Base.getindex(seq::Sequence, rng::UnitRange) = map(idx -> getindex(seq, idx), rng)
 
 ## Array.
 @generated Base.IndexStyle(::Type{Sequence}) = Base.IndexLinear()

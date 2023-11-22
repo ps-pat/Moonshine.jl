@@ -8,7 +8,7 @@ using Random: AbstractRNG, GLOBAL_RNG
 
 using JuMP
 
-import NLopt
+using NLopt: NLopt
 
 ##############
 # Phenotypes #
@@ -50,11 +50,12 @@ export AbstractΦCopula
 Abstract type for copulas joining two phenotypes.
 
 # Type Parameters
-- `P<:AbstractPhenotype`: type of the phenotypes
-- `A<:AbstractAlpha`: type of the α
-- `N<:Integer`: number of parameters of the copula
+
+  - `P<:AbstractPhenotype`: type of the phenotypes
+  - `A<:AbstractAlpha`: type of the α
+  - `N<:Integer`: number of parameters of the copula
 """
-abstract type AbstractΦCopula{P<:AbstractPhenotype, A<:AbstractAlpha, N} end
+abstract type AbstractΦCopula{P<:AbstractPhenotype,A<:AbstractAlpha,N} end
 
 #############
 # Interface #
@@ -73,15 +74,16 @@ given a genetic distance and a set of parameters for the associated α. If
 
 The one phenotype version of `pdf` and `logpdf` is the marginal (log)density
 of that penotype. As such, these methods do not need nor accept `d` or `αpars`
- arguments.
+arguments.
 
 # Implementation
 
 Only one of `logpdf` or `pdf` and one of `logconditional_pdf` or
 `conditional_pdf` need a custom implementation. Two methods need implementation
 for `pdf`:
-- `pdf(copula, φ)`
-- `pdf(copula, φ1, φ2, d, αpars)`
+
+  - `pdf(copula, φ)`
+  - `pdf(copula, φ1, φ2, d, αpars)`
 """
 function pdf end,
 function logpdf end,
@@ -139,21 +141,24 @@ Both forms return functions that take one positional argument by parameter in
 the order given by `(parameters ∘ alpha)(copula)`.
 
 # Arguments
-- `rng::AbstractRNG`: random number generator
-- `copula::AbstractΦCopula`: copula for the phenotypes
-- `Φ`: iterable of phenotypes
-- `H`: iterable of genetic sequences
-- `G`: type of genealogy
-- `idx`: index of the marker for which to build genealogies
-- `n`: number of genealogy to sample
-- `genpars...`: genetic parameters passed as keyword arguments to the
-  constructor of `G`
+
+  - `rng::AbstractRNG`: random number generator
+  - `copula::AbstractΦCopula`: copula for the phenotypes
+  - `Φ`: iterable of phenotypes
+  - `H`: iterable of genetic sequences
+  - `G`: type of genealogy
+  - `idx`: index of the marker for which to build genealogies
+  - `n`: number of genealogy to sample
+  - `genpars...`: genetic parameters passed as keyword arguments to the
+    constructor of `G`
 """
 function loglikelihood end
 
-loglikelihood(copula::AbstractΦCopula, Φ, genealogy::AbstractGenealogy) = function(pars...)
-    sum(combinations(leaves(genealogy), 2), init = zero(Float64)) do (i, j)
-        logpdf(copula, Φ[i], Φ[j], distance(genealogy, i, j), pars...)
+function loglikelihood(copula::AbstractΦCopula, Φ, genealogy::AbstractGenealogy)
+    function (pars...)
+        sum(combinations(leaves(genealogy), 2), init = zero(Float64)) do (i, j)
+            logpdf(copula, Φ[i], Φ[j], distance(genealogy, i, j), pars...)
+        end
     end
 end
 
@@ -167,18 +172,19 @@ function loglikelihood(rng::AbstractRNG, copula::AbstractΦCopula, Φ, H, G;
         genealogy = G(H; genpars...)
         build!(rng, genealogy, idx)
 
-        fs[k] = function(pars...)
+        fs[k] = function (pars...)
             loglikelihood(copula, Φ, genealogy)(pars...)
         end
     end
 
-    function(pars...)
+    function (pars...)
         sum(f -> f(pars...), fs, init = zero(Float64))
     end
 end
 
-loglikelihood(copula::AbstractΦCopula, Φ, H, G; kwargs...) =
+function loglikelihood(copula::AbstractΦCopula, Φ, H, G; kwargs...)
     loglikelihood(GLOBAL_RNG, copula, Φ, H, G; kwargs...)
+end
 
 export fit!
 """
@@ -191,12 +197,13 @@ stated otherwise by `bounds(alpha(colupa))`
 
 The default implementation fits parameters by maximizing the loglikelihood of
 the copula. The optimization is done in two passes:
-1. global optimizations using MLSL (using LBFGS as the local optimizer);
-2. local optimization using MMA.
-Both implementation are from the [NLopt](https://nlopt.readthedocs.io/en/latest/)
-library. Since only bound-constrained problems are supported by MLSL, a call to
-`bound(::T)` must return a bounded domain for each parameter of the likelihood
-in order to use the default `fit!(::AbstractΦCopula, ...)` method.
+
+ 1. global optimizations using MLSL (using LBFGS as the local optimizer);
+ 2. local optimization using MMA.
+    Both implementation are from the [NLopt](https://nlopt.readthedocs.io/en/latest/)
+    library. Since only bound-constrained problems are supported by MLSL, a call to
+    `bound(::T)` must return a bounded domain for each parameter of the likelihood
+    in order to use the default `fit!(::AbstractΦCopula, ...)` method.
 
 ## Arguments
 
@@ -205,10 +212,11 @@ The default implementation accepts two keyword arguments `global_attrs` and
 set the attributes of the global/local optimizer respectively. See
 [NLopt.jl documentation](https://github.com/JuliaOpt/NLopt.jl). Their
 default values are:
-- `global_attrs = ("algorithm" => :G_MLSL_LDS,
-                   "local_optimizer" => :LD_LBFGS,
-                   "maxtime" => 5)
-- `local_attrs = ("algorithm" => :LD_MMA)`.
+
+  - `global_attrs = ("algorithm" => :G_MLSL_LDS,
+    "local_optimizer" => :LD_LBFGS,
+    "maxtime" => 5)
+  - `local_attrs = ("algorithm" => :LD_MMA)`.
 """
 function fit!(rng, copula::AbstractΦCopula, Φ, H, G;
               global_attrs = ("algorithm" => :G_MLSL_LDS,
@@ -276,8 +284,9 @@ function fit!(rng, copula::AbstractΦCopula, Φ, H, G;
     (global_model = global_model, local_model = local_model)
 end
 
-fit!(copula::AbstractΦCopula, Φ, H, G; kwargs...) =
+function fit!(copula::AbstractΦCopula, Φ, H, G; kwargs...)
     fit!(GLOBAL_RNG, copula, Φ, H, G; kwargs...)
+end
 
 ####################
 # Packaged Copulas #

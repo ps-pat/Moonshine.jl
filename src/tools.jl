@@ -1,19 +1,18 @@
 using IntervalSets: AbstractInterval, Interval
 
-import Base:
-    union,
-    intersect,
-    join
+import Base: union,
+             intersect,
+             join
 
 ######################
 # Khatri-Rao Product #
 ######################
 
-Base.@assume_effects :inaccessiblememonly :terminates_globally :effect_free :notaskstate function ⊙(A::AbstractMatrix{T}, B::AbstractMatrix{T}) where T
+function ⊙(A::AbstractMatrix{T}, B::AbstractMatrix{T}) where T
     c = size(A, 2)
     c == size(B, 2) ||
         throw(DimensionMismatch(lazy"matrix A has dimension $(size(A)), " *
-                                    "matrix B has dimension $(size(B))"))
+                                "matrix B has dimension $(size(B))"))
 
     p, q = size(A, 1), size(B, 1)
 
@@ -60,8 +59,7 @@ function simplify!(xs)
     xs
 end
 
-union(x::T, xs::Set{T}) where T =
-    simplify!(Set([x]) ∪ xs)
+union(x::T, xs::Set{T}) where T = simplify!(Set([x]) ∪ xs)
 
 function union(x::Set{T}, y::Set{T}) where T<:Interval
     ret = empty(x)
@@ -76,11 +74,11 @@ function union(x::Set{T}, y::Set{T}) where T<:Interval
     simplify!(ret)
 end
 
-intersect(x::T, xs::Set{T}) where T =
-    (simplify! ∘ Set ∘ broadcast)(Fix1(intersect, x), xs)
+intersect(x::T, xs::Set{T}) where T = (simplify! ∘ Set ∘ broadcast)(Fix1(intersect, x), xs)
 
-intersect(xs::Set{T}, ys::Set{T}) where T =
+function intersect(xs::Set{T}, ys::Set{T}) where T
     (simplify! ∘ mapreduce)(x -> intersect(x, ys), ∪, xs)
+end
 
 for fun ∈ [:union, :intersect]
     @eval $fun(xs::Set{T}, x::T) where T = $fun(x, xs)

@@ -54,7 +54,6 @@ function TreeCore{T}(nmin::Integer, minlength::Integer,
     TreeCore{T}(GLOBAL_RNG, nmin, minlength, nmax, maxlength; genpars...)
 end
 
-
 ###################
 # Tree Definition #
 ###################
@@ -66,8 +65,9 @@ mutable struct Tree{T} <: AbstractGenealogy
     nextvertex::Int
 end
 
-Tree(leaves::AbstractVector{Sequence{T}}; genpars...) where T =
+function Tree(leaves::AbstractVector{Sequence{T}}; genpars...) where T
     Tree(TreeCore{T}(leaves; genpars...), zero(BigFloat), one(Int))
+end
 
 function Tree{T}(rng::AbstractRNG,
                  nmin::Integer, minlength::Integer,
@@ -120,15 +120,18 @@ describe(::Tree, long = true) = long ? "Coalescent Tree" : "Tree"
 
 latitudes(tree::Tree, ivs) = getindex(latitudes(tree), ivs)
 
-latitude(tree::Tree, v) =
+function latitude(tree::Tree, v)
     isleaf(tree, v) ? zero(Float64) : latitudes(tree)[v - nleaves(tree)]
+end
 
 leaves(tree::Tree) = Base.OneTo(nleaves(tree))
 
 ivertices(tree::Tree) = range(nleaves(tree) + 1, nv(tree))
 
-mrca(tree::Tree) = any(iszero.(latitudes(tree))) ?
+function mrca(tree::Tree)
+    any(iszero.(latitudes(tree))) ?
     zero(VertexType) : argmax(latitudes(tree)) + nleaves(tree)
+end
 
 ###########################
 # AbstractGraph Interface #
@@ -155,7 +158,6 @@ function graphplot(tree::Tree, int::Ω;
                    wild_color = :blue,
                    derived_color = :red,
                    attributes...)
-
     mask = fill(ancestral_mask(tree, int), nv(tree))
     node_color = ifelse.(any.(sequences(tree) .& mask),
                          derived_color, wild_color)
@@ -189,8 +191,7 @@ for fun ∈ [:dad, :sibling]
 end
 
 export mut_rate
-mut_rate(tree::Tree, scaled = true) =
-    tree.core.μ_loc * (scaled ? 4 * eff_popsize(tree) : 1)
+mut_rate(tree::Tree, scaled = true) = tree.core.μ_loc * (scaled ? 4 * eff_popsize(tree) : 1)
 
 function tree_coalesce!(rng, tree, vertices, nlive)
     ## Sample coalescing vertices.
@@ -267,5 +268,6 @@ end
 
 build!(tree::Tree, idx = 1) = build!(GLOBAL_RNG, tree, idx)
 
-distance(tree::Tree, v1, v2) =
+function distance(tree::Tree, v1, v2)
     2tmrca(tree, (v1, v2)) - latitude(tree, v1) - latitude(tree, v2)
+end

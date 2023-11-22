@@ -21,6 +21,7 @@ export bounds
 Bounds for the parameters of an α.
 
 # Implementation
+
 Must return a named tuple. The key of an entry must be the name of an
 argument of `loglikelihood(::T, ...)`. The corresponding value must be a
 container of length 2 where the first and last entries are the lower and

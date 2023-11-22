@@ -1,9 +1,9 @@
 using Random: GLOBAL_RNG
 
 export AlphaExponential
-mutable struct AlphaExponential<:AbstractAlpha
+mutable struct AlphaExponential <: AbstractAlpha
     λ::Float64
-    const bounds::NTuple{2, Float64}
+    const bounds::NTuple{2,Float64}
 end
 
 AlphaExponential() = AlphaExponential(1)
@@ -19,11 +19,10 @@ AlphaExponential(λ, lbound, ubound) = AlphaExponential(λ, (lbound, ubound))
 # AbstractAlpha Interface #
 ###########################
 
-bounds(α::AlphaExponential) = (;λ = α.bounds)
+bounds(α::AlphaExponential) = (; λ = α.bounds)
 
 @generated parameters(::AlphaExponential) = (:λ,)
 
 getparameter(α::AlphaExponential, parameter) = getfield(α, parameter)
 
-setparameter!(α::AlphaExponential, parameter, value) =
-    setfield!(α, parameter, value)
+setparameter!(α::AlphaExponential, parameter, value) = setfield!(α, parameter, value)
