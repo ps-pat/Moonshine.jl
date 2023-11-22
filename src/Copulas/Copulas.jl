@@ -2,7 +2,7 @@ import StatsAPI: loglikelihood, fit!
 
 using Combinatorics: combinations
 
-import Distributions: cdf, pdf, logcdf, logpdf
+import Distributions: pdf, logpdf
 
 using Random: AbstractRNG, GLOBAL_RNG
 
@@ -60,33 +60,35 @@ abstract type AbstractΦCopula{P<:AbstractPhenotype, A<:AbstractAlpha, N} end
 # Interface #
 #############
 
-export cdf, pdf, conditional_pdf, logcdf, logpdf
+export pdf, logpdf, conditional_pdf, logconditional_pdf
 """
-    cdf(copula, φ1, φ2, d[, αpars...])
-    pdf(copula, φ1, φ2, d[, αpars...])
+    pdf(copula, φ1[, φ2, d, αpars...])
+    logpdf(copula, φ1[, φ2, d, αpars...])
     conditional_pdf(copula, φ1, φ2, d[, αpars...])
-    logcdf(copula, φ1, φ2, d[, αpars...])
-    logpdf(copula, φ1, φ2, d[, αpars...])
     logconditional_pdf(copula, φ1, φ2, d[, αpars...])
 
-(Logarithm of) the (conditional) probability density function and cumulative
-distribution function of the copula given a genetic distance and a set of
-parameters for the associated α. If `αpars...` is not provided, use the values
-stored in the α.
+(Logarithm of) the (conditional) probability density function of the copula
+given a genetic distance and a set of parameters for the associated α. If
+`αpars...` is not provided, use the values stored in the α.
+
+The one phenotype version of `pdf` and `logpdf` is the marginal (log)density
+of that penotype. As such, these methods do not need nor accept `d` or `αpars`
+ arguments.
 
 # Implementation
 
-Only one of `logpdf` or `pdf`, one of `logconditional_pdf` or `conditional_pdf`
-and one of `logcdf` or `cdf` need a custom implementation.
+Only one of `logpdf` or `pdf` and one of `logconditional_pdf` or
+`conditional_pdf` need a custom implementation. Two methods need implementation
+for `pdf`:
+- `pdf(copula, φ)`
+- `pdf(copula, φ1, φ2, d, αpars)`
 """
-function cdf end,
 function pdf end,
-function conditional_pdf end,
-function logcdf end,
 function logpdf end,
+function conditional_pdf end,
 function logconditional_pdf end
 
-for fun ∈ [:cdf, :pdf, :conditional_pdf]
+for fun ∈ [:pdf, :conditional_pdf]
     logfun = Symbol("log" * string(fun))
 
     @eval function $fun(copula::AbstractΦCopula, φ1, φ2, d, αpars...)
@@ -105,6 +107,10 @@ for fun ∈ [:cdf, :pdf, :conditional_pdf]
         end
     end
 end
+
+pdf(copula::AbstractΦCopula, φ) = logpdf(copula, φ, d)
+
+logpdf(copula::AbstractΦCopula, φ) = pdf(copula, φ, d)
 
 export alpha
 """
