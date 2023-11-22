@@ -1,7 +1,8 @@
 using Graphs:
     SimpleEdge,
     AbstractSimpleGraph,
-    diameter
+    diameter,
+    indegree, outdegree
 
 import Graphs:
     edges, vertices, ne, nv,
@@ -13,6 +14,8 @@ import GraphMakie: graphplot
 using IntervalSets: Interval
 
 using StaticArrays: SA
+
+using GeometryBasics: Point
 
 const VertexType = Int
 const EdgeType = SimpleEdge{VertexType}
@@ -306,12 +309,23 @@ end
 # Common Methods #
 ##################
 
+export isleaf, isroot, isivertex
 """
     isleaf(genealogy, v)
+    isroot(genealogy, v)
+    isivertex(genealogy, v)
 
-True if `v` is a leaf in the given genealogy.
+True if `v` is a leaf/root in the given genealogy.
 """
-isleaf(genealogy, v) = v ∈ leaves(genealogy)
+function isleaf end,
+function isroot end,
+function isivertex end
+
+isleaf(genealogy, v) = (iszero ∘ outdegree)(genealogy, v)
+
+isroot(genealogy, v) = (iszero ∘ indegree)(genealogy, v)
+
+isivertex(genealogy, v) = !isleaf(genealogy, v)
 
 """
     nleaves(genealogy)

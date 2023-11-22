@@ -74,142 +74,51 @@ function (D::CoalMutDensity)(tree::Tree; logscale = false)
     logscale ? ret : exp(ret)
 end
 
-###################################
-# Fréchet Phenotypes Distribution #
-###################################
+############################
+# Phenotypes Distributions #
+############################
 
+export PhenotypeDensity
 """
-    FrechetCoalDensity{T <: Real}
+    PhenotypeDensity
 
-Density of a vector of phenotypes of type `T` conditional on an
-Ancestral Recombination Graph.
+Density of a vector of phenotypes of type `T` conditional on a genealogy.
 
 # Fields
-- `leaves_phenotypes::Vector{T}`: Entry `k` is the phenotype of leaf `k`.
-- `α::Function`: Function mapping the positive real numbers to [0, 1].
-- `pars::Dict{Symbol, Any}`: Parameters.
+- `Φ::Vector{Union{Missing, T}}`: entry `k` is the phenotype of leaf `k`
+- `copula::C`: `<:AbstractΦCopula`
 """
-struct FrechetCoalDensity{T} <: AbstractGraphDensity
-    leaves_phenotypes::Vector{Union{Missing,T}}
-
-    α::Function
-    scale_α::Bool
-    pars::Dict{Symbol,Any}
-
-    function FrechetCoalDensity(leaves_phenotypes::Vector{Union{Missing, S}};
-                                α = t -> -expm1(-t),
-                                scale_α = false,
-                                pars = Dict{Symbol,Any}()) where {S}
-        new{S}(leaves_phenotypes, α, scale_α, pars)
-    end
-end
-export FrechetCoalDensity
-
-q(ψ::Bool, x) = ψ + (ψ ? -1 : 1) * x
-
-"""
-    joint_frechet(arg, parent, children, phenotypes, α, p; logscale = false)
-    joint_frechet(arg, parent, child, phenotypes, α, p; logscale = false)
-    marginal_frechet(phenotype, p)
-
-Joint/marginal densities. The first one is the density of two
-phenotypes associated with two coalescing sequences conditional on the
-phenotype of their parent. The second one is the marginal density of a
-phenotype.
-
-`phenotypes` must be a `Vector{T}` of length 3 containing the phenotypes of the
-parent, left child and right child in that order.
-"""
-function dens_frechet end
-
-## For a parent-child pair (eq. 6 of the paper).
-function dens_frechet(arg, parent, child, phenotypes::AbstractVector{Bool},
-                      α, p; scale_α = false)
-    φp, φc = first(phenotypes), last(phenotypes)
-    Δt = latitude(arg, parent) - latitude(arg, child)
-
-    if scale_α
-        α_final = t -> α(1 / (1 + 2 / ((1 - q(φc, p)) * t^2)))
-    else
-        α_final = α
-    end
-
-    prob = q(φp, p) * α_final(Δt)
-
-    q(iszero((φp + φc) % 2), prob)
+struct PhenotypeDensity{T, C<:AbstractΦCopula} <: AbstractGraphDensity
+    Φ::Vector{Union{Missing, T}}
+    copula::C
 end
 
-dens_frechet(phenotype::Bool, p) = phenotype ? p : 1 - p
-
-## Root.
-function cmatrix_frechet(arg, p)
-    reshape([dens_frechet(φ, p) for φ in SA[false, true]], 2, 1)
-end
-
-## This method assumes that both vectors of phenotypes are sorted
-## (false < true).
-function cmatrix_frechet(arg, σ, φs_σ, δ, φs_δ, α, p; scale_α = false)
-    map(Iterators.product(φs_σ, φs_δ)) do (φ_σ, φ_δ)
-        dens_frechet(arg, δ, σ, SA[φ_δ, φ_σ], α, p, scale_α = scale_α)
-    end
-end
-
-function cmatrix_frechet(arg,
-                         phenotypes::AbstractVector{Union{Missing,Bool}},
-                         σ, α, p; scale_α = false)
-    _parents = parents(arg, σ)
-    δ = isempty(_parents) ? (zero ∘ eltype)(arg) : first(_parents)
-
-    ## Root
-    iszero(δ) && return cmatrix_frechet(arg, p)
-
-    ## Assume that the phenotype of δ is unknown since it is an
-    ## internal vertex.
-    φs_δ = [false, true]
-
-    ## The phenotype of σ might be known if it is a leaf.
-    if isleaf(arg, σ)
-        φ_σ = phenotypes[σ]
-        φs_σ = ismissing(φ_σ) ? [false, true] : [φ_σ]
-    else # non-root internal vertex
-        φs_σ = [false, true]
-    end
-
-    cmatrix_frechet(arg, σ, φs_σ, δ, φs_δ, α, p, scale_α = scale_α)
-end
-
-function (D::FrechetCoalDensity{Bool})(arg, perm = 1:nleaves(arg))
-    p = D.pars[:p]::Float64
-    α = D.α
-    scale_α = D.scale_α
-    leaves_phenotypes = D.leaves_phenotypes[perm]
-    missing_phenotypes = findall(ismissing, leaves_phenotypes)
-    ni = nivertices(arg)
-    nmiss = length(missing_phenotypes)
-
-    ## Only 1 vertex in ARG.
-    iszero(ni) && return first(leaves_phenotype) ? p : 1 - p
+function (D::PhenotypeDensity)(tree::Tree)
+    ## TODO: Manage this case more cleanly
+    nleaves(tree) <= 1 && error("tree must have at least two leaves")
 
     ## Belief propagation through postorder traversal.
+    copula = D.copula
+    Φ = D.Φ
 
     ## Stack used to compute the postorder traversal.
-    vertices_stack = CheapStack(eltype(arg), nv(arg))
+    vertices_stack = CheapStack(eltype(tree), nv(tree))
 
-    ## TODO: update explanations.
-    ## Stack used to store messages. The first `nmiss` dimensions are
-    ## indexed by the missing phenotypes. The last dimension is
-    ## indexed by the current phenotype.
-    messages_stack = CheapStack(Matrix{Float64}, nv(arg))
+    push!(vertices_stack, (minimum ∘ children)(tree, mrca(tree)))
+    push!(vertices_stack, mrca(tree))
+    v = (maximum ∘ children)(tree, mrca(tree))
 
-    push!(vertices_stack, (minimum ∘ children)(arg, mrca(arg)))
-    push!(vertices_stack, mrca(arg))
-    v = (maximum ∘ children)(arg, mrca(arg))
+    ## Stack used to store messages. Entry (i, j) contains the value of
+    ## f(φ = g(i) | ψ = g(j)) where φ and ψ are the source and destination of
+    ## the message respectively and g is some functions that compute phenotype
+    ## from an integer.
+    messages_stack = CheapStack(Matrix{Float64}, nv(tree))
 
     res = zero(Float64)
     while !isempty(vertices_stack)
         while !iszero(v)
-            if !isleaf(arg, v)
-                v_children = children(arg, v)
+            if !isleaf(tree, v)
+                v_children = children(tree, v)
                 push!(vertices_stack, minimum(v_children))
                 push!(vertices_stack, v)
 
@@ -221,16 +130,15 @@ function (D::FrechetCoalDensity{Bool})(arg, perm = 1:nleaves(arg))
         end
 
         v = pop!(vertices_stack)
-        if !isleaf(arg, v) &&
-           (first ∘ children)(arg, v) == first(vertices_stack)
+        if !isleaf(tree, v) &&
+            (first ∘ children)(tree, v) == first(vertices_stack)
             v2 = pop!(vertices_stack)
             push!(vertices_stack, v)
             v = v2
         else # Compute message!
-            μ = cmatrix_frechet(arg, leaves_phenotypes, v, α, p,
-                                scale_α = scale_α)
+            μ = cmatrix(tree, copula, v, Φ)
 
-            if !isleaf(arg, v)
+            if !isleaf(tree, v)
                 μ = (pop!(messages_stack) ⊙ pop!(messages_stack)) * μ
             end
             push!(messages_stack, μ)
@@ -241,3 +149,35 @@ function (D::FrechetCoalDensity{Bool})(arg, perm = 1:nleaves(arg))
 
     pop!(messages_stack)
 end
+
+"""
+    cmatrix(tree, copula, σ, phenotypes)
+
+Matrix containing relevant points of the conditional distribution of a vector
+of phenotypes. Used by the belief propagation algorithm.
+"""
+function cmatrix(tree::Tree, copula::AbstractΦCopula{PhenotypeBinary}, σ, phenotypes)
+    isroot(tree, σ) &&
+        return reshape([pdf(copula, φ) for φ in (false, true)], 2, 1)
+
+    δ = dad(tree, σ)
+
+
+    ## Assume that the phenotype of δ is unknown since it is an
+    ## internal vertex.
+    φsδ = (false, true)
+
+    ## The phenotype of σ might be known if it is a leaf.
+    if isleaf(tree, σ) && !ismissing(phenotypes[σ])
+        φsσ = [phenotypes[σ]]
+    else # non-root internal vertex
+        φsσ = (false, true)
+    end
+
+    cmatrix(tree, copula, σ, φsσ, δ, φsδ)
+end
+
+cmatrix(tree::Tree, copula::AbstractΦCopula{PhenotypeBinary}, σ, φsσ, δ, φsδ) =
+    map(Iterators.product(φsσ, φsδ)) do (φσ, φδ)
+        conditional_pdf(copula, φσ, φδ, distance(tree, σ, δ))
+    end
