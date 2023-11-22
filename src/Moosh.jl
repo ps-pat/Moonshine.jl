@@ -31,8 +31,8 @@ include("ArgDensity.jl")
     @compile_workload begin
         rng = Xoshiro(42)
 
-        test = Arg(rng, 10, 10, μ_loc = 5e-5, ρ_loc = 1e-8)
-        buildtree!(rng, test)
+        tree = Tree(rng, 10, 10, μ_loc = 5e-5)
+        build!(rng, tree)
     end
 end
 

@@ -1,8 +1,10 @@
-using Graphs: SimpleDiGraph
+using Graphs
 
 import Graphs: add_vertex!, add_edge!, rem_edge!
 
-using Random: AbstractRNG, GLOBAL_RNG
+using Random
+
+using Distributions
 
 #######################
 # TreeCore Definition #
