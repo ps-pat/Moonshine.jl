@@ -197,9 +197,9 @@ mut_rate(tree::Tree, scaled = true) = tree.core.μ_loc * (scaled ? 4 * eff_popsi
 
 function tree_coalesce!(rng, tree, vertices, nlive)
     ## Sample coalescing vertices.
+    tree.logprob += -(log ∘ binomial)(length(vertices), 2)
     shuffle!(rng, vertices)
     child1, child2 = pop!(vertices), pop!(vertices)
-    tree.logprob += (log ∘ inv ∘ binomial)(length(vertices), 2)
 
     ## Sample a latitude for the coalescence event.
     Δdist = Exponential(inv(nlive - 1))
