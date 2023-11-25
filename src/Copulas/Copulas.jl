@@ -41,7 +41,7 @@ npars(::Type{PhenotypeBinary}) = 1
 # Packaged Alphas #
 ###################
 
-include("Alphas/Alphas.jl")
+include("Alphas.jl")
 
 export AbstractΦCopula
 """
