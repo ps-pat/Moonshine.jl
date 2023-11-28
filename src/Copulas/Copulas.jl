@@ -162,8 +162,23 @@ function loglikelihood(copula::AbstractΦCopula, Φ, genealogy::AbstractGenealog
     end
 end
 
-function loglikelihood(rng::AbstractRNG, copula::AbstractΦCopula, Φ, H, G;
-                       idx = 1, n = 1000, genpars...)
+function compute_distances(tree::Tree, Φ::AbstractVector{Bool})
+    ## mults stores the multiplicity of a distance for a given phenotypes pair.
+    mults = zeros(Int, nivertices(tree), 3)
+    dists = 2 .* latitudes(tree)
+    n = nleaves(tree)
+
+    @inbounds for (i, j) ∈ combinations(leaves(tree), 2)
+        line = mrca(tree, (i, j)) - n
+        col = Φ[i] + Φ[j] + 1
+        mults[line, col] += 1
+    end
+
+    mults, dists
+end
+
+function loglikelihood(rng::AbstractRNG, copula::AbstractΦCopula{PhenotypeBinary},
+                       Φ, H, G; idx = 1, n = 1000, genpars...)
     ## TODO: type inference fails but Jump doesn't play nice with
     ## FunctionWrappers...
     fs = Vector{Function}(undef, n)
@@ -172,8 +187,22 @@ function loglikelihood(rng::AbstractRNG, copula::AbstractΦCopula, Φ, H, G;
         genealogy = G(H; genpars...)
         build!(rng, genealogy, idx)
 
+        mults, dists = compute_distances(genealogy, Φ)
+
         fs[k] = function (pars...)
-            loglikelihood(copula, Φ, genealogy)(pars...)
+            sum((enumerate ∘ eachcol)(mults), init = zero(Float64)) do (k, mults_col)
+                ## Phenotype is Gray-encoded in k - 1.
+                k -= 1
+                φs = k ⊻ (k >> 1)
+                φ1 = iszero(φs & 1)
+                φ2 = iszero(φs & 2)
+
+                sum(zip(mults_col, dists), init = zero(Float64)) do (mult, dist)
+                    iszero(mult) && return zero(dist)
+
+                    mult * logpdf(copula, φ1, φ2, dist, pars...)
+                end
+            end
         end
     end
 
@@ -220,9 +249,10 @@ default values are:
 """
 function fit!(rng, copula::AbstractΦCopula, Φ, H, G;
               global_attrs = ("algorithm" => :G_MLSL_LDS,
-                              "local_optimizer" => :LD_LBFGS,
-                              "maxtime" => 5),
-              local_attrs = ("algorithm" => :LD_MMA,),
+                              "local_optimizer" => :LN_SBPLX,
+                              "maxtime" => 5 * (length ∘ parameters)(alpha(copula))),
+              local_attrs = ("algorithm" => :LD_MMA,
+                             "maxtime" => 5 * (length ∘ parameters)(alpha(copula))),
               genpars...)
     α = alpha(copula)
 
@@ -275,6 +305,9 @@ function fit!(rng, copula::AbstractΦCopula, Φ, H, G;
 
     set_attributes(local_model, local_attrs...)
     optimize!(local_model)
+
+    termination_status(local_model) ∈ (LOCALLY_SOLVED, OPTIMAL) ||
+        @warn "Local optimization did not converge"
 
     ## Store estimated values.
     for (var, val) ∈ zip(Symbol.(local_vars), value.(local_vars))

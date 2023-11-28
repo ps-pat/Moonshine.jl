@@ -327,6 +327,7 @@ isroot(genealogy, v) = (iszero ∘ indegree)(genealogy, v)
 
 isivertex(genealogy, v) = !isleaf(genealogy, v)
 
+export nleaves, nivertices
 """
     nleaves(genealogy)
     nivertices(genealogy)

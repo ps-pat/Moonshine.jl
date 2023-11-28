@@ -60,7 +60,7 @@ function setparameter! end
 #################
 
 let
-    zeroinf = (eps(Float64), 100)
+    zeroinf = (eps(Float64), 1000)
 
     ## TODO: Implement robust parameters estimation for Log-Cauchy.
     #! format: off
