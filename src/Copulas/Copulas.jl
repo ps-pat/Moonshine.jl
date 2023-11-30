@@ -247,7 +247,7 @@ function fit!(rng, copula::AbstractΦCopula, Φ, H, G;
               global_attrs = ("algorithm" => :GN_ESCH,
                               "maxtime" => 5 * (length ∘ parameters)(alpha(copula)),
                               "maxeval" => 1000),
-              local_attrs = ("algorithm" => :LD_LBFGS,
+              local_attrs = ("algorithm" => :LN_SBPLX,
                              "maxtime" => 5 * (length ∘ parameters)(alpha(copula))),
               genpars...)
     α = alpha(copula)
