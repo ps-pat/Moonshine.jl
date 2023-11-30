@@ -68,7 +68,7 @@ function (D::CoalMutDensity)(tree::Tree; logscale = false)
     m = nmutations(tree)
     bl = branchlength(tree)
 
-    pmut_log = m * log(μ) - 0.5 * μ * l * bl - sum(log, 2:m)
+    pmut_log = m * log(μ) - 0.5 * μ * l * bl - sum(log, 2:m, init = zero(Float64))
     ret = dens_coal(tree, logscale = true) + pmut_log
 
     logscale ? ret : exp(ret)

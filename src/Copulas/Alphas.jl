@@ -4,6 +4,8 @@ using SpecialFunctions: erf, erfc
 
 using Distributions: BetaPrime, Chi, Chisq, cdf
 
+using StatsFuns
+
 export AbstractAlpha
 """
     AbstractAlpha
@@ -60,18 +62,27 @@ function setparameter! end
 #################
 
 let
-    zeroinf = (eps(Float64), 1000)
+    zeroinf = (1e-4, 1e2)
+    zeroone = (1e-4, 1 - 1e-4)
 
-    ## TODO: Implement robust parameters estimation for Log-Cauchy.
+    maxwellboltzmann_cdf = function (t, a)
+        erf(t * invsqrt2 / a) - inv(sqrthalfπ) * (t / a) * exp(-t^2 * 0.5 / a^2)
+    end
+
+    foldednormal_cdf = function (t, μ, σ)
+        c = invsqrt2 / σ
+
+        0.5 * (erf((t + μ) * c) + erf((t - μ) * c))
+    end
+
     #! format: off
     As = (
         Exponential =
-            ((t, λ) -> -expm1(-λ * 1t),
+            ((t, λ) -> -expm1(-λ * t),
              (; λ = ("rate", 1, zeroinf)),
              "CDF of an exponential random variable."),
         MaxwellBoltzmann =
-            ((t, a) -> erf(t / sqrt(2) * a) -
-            sqrt(2 / π) * (t / a) * exp(-t^2 / 2 * a^2),
+            (maxwellboltzmann_cdf,
              (; a = ("scale", 1, zeroinf)),
              "CDF of a Maxwell-Boltzmann distributed random variable."),
         BetaPrime =
@@ -79,24 +90,45 @@ let
              (a = ("shape", 1, zeroinf), b = ("shape", 1, zeroinf)),
              "CDF of a beta prime random variable."),
         Dagum =
-            ((t, p, a, b) -> (1 + (t / b)^(-a))^(-p),
+            ((t, p, a, b) -> inv(1 + (b / t)^a)^p,
              (p = ("shape", 1, zeroinf),
               a = ("shape", 1, zeroinf),
               b = ("scale", 1, zeroinf)),
-             "CDF of a Dagum distributed random variable."),
+             """
+CDF of a Dagum distributed random variable.
+
+See also [`AlphaLogLogistic`](@ref) for the p = 1 constrained case.
+    """),
+        LogLogistic =
+            ((t, a, b) -> inv(1 + b * inv(t)^a),
+             (a = ("shape", 1, (1e-1, 1e1)),
+              b = ("scale", 1, (1e-1, 1e1))),
+             """
+CDF of a log-logistic distributed random variable.
+
+See also [`AlphaDagum`](@ref) for a 3 parameters parametrization.
+    """),
         Pareto =
             ((t, σ, ξ) -> 1 - (1 + ξ * t / σ)^(-inv(ξ)),
              (σ = ("scale", 1, zeroinf), ξ = ("scale", 1, zeroinf)),
-             "CDF of a generalized Pareto distributed random variable with μ = 0."),
+             """
+CDF of a generalized Pareto distributed random variable with μ = 0.
+
+See also [`AlphaLomax`](@ref).
+    """),
         FoldedNormal =
-            ((t, μ, σ) -> 0.5 * (erf((t + μ) / sqrt(2) * σ) + erf((t - μ) / sqrt(2) * σ)),
-             (μ = ("location", 0, (-Inf, Inf)),
+            (foldednormal_cdf,
+             (μ = ("location", 0, (0, last(zeroinf))),
               σ = ("scale", 1, zeroinf)),
              "CDF of a folded-normal distributed random variable"),
         Lomax =
             ((t, a, λ) -> 1 - (1 + t / λ)^(-a),
              (a = ("shape", 1, zeroinf), λ = ("scale", 1, zeroinf)),
-             "CDF of a Lomax distributed random variable."),
+             """
+CDF of a Lomax distributed random variable. Special case of the generalized Pareto distribution.
+
+See also [`AlphaPareto`](@ref).
+    """),
         Rayleigh =
             ((t, σ) -> 1 - exp(-t^2 / (2 * σ^2)),
              (;σ = ("scale", 1, zeroinf)),
@@ -111,7 +143,7 @@ let
              "CDF of a chi-squared distributed random variable."),
         ExpLog =
             ((t, p, β) -> 1 - log(1 - (1 - p) * exp(-β * t)) / log(p),
-             (p = ("probability", 0.5, (eps(Float64), 1 - eps(Float64))),
+             (p = ("probability", 0.5, zeroone),
               β = ("rate", 1, zeroinf)),
              "CDF of an exponential-logarithm distributed random variable."),
         LogCauchy =

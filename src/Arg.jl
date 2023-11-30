@@ -705,29 +705,6 @@ function upstream_mutation_edge(arg, pos, breakpoint)
     Edge(dad, child)
 end
 
-"""
-    ancestral_mask(arg, x)
-
-Mask non ancestral positions to 0.
-"""
-ancestral_mask(arg, x::Set{Ω}) = mapreduce(|, x) do int
-    lpos, rpos = endpoints(int)
-
-    lidx = 1
-    while lpos > arg.core.positions[lidx]
-        lidx += 1
-    end
-
-    ridx = postoidx(arg, rpos)
-
-    andmask(nmarkers(arg), UnitRange(lidx, ridx))
-end
-
-ancestral_mask(arg, x::Ω) = ancestral_mask(arg, Set([x]))
-
-ancestral_mask(arg, x::EdgeType) =
-    ancestral_mask(arg, ancestral_intervals(arg, x))
-
 update_sequence!(arg, v) =
     arg.core.sequences[v] = mapreduce(&, children(arg, v)) do child
         mask = ancestral_mask(arg, Edge(v, child))

@@ -9,7 +9,9 @@ import Graphs: edges, vertices, ne, nv,
 
 import GraphMakie: graphplot
 
-using IntervalSets: Interval
+using LayeredLayouts
+
+using IntervalSets
 
 using StaticArrays: SA
 
@@ -145,6 +147,20 @@ Distance between two vertices.
 Only mandatory if copulas are to be fitted on the genealogy.
 See [`loglikelihood`](@ref).
 """
+function distance end
+
+export prob
+"""
+    prob(genealogy; logscale = false)
+
+Probability of the genealogy.
+
+# Implementation,
+
+Only mandatory if copulas are to be fitted on the genealogy.
+See [`loglikelihood`](@ref).
+"""
+function prob end
 
 #############
 # Utilities #
@@ -195,6 +211,30 @@ function postoidx(genealogy, pos)
 
     nmarkers(genealogy)
 end
+
+"""
+    ancestral_mask(genealogy, x)
+
+Mask non ancestral positions to 0.
+"""
+ancestral_mask(genealogy, x::Set{Ω}) = mapreduce(|, x) do int
+    lpos, rpos = endpoints(int)
+
+    lidx = 1
+    while lpos > positions(genealogy)[lidx]
+        lidx += 1
+    end
+
+    ridx = postoidx(genealogy, rpos)
+
+    andmask(nmarkers(genealogy), UnitRange(lidx, ridx))
+end
+
+ancestral_mask(genealogy, x::Ω) = ancestral_mask(genealogy, Set([x]))
+
+ancestral_mask(genealogy, x::EdgeType) =
+    ancestral_mask(genealogy, ancestral_intervals(genealogy, x))
+
 
 ###################
 # Pretty printing #

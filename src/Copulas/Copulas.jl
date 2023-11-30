@@ -191,11 +191,9 @@ function loglikelihood(rng::AbstractRNG, copula::AbstractΦCopula{PhenotypeBinar
 
         fs[k] = function (pars...)
             sum((enumerate ∘ eachcol)(mults), init = zero(Float64)) do (k, mults_col)
-                ## Phenotype is Gray-encoded in k - 1.
+                ## Phenotypes are Gray-encoded in k - 1.
                 k -= 1
-                φs = k ⊻ (k >> 1)
-                φ1 = iszero(φs & 1)
-                φ2 = iszero(φs & 2)
+                φ1, φ2 = .!iszero.((k ⊻ (k >> 1)) .& (1, 2))
 
                 sum(zip(mults_col, dists), init = zero(Float64)) do (mult, dist)
                     iszero(mult) && return zero(dist)
@@ -227,10 +225,10 @@ stated otherwise by `bounds(alpha(colupa))`
 The default implementation fits parameters by maximizing the loglikelihood of
 the copula. The optimization is done in two passes:
 
- 1. global optimizations using MLSL (using LBFGS as the local optimizer);
- 2. local optimization using MMA.
+ 1. global optimizations using ESCH (an evolutionary algorithm);
+ 2. local optimization using LBFGS.
     Both implementation are from the [NLopt](https://nlopt.readthedocs.io/en/latest/)
-    library. Since only bound-constrained problems are supported by MLSL, a call to
+    library. Since only finite domain is supported by ESCH, a call to
     `bound(::T)` must return a bounded domain for each parameter of the likelihood
     in order to use the default `fit!(::AbstractΦCopula, ...)` method.
 
@@ -242,16 +240,14 @@ set the attributes of the global/local optimizer respectively. See
 [NLopt.jl documentation](https://github.com/JuliaOpt/NLopt.jl). Their
 default values are:
 
-  - `global_attrs = ("algorithm" => :G_MLSL_LDS,
-    "local_optimizer" => :LD_LBFGS,
-    "maxtime" => 5)
-  - `local_attrs = ("algorithm" => :LD_MMA)`.
+  - `global_attrs = ("algorithm" => :GN_ESCH, "maxtime" => 5 * (length ∘ parameters)(alpha(copula)), "maxeval" => 2000)`
+  - `local_attrs = ("algorithm" => :LN_NELDERMEAD, "maxtime" => 5 * (length ∘ parameters)(alpha(copula)))`
 """
 function fit!(rng, copula::AbstractΦCopula, Φ, H, G;
-              global_attrs = ("algorithm" => :G_MLSL_LDS,
-                              "local_optimizer" => :LN_SBPLX,
-                              "maxtime" => 5 * (length ∘ parameters)(alpha(copula))),
-              local_attrs = ("algorithm" => :LD_MMA,
+              global_attrs = ("algorithm" => :GN_ESCH,
+                              "maxtime" => 5 * (length ∘ parameters)(alpha(copula)),
+                              "maxeval" => 1000),
+              local_attrs = ("algorithm" => :LD_LBFGS,
                              "maxtime" => 5 * (length ∘ parameters)(alpha(copula))),
               genpars...)
     α = alpha(copula)
@@ -283,7 +279,7 @@ function fit!(rng, copula::AbstractΦCopula, Φ, H, G;
     global_vars, local_vars = all_variables(global_model), all_variables(local_model)
 
     ## Objective Function
-    objective = loglikelihood(copula, Φ, H, G; genpars...)
+    objective = loglikelihood(rng, copula, Φ, H, G; genpars...)
     nparameters = length(parameters(α))
     register(global_model, :objective,
              nparameters, objective,
@@ -297,6 +293,10 @@ function fit!(rng, copula::AbstractΦCopula, Φ, H, G;
     ## Global Optimization
     set_attributes(global_model, global_attrs...)
     optimize!(global_model)
+
+    termination_status(global_model) ∈
+    (LOCALLY_SOLVED, OPTIMAL, TIME_LIMIT, ITERATION_LIMIT) ||
+        @warn "Global optimization did not converge"
 
     ## Local Optimization
     for (global_var, local_var) ∈ zip(global_vars, local_vars)
