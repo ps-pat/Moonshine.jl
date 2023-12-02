@@ -214,7 +214,10 @@ $description
             ## Evaluation
             (α::$A)(t, $(args...)) = $fun(t, $(args...))
 
-            (α::$A)(t) = α(t, broadcast(par -> getfield(α, par), $args)...)
+            function (α::$A)(t)
+                parameter_values = map(par -> getfield(α, par), parameters(α))
+                α(t, parameter_values...)
+            end
 
             ## AbstractAlpha interface
             function bounds(α::$A)
@@ -225,7 +228,8 @@ $description
 
             @generated parameters(::$A) = Tuple($args)
 
-            getparameter(α::$A, parameter) = getfield(α, parameter)
+            ## TODO: Skip type assertion
+            getparameter(α::$A, parameter) = getfield(α, parameter)::Float64
 
             function setparameter!(α::$A, parameter, value)
                 setfield!(α, parameter, convert(Float64, value))

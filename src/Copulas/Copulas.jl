@@ -110,9 +110,9 @@ for fun ∈ [:pdf, :conditional_pdf]
     end
 end
 
-pdf(copula::AbstractΦCopula, φ) = logpdf(copula, φ, d)
+pdf(copula::AbstractΦCopula, φ) = logpdf(copula, φ)
 
-logpdf(copula::AbstractΦCopula, φ) = pdf(copula, φ, d)
+logpdf(copula::AbstractΦCopula, φ) = pdf(copula, φ)
 
 export alpha
 """
