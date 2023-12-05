@@ -17,18 +17,11 @@ bernoulli_cdf(x, p) = (0 ≤ x < 1) * (1 - p) + (x ≥ 1)
 bernoulli_cdf(φ::Bool, p) = φ ? 1 : 1 - p
 
 ## AbstractΦCopula Interface
-
-function pdf(copula::CopulaFrechet{PhenotypeBinary}, φ)
-    p = first(copula.parameters)
-
-    φ ? p : 1 - p
-end
-
 function logpdf(copula::CopulaFrechet{PhenotypeBinary}, φ1, φ2, d, αpars...)
     α = copula.α(d, αpars...)
     p = first(copula.parameters)
 
-    if φ2
+    if isone(φ2)
         t1 = log(p)
         s2 = (1 - p) * α
     else
@@ -45,7 +38,7 @@ function conditional_pdf(copula::CopulaFrechet{PhenotypeBinary}, φ1, φ2, d, α
     α = copula.α(d, αpars...)
     p = first(copula.parameters)
 
-    if φ2
+    if isone(φ2)
         s2 = (1 - p) * α
     else
         s2 = p * α

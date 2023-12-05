@@ -136,6 +136,13 @@ pdf(copula::AbstractΦCopula, φ) = logpdf(copula, φ)
 
 logpdf(copula::AbstractΦCopula, φ) = pdf(copula, φ)
 
+## Marginal pdfs
+
+function pdf(copula::AbstractΦCopula{PhenotypeBinary}, φ)
+    p = first(copula.parameters)
+    φ ? p : 1 - p
+end
+
 export alpha
 """
     alpha(copula)
@@ -347,3 +354,4 @@ end
 ####################
 
 include("Frechet.jl")
+include("CuadrasAuge.jl")
