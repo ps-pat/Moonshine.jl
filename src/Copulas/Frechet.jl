@@ -1,10 +1,10 @@
-export FrechetCopula
+export CopulaFrechet
 
-struct FrechetCopula{P,A,N} <: AbstractΦCopula{P,A,N}
+struct CopulaFrechet{P,A,N} <: AbstractΦCopula{P,A,N}
     α::A
     parameters::NTuple{N,Float64}
 
-    FrechetCopula(P, α, pars...) = new{P,typeof(α),npars(P)}(α, pars)
+    CopulaFrechet(P, α, pars...) = new{P,typeof(α),npars(P)}(α, pars)
 end
 
 ####################
@@ -18,13 +18,13 @@ bernoulli_cdf(φ::Bool, p) = φ ? 1 : 1 - p
 
 ## AbstractΦCopula Interface
 
-function pdf(copula::FrechetCopula{PhenotypeBinary}, φ)
+function pdf(copula::CopulaFrechet{PhenotypeBinary}, φ)
     p = first(copula.parameters)
 
     φ ? p : 1 - p
 end
 
-function logpdf(copula::FrechetCopula{PhenotypeBinary}, φ1, φ2, d, αpars...)
+function logpdf(copula::CopulaFrechet{PhenotypeBinary}, φ1, φ2, d, αpars...)
     α = copula.α(d, αpars...)
     p = first(copula.parameters)
 
@@ -41,7 +41,7 @@ function logpdf(copula::FrechetCopula{PhenotypeBinary}, φ1, φ2, d, αpars...)
     t1 + t2
 end
 
-function conditional_pdf(copula::FrechetCopula{PhenotypeBinary}, φ1, φ2, d, αpars...)
+function conditional_pdf(copula::CopulaFrechet{PhenotypeBinary}, φ1, φ2, d, αpars...)
     α = copula.α(d, αpars...)
     p = first(copula.parameters)
 

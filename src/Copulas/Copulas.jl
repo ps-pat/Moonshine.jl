@@ -27,15 +27,37 @@ number of parameters of the copula.
 """
 abstract type AbstractPhenotype end
 
-export PhenotypeBinary
-"""
-    PhenotypeBinary
+let
+    phenotypes = (
+        Binary =
+            (1,
+             "Binary phenotype, distributed as a Bernoulli random variable."),)
 
-Binary phenotype, distributed as a Bernoulli random variable.
-"""
-struct PhenotypeBinary <: AbstractPhenotype end
+    for (phenotype, pars) ∈ pairs(phenotypes)
+        d, description = pars
 
-npars(::Type{PhenotypeBinary}) = 1
+        ## Generate name
+        Pstring = string(phenotype)
+        if length(Pstring) < 9 || Pstring[1:9] != "Phenotype"
+            phenotype = Symbol("Phenotype" * Pstring)
+        end
+
+        ## Generate docstring
+        docstring = """
+$phenotype
+
+$description
+    """
+        @eval begin
+            export $phenotype
+            @doc $docstring
+            struct $phenotype <: AbstractPhenotype end
+
+            @generated npars(::Type{$phenotype}) = $d
+        end
+    end
+
+end
 
 ###################
 # Packaged Alphas #
@@ -245,10 +267,9 @@ default values are:
 """
 function fit!(rng, copula::AbstractΦCopula, Φ, H, G;
               global_attrs = ("algorithm" => :GN_ESCH,
-                              "maxtime" => 5 * (length ∘ parameters)(alpha(copula)),
                               "maxeval" => 1000),
               local_attrs = ("algorithm" => :LN_SBPLX,
-                             "maxtime" => 5 * (length ∘ parameters)(alpha(copula))),
+                             "maxtime" => ceil(Int, length(H) / 10) * (length ∘ parameters)(alpha(copula))),
               genpars...)
     α = alpha(copula)
 
