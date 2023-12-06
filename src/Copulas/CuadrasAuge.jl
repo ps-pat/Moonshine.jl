@@ -35,21 +35,21 @@ end
 
 function conditional_pdf(copula::CopulaCuadrasAuge{PhenotypeBinary}, φ, ψ, t, αpars...)
 α = copula.α(t, αpars...)
-    q = 1 - first(copula.parameters)
+    p = first(copula.parameters)
     s = φ + ψ
 
-    ret = q^α
+    ret = (1 - p)^α
 
     if !iszero(s)
         ret = s - ret
     end
 
     if isone(ψ)
-        ret *= q / (1 - q)
+        ret *= (1 - p) / p
     end
 
     if s == 2
-        ret = 1 / q - ret
+        ret = 1 / p - ret
     end
 
     ret
