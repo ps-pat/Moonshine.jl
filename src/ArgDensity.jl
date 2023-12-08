@@ -132,7 +132,8 @@ function (D::PhenotypeDensity)(tree::Tree)
 
         v = pop!(vertices_stack)
         if !isleaf(tree, v) &&
-           (first ∘ children)(tree, v) == first(vertices_stack)
+            !isempty(vertices_stack) &&
+            (first ∘ children)(tree, v) == first(vertices_stack)
             v2 = pop!(vertices_stack)
             push!(vertices_stack, v)
             v = v2
@@ -168,10 +169,11 @@ function cmatrix(tree::Tree, copula::AbstractΦCopula{PhenotypeBinary}, σ, phen
     φsδ = (false, true)
 
     ## The phenotype of σ might be known if it is a leaf.
-    if isleaf(tree, σ) && !ismissing(phenotypes[σ])
-        φsσ = [phenotypes[σ]]
+    if isleaf(tree, σ)
+        φ = phenotypes[σ]
+        φsσ = ismissing(φ) ? [false, true] : [φ]
     else # non-root internal vertex
-        φsσ = (false, true)
+        φsσ = [false, true]
     end
 
     cmatrix(tree, copula, σ, φsσ, δ, φsδ)
@@ -179,6 +181,7 @@ end
 
 function cmatrix(tree::Tree, copula::AbstractΦCopula{PhenotypeBinary}, σ, φsσ, δ, φsδ)
     map(Iterators.product(φsσ, φsδ)) do (φσ, φδ)
-        conditional_pdf(copula, φσ, φδ, distance(tree, σ, δ))
+        Δlat = latitude(tree, δ) - latitude(tree, σ)
+        conditional_pdf(copula, φσ, φδ, Δlat)
     end
 end

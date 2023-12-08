@@ -25,13 +25,11 @@ isempty(s::CheapStack) = iszero(s.ptr)
 
 empty!(s::CheapStack) = s.ptr = 0
 
-first(s::CheapStack) = isempty(s) ? nothing : s.store[s.ptr]
+first(s::CheapStack) = s.store[s.ptr]
 
 length(s::CheapStack) = s.ptr
 
 function pop!(s::CheapStack)
-    isempty(s) && return nothing
-
     @inline ret = s.store[s.ptr]
     s.ptr -= 1
 

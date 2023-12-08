@@ -121,7 +121,11 @@ function mrca(genealogy, vs)
     μ = mrca(genealogy)
 
     possible_μ = CheapStack{VertexType}(nv(genealogy))
-    push!(possible_μ, children(genealogy, μ)...)
+
+    ## Mandatory to avoid dynamic dispatch.
+    for child ∈ children(genealogy, μ)
+        push!(possible_μ, child)
+    end
 
     while !isempty(possible_μ)
         v = pop!(possible_μ)
@@ -129,7 +133,11 @@ function mrca(genealogy, vs)
 
         μ = v
         empty!(possible_μ)
-        push!(possible_μ, children(genealogy, μ)...)
+
+        ## Mandatory to avoid dynamic dispatch.
+        for child ∈ children(genealogy, μ)
+            push!(possible_μ, child)
+        end
     end
 
     ## Type inference needs a little bit of help here for some reason...
@@ -458,7 +466,11 @@ Transitive closure of the "children of" relation.
 function descendants(genealogy, v)
     descendants = CheapStack{VertexType}(nv(genealogy) - 1)
     _children = CheapStack{VertexType}(nv(genealogy) - 1)
-    push!(_children, children(genealogy, v)...)
+
+    ## Mandatory to avoid dynamic dispatch.
+    for child ∈ children(genealogy, v)
+        push!(_children, child)
+    end
 
     while !isempty(_children)
         v = pop!(_children)
