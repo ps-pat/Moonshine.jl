@@ -462,7 +462,11 @@ function descendants(genealogy, v)
 
     while !isempty(_children)
         v = pop!(_children)
-        push!(_children, children(genealogy, v)...)
+
+        ## Mandatory to avoid dynamic dispatch.
+        for child ∈ children(genealogy, v)
+            push!(_children, child)
+        end
         push!(descendants, v)
     end
 

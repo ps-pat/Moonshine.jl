@@ -192,13 +192,25 @@ function loglikelihood(copula::AbstractΦCopula, Φ, genealogy::AbstractGenealog
 end
 
 function compute_distances(tree::Tree, Φ::AbstractVector{Bool})
+    n = nleaves(tree)
+
+    ## 0-1 matrix of ancestors for leaves. Entry i, j is 1 iff leaf j
+    ## has vertex n + i in its ancestry. Since every leaf has vertex
+    ## 2n - 1 (the root) as an ancestor, corresponding row is not
+    ## included in the matrix.
+    ancestry = falses(n - 2, n)
+
+    @inbounds for ivertex ∈ Iterators.drop(reverse(ivertices(tree)), 1)
+        descendant_leaves = filter(<=(nleaves(tree)), descendants(tree, ivertex))
+        ancestry[ivertex - n, descendant_leaves] .= true
+    end
+
     ## mults stores the multiplicity of a distance for a given phenotypes pair.
     mults = zeros(Int, nivertices(tree), 3)
     dists = 2 .* latitudes(tree)
-    n = nleaves(tree)
 
     @inbounds for (i, j) ∈ combinations(leaves(tree), 2)
-        line = mrca(tree, (i, j)) - n
+        line = something(findfirst(ancestry[:,i] .& ancestry[:,j]), n - 1)
         col = Φ[i] + Φ[j] + 1
         mults[line, col] += 1
     end

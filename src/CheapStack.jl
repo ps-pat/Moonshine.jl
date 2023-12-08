@@ -32,22 +32,27 @@ length(s::CheapStack) = s.ptr
 function pop!(s::CheapStack)
     isempty(s) && return nothing
 
-    ret = s.store[s.ptr]
+    @inline ret = s.store[s.ptr]
     s.ptr -= 1
 
     ret
 end
 
+push!(s::CheapStack) = s
+
 function push!(s::CheapStack, x)
     s.ptr += 1
-    s.store[s.ptr] = x
+    @inline s.store[s.ptr] = x
 
     s
 end
 
-function push!(s::CheapStack, xs...)
-    for x ∈ xs
-        push!(s, x)
+function push!(s::CheapStack, x, y, rest...)
+    push!(s, x)
+    push!(s, y)
+
+    for z ∈ rest
+        push!(s, z)
     end
     s
 end
