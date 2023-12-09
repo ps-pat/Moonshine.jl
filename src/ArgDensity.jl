@@ -177,7 +177,7 @@ function cmatrix(tree::Tree, pdf, σ, Φ)
     ## The phenotype of σ might be known if it is a leaf.
     if isleaf(tree, σ)
         φσ = Φ[σ]
-        φsσ = ismissing(φ) ? [false, true] : [φ]
+        φsσ = ismissing(φσ) ? [false, true] : [φσ]
     else # non-root internal vertex
         φsσ = [false, true]
     end
@@ -186,8 +186,13 @@ function cmatrix(tree::Tree, pdf, σ, Φ)
 end
 
 function cmatrix(tree::Tree, pdf, σ, φsσ, δ, φsδ)
-    map(Iterators.product(φsσ, φsδ)) do (φσ, φδ)
+    ## Julia issue #46331.
+    ret = Matrix{Float64}(undef, length(φsσ), length(φsδ))
+
+    map!(ret, collect(Iterators.product(φsσ, φsδ))) do (φσ, φδ)
         Δlat = latitude(tree, δ) - latitude(tree, σ)
-        pdf(copula, φσ, φδ, Δlat)
+        pdf(φσ, φδ, Δlat)
     end
+
+    ret
 end
