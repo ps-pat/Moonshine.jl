@@ -85,7 +85,6 @@ abstract type AbstractΦCopula{P<:AbstractPhenotype,A<:AbstractAlpha,N} end
 # Interface #
 #############
 
-export pdf, logpdf, conditional_pdf, logconditional_pdf
 """
     pdf(copula, φ1[, φ2, d, αpars...])
     logpdf(copula, φ1[, φ2, d, αpars...])
@@ -109,40 +108,33 @@ for `pdf`:
   - `pdf(copula, φ)`
   - `pdf(copula, φ1, φ2, d, αpars)`
 """
-function pdf end,
-function logpdf end,
-function conditional_pdf end,
-function logconditional_pdf end
+function pdf_marginal end,
+function logpdf_marginal end,
+function pdf_joint end,
+function logpdf_joint end,
+function pdf_conditional end,
+function logpdf_conditional end
 
-for fun ∈ [:pdf, :conditional_pdf]
-    logfun = Symbol("log" * string(fun))
+for pdftype ∈ ["marginal", "joint", "conditional"]
+    fun_str = "pdf_" * pdftype
+    fun = Symbol(fun_str)
+    logfun = Symbol("log" * fun_str)
 
-    @eval function $fun(copula::AbstractΦCopula, φ1, φ2, d, αpars...)
-        (exp ∘ $logfun)(copula, φ1, φ2, d, αpars...)
-    end
+    @eval begin
+        export $fun, $logfun
 
-    @eval function $logfun(copula::AbstractΦCopula, φ1, φ2, d, αpars...)
-        (log ∘ $fun)(copula, φ1, φ2, d, αpars...)
-    end
+        $fun(copula::AbstractΦCopula) = exp ∘ $logfun(copula)
 
-    for f ∈ [fun, logfun]
-        @eval function $f(copula::AbstractΦCopula, φ1, φ2, d)
-            α = alpha(copula)
-            αpars = [getparameter(α, par) for par ∈ parameters(α)]
-            $f(copula, φ1, φ2, d, αpars...)
-        end
+        $logfun(copula::AbstractΦCopula) = log ∘ $fun(copula)
     end
 end
 
-pdf(copula::AbstractΦCopula, φ) = logpdf(copula, φ)
-
-logpdf(copula::AbstractΦCopula, φ) = pdf(copula, φ)
-
 ## Marginal pdfs
 
-function pdf(copula::AbstractΦCopula{PhenotypeBinary}, φ)
+function pdf_marginal(copula::AbstractΦCopula{PhenotypeBinary})
     p = first(copula.parameters)
-    φ ? p : 1 - p
+
+    φ -> φ ? p : 1 - p
 end
 
 export alpha
@@ -220,12 +212,12 @@ function compute_distances(tree::Tree, Φ::AbstractVector{Bool})
     mults, dists
 end
 
-## TODO: Uses generic storage to comply with ForwardDiff.jl
-## requirements. Implement a more efficient method?
 function loglikelihood(rng::AbstractRNG, copula::AbstractΦCopula{PhenotypeBinary},
                        Φ, H, G; idx = 1, n = 1000, genpars...)
     npars = (length ∘ parameters)(alpha(copula))
     fs = Vector{FunctionWrapper{Real, NTuple{npars, Real}}}(undef, n)
+
+    logpdf = logpdf_joint(copula)
 
     for k ∈ eachindex(fs)
         genealogy = G(H; genpars...)
@@ -242,7 +234,7 @@ function loglikelihood(rng::AbstractRNG, copula::AbstractΦCopula{PhenotypeBinar
                 sum(zip(mults_col, dists), init = zero(promote_type(T, Float64))) do (mult, dist)
                     iszero(mult) && return zero(dist)
 
-                    mult * logpdf(copula, φ1, φ2, dist, pars...)
+                    mult * logpdf(φ1, φ2, dist, pars...)
                 end
             end
         end
@@ -368,6 +360,24 @@ end
 ####################
 # Packaged Copulas #
 ####################
+
+macro copula_struct(copula)
+    ## Generate name
+    copula_string = string(copula)
+    if length(copula_string) < 6 || copula_string[1:6] != "Copula"
+        copula = Symbol("Copula" * copula_string)
+    end
+
+    quote
+        export $copula
+        struct $copula{P,A,N} <: AbstractΦCopula{P,A,N}
+            α::A
+            parameters::NTuple{N,Float64}
+
+            $copula(P, α, pars...) = new{P,typeof(α), npars(P)}(α, pars)
+        end
+    end
+end
 
 include("Frechet.jl")
 include("CuadrasAuge.jl")

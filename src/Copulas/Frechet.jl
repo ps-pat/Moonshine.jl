@@ -1,48 +1,43 @@
-export CopulaFrechet
-
-struct CopulaFrechet{P,A,N} <: AbstractΦCopula{P,A,N}
-    α::A
-    parameters::NTuple{N,Float64}
-
-    CopulaFrechet(P, α, pars...) = new{P,typeof(α),npars(P)}(α, pars)
-end
+@copula_struct Frechet
 
 ####################
 # Binary Phenotype #
 ####################
 
-## Utilities
-
-bernoulli_cdf(x, p) = (0 ≤ x < 1) * (1 - p) + (x ≥ 1)
-bernoulli_cdf(φ::Bool, p) = φ ? 1 : 1 - p
-
-## AbstractΦCopula Interface
-function logpdf(copula::CopulaFrechet{PhenotypeBinary}, φ1, φ2, d, αpars...)
-    α = copula.α(d, αpars...)
+function logpdf_joint(copula::CopulaFrechet{PhenotypeBinary})
+    α = alpha(copula)
     p = first(copula.parameters)
 
-    if isone(φ2)
-        t1 = log(p)
-        s2 = (1 - p) * α
-    else
-        t1 = log(1 - p)
-        s2 = p * α
+    function (φ, ψ, t, αpars...)
+        αt = α(t, αpars...)
+
+        if isone(ψ)
+            t1 = log(p)
+            s2 = (1 - p) * αt
+        else
+            t1 = log(1 - p)
+            s2 = p * αt
+        end
+
+        t2 = log((φ ⊻ ψ) ? s2 : 1 - s2)
+
+        t1 + t2
     end
-
-    t2 = log((φ1 ⊻ φ2) ? s2 : 1 - s2)
-
-    t1 + t2
 end
 
-function conditional_pdf(copula::CopulaFrechet{PhenotypeBinary}, φ1, φ2, d, αpars...)
-    α = copula.α(d, αpars...)
+function pdf_conditional(copula::CopulaFrechet{PhenotypeBinary})
+    α = alpha(copula)
     p = first(copula.parameters)
 
-    if isone(φ2)
-        s2 = (1 - p) * α
-    else
-        s2 = p * α
-    end
+    function (φ, ψ, t, αpars...)
+        αt = α(t, αpars...)
 
-    φ1 ⊻ φ2 ? s2 : 1 - s2
+        if isone(ψ)
+            s2 = (1 - p) * αt
+        else
+            s2 = p * αt
+        end
+
+        φ ⊻ ψ ? s2 : 1 - s2
+    end
 end

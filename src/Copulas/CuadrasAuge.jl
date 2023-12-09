@@ -1,56 +1,59 @@
-export CopulaCuadrasAuge
-
-struct CopulaCuadrasAuge{P,A,N} <: AbstractΦCopula{P,A,N}
-    α::A
-    parameters::NTuple{N,Float64}
-
-    CopulaCuadrasAuge(P, α, pars...) = new{P,typeof(α),npars(P)}(α, pars)
-end
+@copula_struct CuadrasAuge
 
 ####################
 # Binary Phenotype #
 ####################
 
-## AbstractΦCopula Interface
-
-function pdf(copula::CopulaCuadrasAuge{PhenotypeBinary}, φ, ψ, t, αpars...)
-    α = copula.α(t, αpars...)
+function pdf_joint(copula::CopulaCuadrasAuge{PhenotypeBinary})
+    α = alpha(copula)
     q = 1 - first(copula.parameters)
-    s = φ + ψ
 
-    ret = q^α
+    function (φ, ψ, t, αpars...)
+        αt = α(t, αpars...)
 
-    if !iszero(s)
-        ret = s - ret
+        ret = q^αt
+
+        s = φ + ψ
+
+        if !iszero(s)
+            ret = s - ret
+        end
+
+        ret *= q
+
+        if s == 2
+            ret = 1 - ret
+        end
+
+        ret
+
     end
-
-    ret *= q
-
-    if s == 2
-        ret = 1 - ret
-    end
-
-    ret
 end
 
-function conditional_pdf(copula::CopulaCuadrasAuge{PhenotypeBinary}, φ, ψ, t, αpars...)
-α = copula.α(t, αpars...)
+function pdf_conditional(copula::CopulaCuadrasAuge{PhenotypeBinary})
+    α = alpha(copula)
     p = first(copula.parameters)
-    s = φ + ψ
 
-    ret = (1 - p)^α
+    function (φ, ψ, t, αpars...)
+        αt = α(t, αpars...)
 
-    if !iszero(s)
-        ret = s - ret
+        ret = (1 - p)^αt
+
+        s = φ + ψ
+
+        if !iszero(s)
+            ret = s - ret
+        end
+
+        if isone(ψ)
+            ret *= (1 - p) / p
+        end
+
+        if s == 2
+            ret = 1 / p - ret
+
+        end
+
+        ret
     end
-
-    if isone(ψ)
-        ret *= (1 - p) / p
-    end
-
-    if s == 2
-        ret = 1 / p - ret
-    end
-
-    ret
 end
