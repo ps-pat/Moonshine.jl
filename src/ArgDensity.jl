@@ -109,11 +109,15 @@ function (D::PhenotypeDensity)(tree::Tree)
     push!(vertices_stack, mrca(tree))
     v = (maximum ∘ children)(tree, mrca(tree))
 
-    ## Stack used to store messages. Entry (i, j) contains the value of
-    ## f(φ = g(i) | ψ = g(j)) where φ and ψ are the source and destination of
-    ## the message respectively and g is some functions that compute phenotype
-    ## from an integer.
+    ## Stack used to store messages. Entry (i, j) contains the value
+    ## of f(φ = g(i) | ψ = g(j), t) where φ and ψ are the source and
+    ## destination of the message respectively and g is some functions
+    ## that compute phenotype from an integer.
     messages_stack = CheapStack(Matrix{Float64}, nv(tree))
+
+    ## Conditional and marginal pdfs for the phenotype.
+    marginal_pdf = pdf_marginal(copula)
+    conditional_pdf = pdf_conditional(copula)
 
     res = zero(Float64)
     while !isempty(vertices_stack)
@@ -138,7 +142,8 @@ function (D::PhenotypeDensity)(tree::Tree)
             push!(vertices_stack, v)
             v = v2
         else # Compute message!
-            μ = cmatrix(tree, copula, v, Φ)
+            pdf = isempty(vertices_stack) ? marginal_pdf : conditional_pdf
+            μ = cmatrix(tree, pdf, v, Φ)
 
             if !isleaf(tree, v)
                 μ = (pop!(messages_stack) ⊙ pop!(messages_stack)) * μ
@@ -153,14 +158,15 @@ function (D::PhenotypeDensity)(tree::Tree)
 end
 
 """
-    cmatrix(tree, copula, σ, phenotypes)
+    cmatrix(tree, pdf, σ, Φ)
+    cmatrix(tree, pdf, σ, φsσ, δ, φsδ)
 
 Matrix containing relevant points of the conditional distribution of a vector
 of phenotypes. Used by the belief propagation algorithm.
 """
-function cmatrix(tree::Tree, copula::AbstractΦCopula{PhenotypeBinary}, σ, phenotypes)
+function cmatrix(tree::Tree, pdf, σ, Φ)
     isroot(tree, σ) &&
-        return reshape([pdf(copula, φ) for φ in (false, true)], 2, 1)
+        return reshape([pdf(φ) for φ in (false, true)], 2, 1)
 
     δ = dad(tree, σ)
 
@@ -170,18 +176,18 @@ function cmatrix(tree::Tree, copula::AbstractΦCopula{PhenotypeBinary}, σ, phen
 
     ## The phenotype of σ might be known if it is a leaf.
     if isleaf(tree, σ)
-        φ = phenotypes[σ]
+        φσ = Φ[σ]
         φsσ = ismissing(φ) ? [false, true] : [φ]
     else # non-root internal vertex
         φsσ = [false, true]
     end
 
-    cmatrix(tree, copula, σ, φsσ, δ, φsδ)
+    cmatrix(tree, pdf, σ, φsσ, δ, φsδ)
 end
 
-function cmatrix(tree::Tree, copula::AbstractΦCopula{PhenotypeBinary}, σ, φsσ, δ, φsδ)
+function cmatrix(tree::Tree, pdf, σ, φsσ, δ, φsδ)
     map(Iterators.product(φsσ, φsδ)) do (φσ, φδ)
         Δlat = latitude(tree, δ) - latitude(tree, σ)
-        conditional_pdf(copula, φσ, φδ, Δlat)
+        pdf(copula, φσ, φδ, Δlat)
     end
 end
