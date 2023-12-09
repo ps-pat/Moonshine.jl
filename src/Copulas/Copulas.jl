@@ -10,6 +10,8 @@ using JuMP
 
 using NLopt: NLopt
 
+using FunctionWrappers: FunctionWrapper
+
 ##############
 # Phenotypes #
 ##############
@@ -218,11 +220,12 @@ function compute_distances(tree::Tree, Φ::AbstractVector{Bool})
     mults, dists
 end
 
+## TODO: Uses generic storage to comply with ForwardDiff.jl
+## requirements. Implement a more efficient method?
 function loglikelihood(rng::AbstractRNG, copula::AbstractΦCopula{PhenotypeBinary},
                        Φ, H, G; idx = 1, n = 1000, genpars...)
-    ## TODO: type inference fails but Jump doesn't play nice with
-    ## FunctionWrappers...
-    fs = Vector{Function}(undef, n)
+    npars = (length ∘ parameters)(alpha(copula))
+    fs = Vector{FunctionWrapper{Real, NTuple{npars, Real}}}(undef, n)
 
     for k ∈ eachindex(fs)
         genealogy = G(H; genpars...)
@@ -230,13 +233,13 @@ function loglikelihood(rng::AbstractRNG, copula::AbstractΦCopula{PhenotypeBinar
 
         mults, dists = compute_distances(genealogy, Φ)
 
-        fs[k] = function (pars...)
-            sum((enumerate ∘ eachcol)(mults), init = zero(Float64)) do (k, mults_col)
+        fs[k] = function (pars::T...) where T<:Real
+            sum((enumerate ∘ eachcol)(mults), init = zero(promote_type(T, Float64))) do (k, mults_col)
                 ## Phenotypes are Gray-encoded in k - 1.
                 k -= 1
                 φ1, φ2 = .!iszero.((k ⊻ (k >> 1)) .& (1, 2))
 
-                sum(zip(mults_col, dists), init = zero(Float64)) do (mult, dist)
+                sum(zip(mults_col, dists), init = zero(promote_type(T, Float64))) do (mult, dist)
                     iszero(mult) && return zero(dist)
 
                     mult * logpdf(copula, φ1, φ2, dist, pars...)
@@ -245,8 +248,9 @@ function loglikelihood(rng::AbstractRNG, copula::AbstractΦCopula{PhenotypeBinar
         end
     end
 
-    function (pars...)
-        sum(f -> f(pars...), fs, init = zero(Float64))
+    function (pars::T...) where T<:Real
+        sum(f -> f(pars...)::promote_type(T, Float64), fs,
+            init = zero(promote_type(T, Float64)))
     end
 end
 
