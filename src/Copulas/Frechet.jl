@@ -4,9 +4,9 @@
 # Binary Phenotype #
 ####################
 
-function logpdf_joint(copula::CopulaFrechet{PhenotypeBinary})
+function logpdf_joint(copula::CopulaFrechet{<:Bernoulli})
     α = alpha(copula)
-    p = first(copula.parameters)
+    p = succprob(marginal(copula))
 
     function (φ, ψ, t, αpars...)
         αt = α(t, αpars...)
@@ -25,9 +25,9 @@ function logpdf_joint(copula::CopulaFrechet{PhenotypeBinary})
     end
 end
 
-function pdf_conditional(copula::CopulaFrechet{PhenotypeBinary})
+function pdf_conditional(copula::CopulaFrechet{<:Bernoulli})
     α = alpha(copula)
-    p = first(copula.parameters)
+    p = succprob(marginal(copula))
 
     function (φ, ψ, t, αpars...)
         αt = α(t, αpars...)

@@ -4,9 +4,9 @@
 # Binary Phenotype #
 ####################
 
-function pdf_joint(copula::CopulaCuadrasAuge{PhenotypeBinary})
+function pdf_joint(copula::CopulaCuadrasAuge{<:Bernoulli})
     α = alpha(copula)
-    q = 1 - first(copula.parameters)
+    q = failprob(marginal(copula))
 
     function (φ, ψ, t, αpars...)
         αt = α(t, αpars...)
@@ -30,9 +30,9 @@ function pdf_joint(copula::CopulaCuadrasAuge{PhenotypeBinary})
     end
 end
 
-function pdf_conditional(copula::CopulaCuadrasAuge{PhenotypeBinary})
+function pdf_conditional(copula::CopulaCuadrasAuge{<:Bernoulli})
     α = alpha(copula)
-    p = first(copula.parameters)
+    p = succprob(marginal(copula))
 
     function (φ, ψ, t, αpars...)
         αt = α(t, αpars...)

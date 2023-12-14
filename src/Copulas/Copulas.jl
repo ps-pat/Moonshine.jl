@@ -2,7 +2,7 @@ import StatsAPI: loglikelihood, fit!
 
 using Combinatorics: combinations
 
-import Distributions: pdf, logpdf
+import Distributions
 
 using Random: AbstractRNG, GLOBAL_RNG
 
@@ -11,55 +11,6 @@ using JuMP
 using NLopt: NLopt
 
 using FunctionWrappers: FunctionWrapper
-
-##############
-# Phenotypes #
-##############
-
-export AbstractPhenotype
-"""
-    AbstractPhenotype
-
-Abstract type for phenotypes.
-
-# Implementation
-
-Each subtype `T` must implement the method `npars(::Type{T})` returning the
-number of parameters of the copula.
-"""
-abstract type AbstractPhenotype end
-
-let
-    phenotypes = (
-        Binary =
-            (1,
-             "Binary phenotype, distributed as a Bernoulli random variable."),)
-
-    for (phenotype, pars) ∈ pairs(phenotypes)
-        d, description = pars
-
-        ## Generate name
-        Pstring = string(phenotype)
-        if length(Pstring) < 9 || Pstring[1:9] != "Phenotype"
-            phenotype = Symbol("Phenotype" * Pstring)
-        end
-
-        ## Generate docstring
-        docstring = """
-$phenotype
-
-$description
-    """
-        @eval begin
-            export $phenotype
-            @doc $docstring
-            struct $phenotype <: AbstractPhenotype end
-
-            @generated npars(::Type{$phenotype}) = $d
-        end
-    end
-
-end
 
 ###################
 # Packaged Alphas #
@@ -75,11 +26,10 @@ Abstract type for copulas joining two phenotypes.
 
 # Type Parameters
 
-  - `P<:AbstractPhenotype`: type of the phenotypes
+  - `P<:Distribution`: type of the phenotypes
   - `A<:AbstractAlpha`: type of the α
-  - `N<:Integer`: number of parameters of the copula
 """
-abstract type AbstractΦCopula{P<:AbstractPhenotype,A<:AbstractAlpha,N} end
+abstract type AbstractΦCopula{P<:Distribution,A<:AbstractAlpha} end
 
 #############
 # Interface #
@@ -131,8 +81,8 @@ end
 
 ## Marginal pdfs
 
-function pdf_marginal(copula::AbstractΦCopula{PhenotypeBinary})
-    p = first(copula.parameters)
+function pdf_marginal(copula::AbstractΦCopula{<:Bernoulli})
+    p = succprob(marginal(copula))
 
     φ -> φ ? p : 1 - p
 end
@@ -148,6 +98,19 @@ export alpha
 If the α is stored as a field named `α`, no custom implementation is needed.
 """
 alpha(copula::AbstractΦCopula) = getfield(copula, :α)
+
+export marginal
+"""
+    marginal(copula)
+
+Marginal distribution associated with the copula.
+
+# Implementation
+
+If the distribution is stored as a field named `marginal_distribution`, no
+custom impementation is needed.
+"""
+marginal(copula::AbstractΦCopula) = getfield(copula, :marginal_distribution)
 
 #############
 # Inference #
@@ -212,7 +175,7 @@ function compute_distances(tree::Tree, Φ::AbstractVector{Bool})
     mults, dists
 end
 
-function loglikelihood(rng::AbstractRNG, copula::AbstractΦCopula{PhenotypeBinary},
+function loglikelihood(rng::AbstractRNG, copula::AbstractΦCopula{<:Bernoulli},
                        Φ, H, G; idx = 1, n = 1000, genpars...)
     npars = (length ∘ parameters)(alpha(copula))
     fs = Vector{FunctionWrapper{Real, NTuple{npars, Real}}}(undef, n)
@@ -370,11 +333,11 @@ macro copula_struct(copula)
 
     quote
         export $copula
-        struct $copula{P,A,N} <: AbstractΦCopula{P,A,N}
+        struct $copula{P,A} <: AbstractΦCopula{P,A}
+            marginal_distribution::P
             α::A
-            parameters::NTuple{N,Float64}
 
-            $copula(P, α, pars...) = new{P,typeof(α), npars(P)}(α, pars)
+            #$copula(P, α) = new{typeof(P),typeof(α)}(P, α)
         end
     end
 end

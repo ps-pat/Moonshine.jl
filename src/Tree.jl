@@ -18,14 +18,14 @@ struct TreeCore{T}
 
     positions::Vector{Float64}
     seq_length::Float64
-    eff_popsize::Float64
+    Ne::Float64
     μ_loc::Float64
 end
 
 function TreeCore{T}(leaves::AbstractVector{Sequence{T}};
                      positions = (collect ∘ range)(0, 1, length = length(leaves)),
                      seq_length = one(Float64),
-                     effective_popsize = one(Float64),
+                     Ne = one(Float64),
                      μ_loc = zero(Float64)) where T
     n = length(leaves)
 
@@ -37,7 +37,7 @@ function TreeCore{T}(leaves::AbstractVector{Sequence{T}};
     positions = validate_positions(positions, (length ∘ first)(leaves))
 
     TreeCore{T}(SimpleDiGraph(n), zeros(Float64, n - 1), sequences, n,
-                positions, seq_length, effective_popsize, μ_loc)
+                positions, seq_length, Ne, μ_loc)
 end
 
 function TreeCore{T}(rng::AbstractRNG,
@@ -103,7 +103,7 @@ end
 ##################
 
 for field ∈ [:(:nleaves), :(:sequences), :(:latitudes), :(:graph),
-             :(:seq_length), :(:eff_popsize), :(:positions)]
+             :(:seq_length), :(:Ne), :(:positions)]
     fun_name = eval(field)
     @eval begin
         export $fun_name
@@ -203,11 +203,13 @@ for fun ∈ [:dad, :sibling]
 end
 
 export mut_rate
-mut_rate(tree::Tree, scaled = true) = tree.core.μ_loc * (scaled ? 4 * eff_popsize(tree) : 1)
+mut_rate(tree::Tree, scaled = true) = tree.core.μ_loc * (scaled ? 4 * Ne(tree) : 1)
 
 function tree_coalesce!(rng, tree, vertices, nlive)
-    ## Sample coalescing vertices.
-    tree.logprob += -(log ∘ binomial)(length(vertices), 2)
+    ## Sample coalescing vertices. A + log(2) is missing, don't forget
+    ## to account for it!
+    n = length(vertices)
+    tree.logprob -= log(n) + log(n - 1)
     shuffle!(rng, vertices)
     child1, child2 = pop!(vertices), pop!(vertices)
 
@@ -274,6 +276,9 @@ function build!(rng, tree::Tree, idx = 1)
         tree_coalesce!(rng, tree, cvertices, nlive)
         nlive -= 1
     end
+
+    ## Accounts for the the constant in the coalescence pprobabilities.
+    tree.logprob += (nleaves(tree) - 1) * log(2)
 
     tree
 end
