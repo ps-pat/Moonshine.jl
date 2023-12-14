@@ -63,7 +63,6 @@ end
 
 genpars(D::CoalDensity) = (Ne = zero(Float64),
                            μ_loc = zero(Float64),
-                           ρ_loc = zero(Float64),
                            seq_length = zero(Float64),
                            positions = [0])
 
@@ -101,7 +100,6 @@ end
 
 genpars(D::CoalMutDensity) = (Ne = D.Ne,
                               μ_loc = D.μ_loc,
-                              ρ_loc = zero(Float64),
                               seq_length = D.seq_length,
                               positions = [0])
 

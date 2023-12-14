@@ -45,7 +45,7 @@ length(d::BernoulliMulti) = round(Int, log2(length(d.p)))
 insupport(d::BernoulliMulti, x::AbstractVector) = all(z -> iszero(z) || isone(z), x)
 
 params(d::Bernoulli) = (d.p,)
-@generated params(::Bernoulli{T}) where T = T
+@generated partype(::Bernoulli{T}) where T = T
 
 function pdf(d::BernoulliMulti, x::BitVector)
     getindex(d.p, bitrotate(bitreverse(first(x.chunks)), length(x)) + 1)
