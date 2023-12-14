@@ -2,15 +2,33 @@ using StaticArrays: SA
 
 using Distributions: logpdf
 
-abstract type AbstractDensity <: Function end
-abstract type AbstractGraphDensity <: AbstractDensity end
+#############
+# Interface #
+#############
+
+export genpars
+"""
+    genpars(D)
+
+Returns the genetical parameters associated with a density in the form of a
+named tuple.
+
+# Names
+Names of the parameters are standardized as follow:
+- `seq_length`: length of the haplotypes
+- `Ne`: effective population size
+- `μ_loc`: per locus mutation rate
+- `ρ_loc`: per locus recombination rate
+- `positions`: positions of the markers normalized in [0, 1]
+"""
+function genpars end
 
 ##############
 # Coalescent #
 ##############
 
 export CoalDensity
-struct CoalDensity <: AbstractGraphDensity
+struct CoalDensity
     ## Number of leaves.
     n::Int
 
@@ -43,33 +61,60 @@ function (D::CoalDensity)(tree::Tree; logscale = false)
     logscale ? ret : exp(ret)
 end
 
+genpars(D::CoalDensity) = (Ne = zero(Float64),
+                           μ_loc = zero(Float64),
+                           ρ_loc = zero(Float64),
+                           seq_length = zero(Float64),
+                           positions = [0])
+
 ############################
 # Coalescent with mutation #
 ############################
 
 export CoalMutDensity
-struct CoalMutDensity <: AbstractGraphDensity
-    dens_coal::CoalDensity
+"""
+    CoalMutDensity
 
-    ## Scaled mutation rate.
-    μ::BigFloat
+Density of a genealogy with mutations according to the coalescent.
+Mutations are assumed to be selection neutral i.e. independent of the
+coalescent process.
 
-    ## Length of sequences.
+See also [`CoalDensity`](@ref).
+
+# Fields
+- `fC::CoalDensity`: density of the genealogy (excluding mutations)
+- `Ne::BigFloat`: effective population size
+- `μ_loc::BigFloat`: per locus mutation rate
+- `seq_length`: length of the sequences
+"""
+struct CoalMutDensity
+    fC::CoalDensity
+
+    Ne::BigFloat
+
+    μ_loc::BigFloat
+
     seq_length::BigFloat
 
-    CoalMutDensity(n, μ, seq_length) = new(CoalDensity(n), μ, seq_length)
+    CoalMutDensity(n, Ne, μ, seq_length) = new(CoalDensity(n), Ne, μ, seq_length)
 end
 
+genpars(D::CoalMutDensity) = (Ne = D.Ne,
+                              μ_loc = D.μ_loc,
+                              ρ_loc = zero(Float64),
+                              seq_length = D.seq_length,
+                              positions = [0])
+
 function (D::CoalMutDensity)(tree::Tree; logscale = false)
-    dens_coal = D.dens_coal
-    μ = D.μ
+    fC = D.fC
+    μ = D.μ_loc * D.Ne
     l = D.seq_length
 
     m = nmutations(tree)
     bl = branchlength(tree)
 
-    pmut_log = m * log(μ) - 0.5 * μ * l * bl - sum(log, 2:m, init = zero(Float64))
-    ret = dens_coal(tree, logscale = true) + pmut_log
+    pmut_log = m * log(μ) - 0.5 * μ * l * bl - sum(log, 2:m, init = zero(BigFloat))
+    ret = fC(tree, logscale = true) + pmut_log
 
     logscale ? ret : exp(ret)
 end
@@ -89,7 +134,7 @@ Density of a vector of phenotypes of type `T` conditional on a genealogy.
   - `Φ::Vector{Union{Missing, T}}`: entry `k` is the phenotype of leaf `k`
   - `copula::C`: `<:AbstractΦCopula`
 """
-struct PhenotypeDensity{T,C<:AbstractΦCopula} <: AbstractGraphDensity
+struct PhenotypeDensity{T,C<:AbstractΦCopula}
     Φ::Vector{Union{Missing,T}}
     copula::C
 end

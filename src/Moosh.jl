@@ -4,6 +4,8 @@ using Base: Fix1
 
 using PrecompileTools
 
+using Transducers
+
 include("Sequence.jl")
 
 export Sequence
@@ -23,6 +25,10 @@ include("Tree.jl")
 include("Copulas/Copulas.jl")
 
 include("ArgDensity.jl")
+
+include("Distributions.jl")
+
+include("ImportanceSampling.jl")
 
 ## Precompilation.
 @setup_workload begin

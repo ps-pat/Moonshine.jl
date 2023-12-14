@@ -19,30 +19,45 @@ using RandomNumbers.PCG: PCGStateSetseq
 # Definition of IsChain #
 #########################
 
-## Ugly circular reference hack, sorry!
-
 export IsChain
-struct IsChain{H<:AbstractGraphDensity, P<:AbstractGraphDensity, T, R}
-    dens_haps::H
-    dens_phenos::P
+struct IsChain{G, H, P, T}
+    fH::H
+    fΦ::P
 
-    haplotypes::Vector{Sequence{T}}
+    H::Vector{Sequence{T}}
 
-    records::Vector{R}
+    genealogies::Vector{G}
+
+    seed::UInt128
 end
 
-IsChain(dens_haps, dens_phenos, haplotypes, n) =
-    IsChain(dens_haps, dens_phenos, haplotypes, Vector{IsRecord}(undef, n))
+function IsChain{G}(fH, fΦ, haplotypes::AbstractVector{Sequence{T}}, n, seed) where {G,T}
+    H, P = typeof(fH), typeof(fΦ)
+    IsChain{G, H,P,T}(fH, fΦ, haplotypes, Vector{G}(undef, n), seed)
+end
 
-## Iteration interface.
-iterate(chain::IsChain, state = 1) =
-    state > lastindex(chain) ? nothing : (chain[state], state + 1)
+IsChain{G}(fH, fΦ, haplotypes::AbstractVector{Sequence{T}}, n) where {G,T} =
+    IsChain{G}(fH, fΦ, haplotypes::AbstractVector{Sequence{T}}, n, rand(UInt128))
 
-@generated eltype(::Type{IsChain{H, P, T, R}}) where{H, P, T, R} = R
+#######################
+# Iteration interface #
+#######################
 
-@generated eltype(::IsChain) = eltype(IsChain)
+function iterate(chain::IsChain, state = 1)
+    # state > lastindex(chain) ? nothing : (chain[state], state + 1)
+    while state <= lastindex(chain)
+        isassigned(chain.genealogies, state) && return (chain[state], state + 1)
+        state += 1
+    end
 
-length(chain::IsChain) = length(chain.records)
+    nothing
+end
+
+@generated eltype(::Type{IsChain{G}}) where G = G
+
+@generated eltype(chain::IsChain{G}) where G = eltype(chain)
+
+length(chain::IsChain) = length(chain.genealogies)
 
 size(chain::IsChain) = (length(chain),)
 
@@ -51,94 +66,113 @@ lastindex(chain::IsChain) = length(chain)
 
 firstindex(chain::IsChain) = lastindex(chain) > 0 ? 1 : 0
 
-getindex(chain::IsChain, i) = getindex(chain.records, i)
+getindex(chain::IsChain, i) = getindex(chain.genealogies, i)
 
-setindex!(chain::IsChain, x, i) = setindex!(chain.records, x, i)
+## No setindex!
 
-export joint
+###########
+# Methods #
+###########
+
+phenotypes(ic) = ic.fΦ.Φ
+
+export simulate!
 """
-    joint(chain, phenotypes = nothing; logscale = false)
+    simulate!(chain[, idx])
 
-Compute the joint density of a pair of haplotypes/phenotypes vector. If
-`phenotypes` is provided, it must be the same length as the number of `missing`
-phenotypes in `chain`. The returned value corresponds to the "complete data"
-joint density. Otherwise, only the phenotypes in `chain` are accounted for;
-this corresponds to the "incomplete data" joint density.
+Simulate genealogies for a chain. Indices of the genealogies to be simulated
+cand be specified via the optional argument `idx`.
 """
-function joint(chain, phenotypes = nothing; logscale = false)
-    dens_tree = chain.dens_haps
+function simulate! end
 
-    ret = mean(chain) do record
-        dens_φ = record.dens_pheno
-        arg = record.arg
-
-        weight_log = dens_tree(arg, logscale = true) - arg.logprob
-        pdf_log = dens_φ(phenotypes, logscale = true)
-
-        exp(weight_log + pdf_log)
-    end
-
-    logscale ? log(ret) : ret
-end
-
-export likelihood
-"""
-    likelihood(chain, phenotypes; logscale = false)
-
-Compute the complete/incomplete data joint densities ratio. This corresponds to
-the likelihood of `phenotypes`.
-"""
-function likelihood(chain, phenotypes; logscale = false)
-    ret_log = joint(chain, phenotypes, logscale = true) -
-        joint(chain, logscale = true)
-
-    logscale ? ret_log : exp(ret_log)
-end
-
-##########################
-# Definition of IsRecord #
-##########################
-
-struct IsRecord
-    parent_chain::IsChain{H, P, T, IsRecord} where {H, P, T}
-
-    arg::Arg
-    dens_pheno::Function
-end
-
-"""
-    compute_joint([rng], haplotypes, phenotypes, dens_haps, dens_phenos;
-                  n_is = 1000, n_mcmc = 1000)
-
-Compute the joint density of a vector of haplotypes and
-phenotypes. Returns an `IsChain`.
-
-# Arguments
-- `haplotypes::Vector`: vector of haplotypes
-- `dens_haps::AbstractGraphDensity`: density for `haplotypes`
-- `dens_phenos::AbstractGraphDensity`: density for phenotypes conditional on
-  `haplotypes`
-- `n_is`: number of is samples to draw (for integration wrt arg)
-- `n_mcmc`: number of MCMC samples to draw (for integration wrt phenotypes)
-"""
-function compute_joint end
-export compute_joint
-
-function compute_joint(rng, haplotypes, dens_haps, dens_phenos;
-                       n_is = 1000, n_mcmc = 1000)
-    chain = IsChain(dens_haps, dens_phenos, haplotypes, n_is)
-
-    ## Initialize the rng of each worker.
-    seed = rand(rng, Int)
-
-    @threads for k ∈ 1:n_is
-        rng_local = PCGStateSetseq((seed, k))
-
-        tree = buildtree!(rng_local, Arg(haplotypes))
-        dens_φ = chain.dens_phenos(rng_local, tree, M = n_mcmc)
-
-        chain[k] = IsRecord(chain, tree, dens_φ)
+function simulate!(chain::IsChain{G}, idx) where G
+    Threads.@threads for k ∈ idx
+        rng = PCGStateSetseq((chain.seed, k))
+        chain.genealogies[k] = G(chain.H; genpars(chain.fH)...)
+        build!(rng, chain.genealogies[k])
     end
 
     chain
+end
+
+simulate!(chain) = simulate!(chain, eachindex(chain.genealogies))
+
+export weights
+"""
+    weights(chain; logscale = false)
+
+Importance samping weights of the chain.
+"""
+function weights(chain; logscale = false)
+    fG = chain.fH
+
+    GetLogPrs(f) = Map(g -> f(g, logscale = true))
+
+    chain |>
+        Zip(GetLogPrs(prob), GetLogPrs(fG)) ⨟ MapSplat(-) ⨟ Map(logscale ? identity : exp)
+end
+
+export ess
+"""
+    ess(chain)
+
+Effective sample size of the chain.
+"""
+function ess(chain)
+    ws = weights(chain)
+    sum(ws)^2 / sum(w -> w^2, ws)
+end
+
+macro crazy_dispatch(fun, dist)
+    :($fun(ic::IsChain))
+end
+
+##########################
+# Density reconstruction #
+##########################
+
+let dists = (:Bernoulli,)
+    for dist ∈ dists
+        name = Symbol("Phenotype" * string(dist))
+        @eval begin
+            const $name = PhenotypeDensity{T,C} where {D<:$dist, T, C<:AbstractΦCopula{D}}
+        end
+    end
+end
+
+function reduce_dist(part, nmissing)
+    res = zeros(BigFloat, Int(exp2(nmissing)))
+
+    for (log_fΦ, log_w) ∈ part
+        res .+= exp.(log_fΦ .+ log_w)
+    end
+
+    res
+end
+
+function raw_sample_pdf(chain::IsChain{G,H,P}) where {G,H,P<:PhenotypeBernoulli}
+    fΦ = chain.fΦ
+    fG = chain.fH
+    nmissing = sum(ismissing.(phenotypes(chain)))
+
+    GetLogPrs(f) = Map(g -> f(g, logscale = true))
+    log_fΦs = Map(genealogy -> log.(fΦ(genealogy)))
+    log_ws = Zip(GetLogPrs(prob), GetLogPrs(fG)) ⨟ MapSplat(.-)
+
+
+    ## TODO: parallelize.
+    res = zeros(BigFloat, Int(exp2(nmissing)))
+
+    for (log_fΦ, log_w) ∈ chain |> Zip(log_fΦs, log_ws)
+        res .+= exp.(log_fΦ .+ log_w)
+    end
+
+    res ./ sum(res, dims = 1)
+end
+
+export sample_pdf
+function sample_pdf(chain::IsChain{G,H,P}) where {G,H,P<:PhenotypeBernoulli}
+    p = raw_sample_pdf(chain)
+
+    length(p) > 1 ? BernoulliMulti(p) : Bernoulli(p)
 end
