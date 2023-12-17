@@ -174,5 +174,5 @@ export sample_pdf
 function sample_pdf(chain::IsChain{G,H,P}) where {G,H,P<:PhenotypeBernoulli}
     p = raw_sample_pdf(chain)
 
-    length(p) > 1 ? BernoulliMulti(p) : Bernoulli(p)
+    length(p) > 2 ? BernoulliMulti(p) : Bernoulli(p)
 end
