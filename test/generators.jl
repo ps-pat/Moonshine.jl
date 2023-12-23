@@ -3,9 +3,9 @@ using Random: AbstractRNG
 import JCheck: specialcases, generate
 
 ## Sequences
-specialcases(::Type{Sequence{T}}) where T = [Sequence()]
+specialcases(::Type{Sequence}) = [Sequence()]
 
-generate(rng::AbstractRNG, ::Type{Sequence{T}}, n)  where T =
+generate(rng::AbstractRNG, ::Type{Sequence}, n) =
     [Sequence(rng, 1, 200) for _ ∈ 1:n]
 
 ## ARG on 2 leaves, 2 markers, no recoalescence.

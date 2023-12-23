@@ -27,33 +27,33 @@ const Seq = Sequence{UInt}
 
 @add_predicate(sequence_qc,
                "Xor identity element",
-               seq::Seq -> seq ⊻ fillseq(false, length(seq)) == seq)
+               seq::Seq -> seq ⊻ Sequence(false(length(seq))) == seq)
 
 @add_predicate(sequence_qc,
                "Xor 2-idempotency",
-               seq::Seq -> seq ⊻ seq == fillseq(false, length(seq)))
+               seq::Seq -> seq ⊻ seq == Sequence(falses(length(seq))))
 
 @add_predicate(sequence_qc,
                "Xor bit switch",
-               seq::Seq -> seq ⊻ fillseq(true, length(seq)) == ~seq)
+               seq::Seq -> seq ⊻ Sequence(trues(length(seq))) == ~seq)
 
 @add_predicate(sequence_qc,
                "& identity element",
-               seq::Seq -> seq & fillseq(true, length(seq)) == seq)
+               seq::Seq -> seq & Sequence(trues(length(seq))) == seq)
 
 @add_predicate(sequence_qc,
                "& absorbing element",
-               seq::Seq -> seq & fillseq(false, length(seq)) ==
-                   fillseq(false, length(seq)))
+               seq::Seq -> seq & Sequence(falses(length(seq))) ==
+                   Sequence(falses(length(seq))))
 
 @add_predicate(sequence_qc,
                "| identity element",
-               seq::Seq -> seq | fillseq(false, length(seq)) == seq)
+               seq::Seq -> seq | Sequence(falses(length(seq))) == seq)
 
 @add_predicate(sequence_qc,
                "| absorbing element",
-               seq::Seq -> seq | fillseq(true, length(seq)) ==
-                   fillseq(true, length(seq)))
+               seq::Seq -> seq | Sequence(trues(length(seq))) ==
+                   Sequence(trues(length(seq))))
 
 @testset "Sequence" begin
     @quickcheck sequence_qc

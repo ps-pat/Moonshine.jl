@@ -431,7 +431,7 @@ function mmn_blocks_idx(arg::Arg{T}, e::EdgeType, int = Ω(0, ∞)) where T
         lbound = (postoidx_arg ∘ first)(_endpoints)
         rbound = (postoidx_arg ∘ prevfloat ∘ last)(_endpoints)
 
-        blockidx(n, bs, lbound), blockidx(n, bs, rbound)
+        blockidx(n, bs, lbound), blockidx(n, bs, rbound) # blockidx deleted
     end
 end
 
@@ -473,9 +473,10 @@ function first_inconsistent_position(arg, int::Ω)
             for (block_idx, block) ∈ zip(blocks_idx, xored_sequences)
                 first_set_bit = leading_zeros(block) + 1
                 if first_set_bit <= bs
-                    idx = actualpos(n, bs, block_idx, first_set_bit)
-                    haskey(mutation_edges, idx) || (mutation_edges[idx] = EdgeType[])
-                    push!(mutation_edges[idx], e)
+                    if !haskey(mutation_edges, first_set_bit)
+                        mutation_edges[first_set_bit] = EdgeType[]
+                    end
+                    push!(mutation_edges[first_set_bit], e)
                     break
                 end
             end

@@ -170,6 +170,14 @@ See [`loglikelihood`](@ref).
 """
 function prob end
 
+export positions
+"""
+    positions(genealogy)
+
+Positions of the markers.
+"""
+function positions end
+
 #############
 # Utilities #
 #############
@@ -225,8 +233,8 @@ end
 
 Mask non ancestral positions to 0.
 """
-ancestral_mask(genealogy, x::Set{Ω}) = mapreduce(|, x) do int
-    lpos, rpos = endpoints(int)
+function ancestral_mask(genealogy, ω::Ω)
+    lpos, rpos = endpoints(ω)
 
     lidx = 1
     while lpos > positions(genealogy)[lidx]
@@ -235,14 +243,17 @@ ancestral_mask(genealogy, x::Set{Ω}) = mapreduce(|, x) do int
 
     ridx = postoidx(genealogy, rpos)
 
-    andmask(nmarkers(genealogy), UnitRange(lidx, ridx))
+    mask = falses(nmarkers(genealogy))
+    mask[range(lidx, ridx)] .= true
+
+    Sequence(mask)
 end
 
-ancestral_mask(genealogy, x::Ω) = ancestral_mask(genealogy, Set([x]))
+ancestral_mask(genealogy, ωs::Set{Ω}) =
+    mapreduce(ω -> ancestral_mask(genealogy, ω), |, ωs)
 
 ancestral_mask(genealogy, x::EdgeType) =
     ancestral_mask(genealogy, ancestral_intervals(genealogy, x))
-
 
 ###################
 # Pretty printing #
@@ -494,7 +505,7 @@ number of mutations on that edge.
 """
 function nmutations end
 
-nmutations(genealogy, e) = count_ones(xor(sequences(genealogy, e)...))
+nmutations(genealogy, e) = count(xor(sequences(genealogy, e)...))
 
 function nmutations(genealogy)
     mapreduce(e -> nmutations(genealogy, e), +, edges(genealogy),

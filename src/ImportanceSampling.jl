@@ -20,24 +20,24 @@ using RandomNumbers.PCG: PCGStateSetseq
 #########################
 
 export IsChain
-struct IsChain{G, H, P, T}
+struct IsChain{G, H, P}
     fH::H
     fΦ::P
 
-    H::Vector{Sequence{T}}
+    H::Vector{Sequence}
 
     genealogies::Vector{G}
 
     seed::UInt128
 end
 
-function IsChain{G}(fH, fΦ, haplotypes::AbstractVector{Sequence{T}}, n, seed) where {G,T}
+function IsChain{G}(fH, fΦ, haplotypes::AbstractVector{Sequence}, n, seed) where G
     H, P = typeof(fH), typeof(fΦ)
-    IsChain{G, H,P,T}(fH, fΦ, haplotypes, Vector{G}(undef, n), seed)
+    IsChain{G,H,P}(fH, fΦ, haplotypes, Vector{G}(undef, n), seed)
 end
 
-IsChain{G}(fH, fΦ, haplotypes::AbstractVector{Sequence{T}}, n) where {G,T} =
-    IsChain{G}(fH, fΦ, haplotypes::AbstractVector{Sequence{T}}, n, rand(UInt128))
+IsChain{G}(fH, fΦ, haplotypes::AbstractVector{Sequence}, n) where G =
+    IsChain{G}(fH, fΦ, haplotypes::AbstractVector{Sequence}, n, rand(UInt128))
 
 #######################
 # Iteration interface #

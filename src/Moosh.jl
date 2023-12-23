@@ -8,10 +8,6 @@ using Transducers
 
 include("Sequence.jl")
 
-export Sequence
-
-export fillseq
-
 include("tools.jl")
 
 include("CheapStack.jl")
@@ -31,15 +27,15 @@ include("Distributions.jl")
 include("ImportanceSampling.jl")
 
 ## Precompilation.
-@setup_workload begin
-    using Random: Xoshiro
+# @setup_workload begin
+#     using Random: Xoshiro
 
-    @compile_workload begin
-        rng = Xoshiro(42)
+#     @compile_workload begin
+#         rng = Xoshiro(42)
 
-        tree = Tree(rng, 10, 10, μ_loc = 5e-5)
-        build!(rng, tree)
-    end
-end
+#         tree = Tree(rng, 10, 10, μ_loc = 5e-5)
+#         build!(rng, tree)
+#     end
+# end
 
 end # module Moosh

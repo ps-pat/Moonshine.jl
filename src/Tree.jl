@@ -10,10 +10,10 @@ using Distributions
 # TreeCore Definition #
 #######################
 
-struct TreeCore{T}
+struct TreeCore
     graph::SimpleDiGraph{VertexType}
     latitudes::Vector{Float64}
-    sequences::Vector{Sequence{T}}
+    sequences::Vector{Sequence}
     nleaves::Int
 
     positions::Vector{Float64}
@@ -22,11 +22,11 @@ struct TreeCore{T}
     μ_loc::Float64
 end
 
-function TreeCore{T}(leaves::AbstractVector{Sequence{T}};
-                     positions = (collect ∘ range)(0, 1, length = length(leaves)),
-                     seq_length = one(Float64),
-                     Ne = one(Float64),
-                     μ_loc = zero(Float64)) where T
+function TreeCore(leaves::AbstractVector{Sequence};
+                  positions = (collect ∘ range)(0, 1, length = length(leaves)),
+                  seq_length = one(Float64),
+                  Ne = one(Float64),
+                  μ_loc = zero(Float64))
     n = length(leaves)
 
     sequences = similar(leaves, 2n - 1)
@@ -36,24 +36,24 @@ function TreeCore{T}(leaves::AbstractVector{Sequence{T}};
 
     positions = validate_positions(positions, (length ∘ first)(leaves))
 
-    TreeCore{T}(SimpleDiGraph(n), zeros(Float64, n - 1), sequences, n,
+    TreeCore(SimpleDiGraph(n), zeros(Float64, n - 1), sequences, n,
                 positions, seq_length, Ne, μ_loc)
 end
 
-function TreeCore{T}(rng::AbstractRNG,
-                     nmin::Integer, minlength::Integer,
-                     nmax::Integer = 0, maxlength::Integer = 0;
-                     genpars...) where T
+function TreeCore(rng::AbstractRNG,
+                  nmin::Integer, minlength::Integer,
+                  nmax::Integer = 0, maxlength::Integer = 0;
+                  genpars...)
     n = iszero(nmax) ? nmin : rang(rng, nmin:nmax)
     nmarkers = iszero(maxlength) ? minlength : rang(rng, minlength:maxlength)
 
-    TreeCore{T}([Sequence{T}(rng, nmarkers) for _ ∈ 1:n]; genpars...)
+    TreeCore([Sequence(rng, nmarkers) for _ ∈ 1:n]; genpars...)
 end
 
-function TreeCore{T}(nmin::Integer, minlength::Integer,
-                     nmax::Integer = 0, maxlength::Integer = 0;
-                     genpars...) where T
-    TreeCore{T}(GLOBAL_RNG, nmin, minlength, nmax, maxlength; genpars...)
+function TreeCore(nmin::Integer, minlength::Integer,
+                  nmax::Integer = 0, maxlength::Integer = 0;
+                  genpars...)
+    TreeCore(GLOBAL_RNG, nmin, minlength, nmax, maxlength; genpars...)
 end
 
 ###################
@@ -61,41 +61,28 @@ end
 ###################
 
 export Tree
-mutable struct Tree{T} <: AbstractGenealogy
-    core::TreeCore{T}
+mutable struct Tree <: AbstractGenealogy
+    core::TreeCore
     logprob::BigFloat
     nextvertex::Int
 end
 
-function Tree(leaves::AbstractVector{Sequence{T}}; genpars...) where T
-    Tree(TreeCore{T}(leaves; genpars...), zero(BigFloat), one(Int))
-end
-
-function Tree{T}(rng::AbstractRNG,
-                 nmin::Integer, minlength::Integer,
-                 nmax::Integer = 0, maxlength::Integer = 0;
-                 genpars...) where T
-    Tree(TreeCore{T}(rng, nmin, minlength, nmax, maxlength; genpars...),
-         zero(BigFloat), one(Int))
+function Tree(leaves::AbstractVector{Sequence}; genpars...)
+    Tree(TreeCore(leaves; genpars...), zero(BigFloat), one(Int))
 end
 
 function Tree(rng::AbstractRNG,
               nmin::Integer, minlength::Integer,
               nmax::Integer = 0, maxlength::Integer = 0;
               genpars...)
-    Tree{UInt}(rng, nmin, minlength, nmax, maxlength; genpars...)
-end
-
-function Tree{T}(nmin::Integer, minlength::Integer,
-                 nmax::Integer = 0, maxlength::Integer = 0;
-                 genpars...) where T
-    Tree{T}(GLOBAL_RNG, nmin, minlength, nmax, maxlength; genpars...)
+    Tree(TreeCore(rng, nmin, minlength, nmax, maxlength; genpars...),
+         zero(BigFloat), one(Int))
 end
 
 function Tree(nmin::Integer, minlength::Integer,
               nmax::Integer = 0, maxlength::Integer = 0;
               genpars...)
-    Tree{UInt}(nmin, minlength, nmax, maxlength; genpars...)
+    Tree(GLOBAL_RNG, nmin, minlength, nmax, maxlength; genpars...)
 end
 
 ##################
