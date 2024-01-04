@@ -102,13 +102,10 @@ export weights
 
 Importance samping weights of the chain.
 """
-function weights(chain; logscale = false)
+weights(chain, logscale = false) = Iterators.map(chain) do genealogy
     fG = chain.fH
-
-    GetLogPrs(f) = Map(g -> f(g, logscale = true))
-
-    chain |>
-        Zip(GetLogPrs(prob), GetLogPrs(fG)) ⨟ MapSplat(-) ⨟ Map(logscale ? identity : exp)
+    log_weight = fG(genealogy, logscale = true) - prob(genealogy, logscale = true)
+    logscale ? log_weight : exp(log_weight)
 end
 
 export ess
@@ -120,10 +117,6 @@ Effective sample size of the chain.
 function ess(chain)
     ws = weights(chain)
     sum(ws)^2 / sum(w -> w^2, ws)
-end
-
-macro crazy_dispatch(fun, dist)
-    :($fun(ic::IsChain))
 end
 
 ##########################
