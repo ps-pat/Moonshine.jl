@@ -86,7 +86,7 @@ function Sequence end
 
 Sequence(::UndefInitializer, n) = Sequence(BitVector(undef, n))
 
-Sequence(rng::AbstractRNG, n) = Sequence(bitrand(n))
+Sequence(rng::AbstractRNG, n) = Sequence(bitrand(rng, n))
 
 Sequence(rng::AbstractRNG, minlength, maxlength) =
     Sequence(rng, rand(rng, range(minlength, maxlength)))
