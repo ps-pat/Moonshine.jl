@@ -10,7 +10,8 @@ import Distributions: insupport, pdf,
                       params, partype,
                       mean, var, cov, entropy,
                       _logpdf,
-                      _rand!
+                      _rand!,
+                      Bernoulli
 
 using Combinatorics
 
@@ -36,6 +37,8 @@ word size of the machine, i.e. `Sys.WORD_SIZE`.
 struct BernoulliMulti{T<:Real} <: DiscreteMultivariateDistribution
     p::Vector{T}
 end
+
+Bernoulli(d::BernoulliMulti{T}, k) where T = Bernoulli{T}(prob1(d, k))
 
 @generated eltype(::Type{BernoulliMulti}) = eltype(Bernoulli)
 @generated eltype(::BernoulliMulti) = eltype(BernoulliMulti)
@@ -70,16 +73,13 @@ export marginal
 
 Compute the marginal distribution of random variables from their joint
 distribution.
-
-# Type stability
-
-Type stability of methods is not guaranteed.
-`marginal(::BernoulliMulti, idx)` will return either a `BernoulliMulti` or
-a `Bernoulli` depending on the length of `idx` for instance.
 """
-function marginal(d::BernoulliMulti{T}, idx) where T
-    (isone ∘ length)(idx) && return Bernoulli{T}(prob1(d, idx))
+function marginal end
 
+marginal(d::BernoulliMulti{T}, idx::Integer) where T =
+    Bernoulli{T}(prob1(d, idx))
+
+function marginal(d::BernoulliMulti{T}, idx) where T
     sort!(idx, rev = true)
 
     n = length(d)

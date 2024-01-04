@@ -44,7 +44,6 @@ IsChain{G}(fH, fΦ, haplotypes::AbstractVector{Sequence}, n) where G =
 #######################
 
 function iterate(chain::IsChain, state = 1)
-    # state > lastindex(chain) ? nothing : (chain[state], state + 1)
     while state <= lastindex(chain)
         isassigned(chain.genealogies, state) && return (chain[state], state + 1)
         state += 1
@@ -140,39 +139,20 @@ let dists = (:Bernoulli,)
     end
 end
 
-function reduce_dist(part, nmissing)
-    res = zeros(BigFloat, Int(exp2(nmissing)))
-
-    for (log_fΦ, log_w) ∈ part
-        res .+= exp.(log_fΦ .+ log_w)
-    end
-
-    res
-end
-
-function raw_sample_pdf(chain::IsChain{G,H,P}) where {G,H,P<:PhenotypeBernoulli}
+export sample_dist
+function sample_dist(chain::IsChain{G,H,P}) where {G,H,P<:PhenotypeBernoulli}
     fΦ = chain.fΦ
     fG = chain.fH
     nmissing = sum(ismissing.(phenotypes(chain)))
 
-    GetLogPrs(f) = Map(g -> f(g, logscale = true))
-    log_fΦs = Map(genealogy -> log.(fΦ(genealogy)))
-    log_ws = Zip(GetLogPrs(prob), GetLogPrs(fG)) ⨟ MapSplat(.-)
-
-
-    ## TODO: parallelize.
     res = zeros(BigFloat, Int(exp2(nmissing)))
 
-    for (log_fΦ, log_w) ∈ chain |> Zip(log_fΦs, log_ws)
+    Threads.@threads for genealogy ∈ chain
+        log_fΦ = fΦ(genealogy)
+        log_w =  fG(genealogy, logscale = true) - prob(genealogy, logscale = true)
+
         res .+= exp.(log_fΦ .+ log_w)
     end
 
-    res ./ sum(res, dims = 1)
-end
-
-export sample_pdf
-function sample_pdf(chain::IsChain{G,H,P}) where {G,H,P<:PhenotypeBernoulli}
-    p = raw_sample_pdf(chain)
-
-    length(p) > 2 ? BernoulliMulti(p) : Bernoulli(p)
+    BernoulliMulti(res ./ sum(res, dims = 1))
 end
