@@ -17,6 +17,8 @@ using StaticArrays: SA
 
 using GeometryBasics: Point
 
+using Bumper
+
 const VertexType = Int
 const EdgeType = SimpleEdge{VertexType}
 const ∞ = Inf
@@ -117,31 +119,61 @@ Custom type only need to implement `mrca(::T)`.
 """
 function mrca end
 
+# function mrca(genealogy, vs)
+#     μ = mrca(genealogy)
+
+#     possible_μ = CheapStack{VertexType}(nv(genealogy))
+
+#     ## Mandatory to avoid dynamic dispatch.
+#     for child ∈ children(genealogy, μ)
+#         push!(possible_μ, child)
+#     end
+
+#     while !isempty(possible_μ)
+#         v = pop!(possible_μ)
+#         vs ⊆ descendants(genealogy, v) || continue
+
+#         μ = v
+#         empty!(possible_μ)
+
+#         ## Mandatory to avoid dynamic dispatch.
+#         for child ∈ children(genealogy, μ)
+#             push!(possible_μ, child)
+#         end
+#     end
+
+#     ## Type inference needs a little bit of help here for some reason...
+#     something(μ)
+# end
+
 function mrca(genealogy, vs)
     μ = mrca(genealogy)
 
-    possible_μ = CheapStack{VertexType}(nv(genealogy))
+    @no_escape begin
+        possible_μ = @alloc(eltype(genealogy), nv(genealogy))
+        ptr = firstindex(possible_μ)
 
-    ## Mandatory to avoid dynamic dispatch.
-    for child ∈ children(genealogy, μ)
-        push!(possible_μ, child)
-    end
-
-    while !isempty(possible_μ)
-        v = pop!(possible_μ)
-        vs ⊆ descendants(genealogy, v) || continue
-
-        μ = v
-        empty!(possible_μ)
-
-        ## Mandatory to avoid dynamic dispatch.
         for child ∈ children(genealogy, μ)
-            push!(possible_μ, child)
+            possible_μ[ptr] = child
+            ptr += 1
+        end
+
+        while ptr > firstindex(possible_μ)
+            v = possible_μ[ptr - 1]
+            ptr -= 1
+            vs ⊆ descendants(genealogy, v) || continue
+
+            μ = v
+            ptr = firstindex(possible_μ)
+
+            for child ∈ children(genealogy, μ)
+                possible_μ[ptr] = child
+                ptr += 1
+            end
         end
     end
 
-    ## Type inference needs a little bit of help here for some reason...
-    something(μ)
+    μ
 end
 
 export distance
