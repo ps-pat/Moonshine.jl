@@ -244,7 +244,7 @@ default values are:
   - `local_attrs = ("algorithm" => :LN_NELDERMEAD, "maxtime" => 5 * (length ∘ parameters)(alpha(copula)))`
 """
 function fit!(rng, copula::AbstractΦCopula, Φ, H, G;
-              global_attrs = ("algorithm" => :GN_ESCH,
+              global_attrs = ("algorithm" => :GN_DIRECT,
                               "maxeval" => 1000),
               local_attrs = ("algorithm" => :LN_SBPLX,
                              "maxtime" => ceil(Int, length(H) / 10) * (length ∘ parameters)(alpha(copula))),
