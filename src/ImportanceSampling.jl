@@ -10,10 +10,14 @@ import Base:
     firstindex,
     lastindex,
     getindex,
-    setindex!
+    setindex!,
+    view
 
-using Base.Threads: nthreads, @threads, threadid
+using Base.Threads
 using RandomNumbers.PCG: PCGStateSetseq
+
+using ChunkSplitters
+import ChunkSplitters: chunks
 
 #########################
 # Definition of IsChain #
@@ -38,6 +42,12 @@ end
 
 IsChain{G}(fH, fΦ, haplotypes::AbstractVector{Sequence}, n) where G =
     IsChain{G}(fH, fΦ, haplotypes::AbstractVector{Sequence}, n, rand(UInt128))
+
+## ChunkSplitters
+chunks(x::IsChain, nchunks::Int, type = :batch) =
+    chunks(x.genealogies, nchunks, type)
+
+view(chain::IsChain, idx) = view(chain.genealogies, idx)
 
 #######################
 # Iteration interface #
@@ -138,14 +148,22 @@ function sample_dist(chain::IsChain{G,H,P}) where {G,H,P<:PhenotypeBernoulli}
     fG = chain.fH
     nmissing = sum(ismissing.(phenotypes(chain)))
 
-    res = zeros(BigFloat, Int(exp2(nmissing)))
+    res_parts = map(chunks(chain, Threads.nthreads())) do (rg, _)
+        @spawn begin
+            local acc = zeros(BigFloat, Int(exp2(nmissing)))
 
-    Threads.@threads for genealogy ∈ chain
-        log_fΦ = fΦ(genealogy)
-        log_w =  fG(genealogy, logscale = true) - prob(genealogy, logscale = true)
+            for genealogy ∈ view(chain, rg)
+                local log_fΦ = log.(fΦ(genealogy))
+                local log_w =  fG(genealogy, logscale = true) - prob(genealogy, logscale = true)
 
-        res .+= exp.(log_fΦ .+ log_w)
+                acc .+= exp.(log_fΦ .+ log_w)
+            end
+
+            acc
+        end
     end
+
+    res = sum(fetch, res_parts)
 
     BernoulliMulti(res ./ sum(res, dims = 1))
 end
