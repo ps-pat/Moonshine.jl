@@ -200,6 +200,8 @@ function (D::PhenotypeDensity)(tree::Tree)
     pop!(messages_stack)
 end
 
+phenotypes(D::PhenotypeDensity) = D.Φ
+
 """
     cmatrix(tree, pdf, σ, Φ)
     cmatrix(tree, pdf, σ, φsσ, δ, φsδ)

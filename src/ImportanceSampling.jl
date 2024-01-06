@@ -24,9 +24,8 @@ import ChunkSplitters: chunks
 #########################
 
 export IsChain
-struct IsChain{G, H, P}
-    fH::H
-    fΦ::P
+struct IsChain{G, H}
+    fG::H
 
     H::Vector{Sequence}
 
@@ -35,13 +34,13 @@ struct IsChain{G, H, P}
     seed::UInt128
 end
 
-function IsChain{G}(fH, fΦ, haplotypes::AbstractVector{Sequence}, n, seed) where G
-    H, P = typeof(fH), typeof(fΦ)
-    IsChain{G,H,P}(fH, fΦ, haplotypes, Vector{G}(undef, n), seed)
+function IsChain{G}(fG, haplotypes::AbstractVector{Sequence}, n, seed) where G
+    H = typeof(fG)
+    IsChain{G,H}(fG, haplotypes, Vector{G}(undef, n), seed)
 end
 
-IsChain{G}(fH, fΦ, haplotypes::AbstractVector{Sequence}, n) where G =
-    IsChain{G}(fH, fΦ, haplotypes::AbstractVector{Sequence}, n, rand(UInt128))
+IsChain{G}(fG, haplotypes::AbstractVector{Sequence}, n) where G =
+    IsChain{G}(fG, haplotypes::AbstractVector{Sequence}, n, rand(UInt128))
 
 ## ChunkSplitters
 chunks(x::IsChain, nchunks::Int, type = :batch) =
@@ -83,8 +82,6 @@ getindex(chain::IsChain, i) = getindex(chain.genealogies, i)
 # Methods #
 ###########
 
-phenotypes(ic) = ic.fΦ.Φ
-
 export simulate!
 """
     simulate!(chain[, idx])
@@ -97,7 +94,7 @@ function simulate! end
 function simulate!(chain::IsChain{G}, idx) where G
     Threads.@threads for k ∈ idx
         rng = PCGStateSetseq((chain.seed, k))
-        chain.genealogies[k] = G(chain.H; genpars(chain.fH)...)
+        chain.genealogies[k] = G(chain.H; genpars(chain.fG)...)
         build!(rng, chain.genealogies[k])
     end
 
@@ -113,7 +110,7 @@ export weights
 Importance samping weights of the chain.
 """
 weights(chain, logscale = false) = Iterators.map(chain) do genealogy
-    fG = chain.fH
+    fG = chain.fG
     log_weight = fG(genealogy, logscale = true) - prob(genealogy, logscale = true)
     logscale ? log_weight : exp(log_weight)
 end
@@ -143,10 +140,9 @@ let dists = (:Bernoulli,)
 end
 
 export sample_dist
-function sample_dist(chain::IsChain{G,H,P}) where {G,H,P<:PhenotypeBernoulli}
-    fΦ = chain.fΦ
-    fG = chain.fH
-    nmissing = sum(ismissing.(phenotypes(chain)))
+function sample_dist(chain::IsChain{G,H}, fΦ::P) where {G,H,P<:PhenotypeBernoulli}
+    fG = chain.fG
+    nmissing = sum(ismissing.(phenotypes(fΦ)))
 
     res_parts = map(chunks(chain, Threads.nthreads())) do (rg, _)
         @spawn begin
