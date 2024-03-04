@@ -36,34 +36,34 @@ abstract type AbstractΦCopula{P<:Distribution,A<:AbstractAlpha} end
 #############
 
 """
-    pdf(copula, φ1[, φ2, d, αpars...])
-    logpdf(copula, φ1[, φ2, d, αpars...])
-    conditional_pdf(copula, φ1, φ2, d[, αpars...])
-    logconditional_pdf(copula, φ1, φ2, d[, αpars...])
+    pdf_marginal(copula,)
+    logpdf_marginal(copula)
+    pdf_joint(copula)
+    logpdf_joint(copula)
+    pdf_conditional(copula)
+    logpdf_conditional(copula)
 
-(Logarithm of) the (conditional) probability density function of the copula
-given a genetic distance and a set of parameters for the associated α. If
-`αpars...` is not provided, use the values stored in the α.
+(Logarithm of) the marginal/joint/conditional probability density
+function of the copula.
 
-The one phenotype version of `pdf` and `logpdf` is the marginal (log)density
-of that penotype. As such, these methods do not need nor accept `d` or `αpars`
-arguments.
 
 # Implementation
 
-Only one of `logpdf` or `pdf` and one of `logconditional_pdf` or
-`conditional_pdf` need a custom implementation. Two methods need implementation
-for `pdf`:
-
-  - `pdf(copula, φ)`
-  - `pdf(copula, φ1, φ2, d, αpars)`
+- Only one of `logpdf_joint` or `pdf_joint` need to be implemented.
+- Only one of `logpdf_conditional` or `pdf_conditional` need to be implemented.
+- Implemented methods should return a function taking 3 positional arguments and
+  a vararg argument. The first 2 arguments are the phenotypes. The third
+  argument is the genetic distance between the individuals to which the
+  phenotypes are associated. The remaining arguments are to be passed to the
+  α function associated with the copula.
 """
 function pdf_marginal end,
 function logpdf_marginal end,
 function pdf_joint end,
 function logpdf_joint end,
 function pdf_conditional end,
-function logpdf_conditional end
+function logpdf_conditional end,
+function ∇logpdf_joint end
 
 for pdftype ∈ ["marginal", "joint", "conditional"]
     fun_str = "pdf_" * pdftype
@@ -86,6 +86,21 @@ function pdf_marginal(copula::AbstractΦCopula{<:Bernoulli})
 
     φ -> φ ? p : 1 - p
 end
+
+## Gradient
+
+export ∇logpdf_joint
+"""
+    ∇logpdf_joint(copula)
+
+Logarithmic derivative of the joint pdf.
+
+# Implementation
+
+If `∇logpdf_joint`is not implemented, automatic differentiation will be used by
+[`fit!`](@ref) if needed.
+"""
+∇logpdf_joint(copula::AbstractΦCopula) = nothing
 
 export alpha
 """
@@ -140,14 +155,6 @@ the order given by `(parameters ∘ alpha)(copula)`.
 """
 function loglikelihood end
 
-function loglikelihood(copula::AbstractΦCopula, Φ, genealogy::AbstractGenealogy)
-    function (pars...)
-        sum(combinations(leaves(genealogy), 2), init = zero(Float64)) do (i, j)
-            logpdf(copula, Φ[i], Φ[j], distance(genealogy, i, j), pars...)
-        end
-    end
-end
-
 function compute_distances(tree::Tree, Φ::AbstractVector{Bool})
     n = nleaves(tree)
 
@@ -167,7 +174,7 @@ function compute_distances(tree::Tree, Φ::AbstractVector{Bool})
     dists = 2 .* latitudes(tree)
 
     @inbounds for (i, j) ∈ combinations(leaves(tree), 2)
-        line = something(findfirst(ancestry[:,i] .& ancestry[:,j]), n - 1)
+        @views line = something(findfirst(ancestry[:,i] .& ancestry[:,j]), n - 1)
         col = Φ[i] + Φ[j] + 1
         mults[line, col] += 1
     end
@@ -175,12 +182,56 @@ function compute_distances(tree::Tree, Φ::AbstractVector{Bool})
     mults, dists
 end
 
+function decode_phenos(k)
+    k -= 1
+    .!iszero.((k ⊻ (k >> 1)) .& (1, 2))
+end
+
+ll_bernoulli(mults, dists, f) = function (pars::T...) where T<:Real
+    z0 = zero(promote_type(T, Float64))
+
+    sum((enumerate ∘ eachcol)(mults), init = z0) do (k, mults_col)
+        ## Phenotypes are Gray-encoded in k - 1.
+        φ1, φ2 = decode_phenos(k)
+
+        sum(zip(mults_col, dists), init = z0) do (mult, dist)
+            iszero(mult) && return z0
+
+            mult .* f(φ1, φ2, dist, pars...)
+        end
+    end
+end
+
+score_bernoulli(mults, dists, f, npars) = function (pars::T...) where T<:Real
+    z0 = zero(promote_type(T, Float64))
+    z = isone(npars) ? z0 : fill(z0, npars)
+
+    sum((enumerate ∘ eachcol)(mults), init = z) do (k, mults_col)
+        ## Phenotypes are Gray-encoded in k - 1.
+        φ1, φ2 = decode_phenos(k)
+
+        sum(zip(mults_col, dists), init = z) do (mult, dist)
+            iszero(mult) && return z
+
+            mult .* f(φ1, φ2, dist, pars...)
+        end
+    end
+end
+
 function loglikelihood(rng::AbstractRNG, copula::AbstractΦCopula{<:Bernoulli},
                        Φ, H, G; idx = 1, n = 1000, genpars...)
-    npars = (length ∘ parameters)(alpha(copula))
-    fs = Vector{FunctionWrapper{Real, NTuple{npars, Real}}}(undef, n)
-
     logpdf = logpdf_joint(copula)
+    ∇logpdf = ∇logpdf_joint(copula)
+    npars = (length ∘ parameters)(alpha(copula))
+
+    fs = Vector{FunctionWrapper{Real, NTuple{npars, Real}}}(undef, n)
+    if isone(npars)
+        ret = Real
+    else
+        ret = AbstractVector{Real}
+    end
+
+    ∇fs = Vector{FunctionWrapper{ret, NTuple{npars, Real}}}(undef, n)
 
     for k ∈ eachindex(fs)
         genealogy = G(H; genpars...)
@@ -188,25 +239,35 @@ function loglikelihood(rng::AbstractRNG, copula::AbstractΦCopula{<:Bernoulli},
 
         mults, dists = compute_distances(genealogy, Φ)
 
-        fs[k] = function (pars::T...) where T<:Real
-            sum((enumerate ∘ eachcol)(mults), init = zero(promote_type(T, Float64))) do (k, mults_col)
-                ## Phenotypes are Gray-encoded in k - 1.
-                k -= 1
-                φ1, φ2 = .!iszero.((k ⊻ (k >> 1)) .& (1, 2))
+        fs[k] = ll_bernoulli(mults, dists, logpdf)
 
-                sum(zip(mults_col, dists), init = zero(promote_type(T, Float64))) do (mult, dist)
-                    iszero(mult) && return zero(dist)
-
-                    mult * logpdf(φ1, φ2, dist, pars...)
-                end
-            end
-        end
+        ∇fs[k] = score_bernoulli(mults, dists, ∇logpdf, npars)
     end
 
-    function (pars::T...) where T<:Real
+    f = function (pars::T...) where T<:Real
         sum(f -> f(pars...)::promote_type(T, Float64), fs,
             init = zero(promote_type(T, Float64)))
     end
+
+    ## Gradient
+    if isone(npars)
+        ∇f = function(pars::T...) where T<:Real
+            z0 = zero(promote_type(T, Float64))
+            sum(∇f -> ∇f(pars...)::promote_type(T, Float64), ∇fs, init = z0)
+        end
+    else
+        ∇f = function (g::AbstractVector{T}, pars::T...) where T<:Real
+            fill!(g, zero(T))
+
+            for ∇f ∈ ∇fs
+                g .+= convert.(T, ∇f(pars...))
+            end
+
+            g
+        end
+    end
+
+    f, ∇f
 end
 
 function loglikelihood(copula::AbstractΦCopula, Φ, H, G; kwargs...)
@@ -245,9 +306,9 @@ default values are:
 """
 function fit!(rng, copula::AbstractΦCopula, Φ, H, G;
               global_attrs = ("algorithm" => :GN_DIRECT,
-                              "maxeval" => 1000),
-              local_attrs = ("algorithm" => :LN_SBPLX,
-                             "maxtime" => ceil(Int, length(H) / 10) * (length ∘ parameters)(alpha(copula))),
+                              "maxeval" => 10000),
+              local_attrs = ("algorithm" => :LD_MMA,
+                             "maxeval" => 10000),
               genpars...)
     α = alpha(copula)
 
@@ -278,16 +339,18 @@ function fit!(rng, copula::AbstractΦCopula, Φ, H, G;
     global_vars, local_vars = all_variables(global_model), all_variables(local_model)
 
     ## Objective Function
-    objective = loglikelihood(rng, copula, Φ, H, G; genpars...)
+    f, ∇f = loglikelihood(rng, copula, Φ, H, G; genpars...)
     nparameters = length(parameters(α))
-    register(global_model, :objective,
-             nparameters, objective,
-             autodiff = true)
-    register(local_model, :objective,
-             nparameters, objective,
-             autodiff = true)
-    @NLobjective(global_model, Max, objective(global_vars...))
-    @NLobjective(local_model, Max, objective(local_vars...))
+    if isnothing(∇f)
+        register(global_model, :f, nparameters, f, autodiff = true)
+        register(local_model, :f, nparameters, f, autodiff = true)
+    else
+        register(global_model, :f, nparameters, f, ∇f, autodiff = isone(nparameters))
+        register(local_model, :f, nparameters, f, ∇f, autodiff = isone(nparameters))
+    end
+
+    @NLobjective(global_model, Max, f(global_vars...))
+    @NLobjective(local_model, Max, f(local_vars...))
 
     ## Global Optimization
     set_attributes(global_model, global_attrs...)

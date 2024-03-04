@@ -41,3 +41,23 @@ function pdf_conditional(copula::CopulaFrechet{<:Bernoulli})
         φ ⊻ ψ ? s2 : 1 - s2
     end
 end
+
+function ∇logpdf_joint(copula::CopulaFrechet{<:Bernoulli})
+    α = alpha(copula)
+    ∇α = grad(α)
+
+    function (φ, ψ, t, αpars...)
+        num = ∇α(t, αpars...)
+        denum = α(t, αpars...)
+
+        φ ⊻ ψ && return num ./ denum
+
+        if φ
+            mult = failprob(marginal(copula))
+        else
+            mult = succprob(marginal(copula))
+        end
+
+        (mult .* num) ./ ( mult .* denum .- 1)
+    end
+end

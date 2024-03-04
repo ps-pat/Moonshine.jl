@@ -57,3 +57,24 @@ function pdf_conditional(copula::CopulaCuadrasAuge{<:Bernoulli})
         ret
     end
 end
+
+function ∇logpdf_joint(copula::CopulaCuadrasAuge{<:Bernoulli})
+    α = alpha(copula)
+    ∇α = grad(α)
+    q = failprob(marginal(copula))
+
+    function (φ, ψ, t, αpars...)
+        f00 = log(q) .* ∇α(t, αpars...)
+
+        !(φ || ψ) && return f00
+
+        qα = inv(q^(α(t, αpars...)))
+        if φ ⊻ ψ
+            d = 1 - qα
+        else
+            d = qα * (inv(q) - 2) + 1
+        end
+
+        f00 ./ d
+    end
+end
