@@ -10,6 +10,10 @@ import Base: empty,
 
 using Random
 
+using Base: bitcount
+
+using LinearAlgebra
+
 export Sequence
 ## "Efficient storage of marker data."
 struct Sequence
@@ -48,14 +52,21 @@ function blocksize end
 ~(sequence::Sequence) = Sequence(broadcast(~, sequence.data))
 
 for fun ∈ [:&, :|, :xor]
-    @eval $fun(sequence1::Sequence, sequence2::Sequence) =
+    @eval function $fun(sequence1::Sequence, sequence2::Sequence)
         Sequence(broadcast($fun, sequence1.data, sequence2.data))
+    end
 end
 
 for fun ∈ [:<<, :>>, :>>>]
     @eval $fun(sequence, k) = Sequence($fun(sequence, k))
 end
 
+function hash(η::Sequence, h::UInt)
+    h = hash(η.data, h)
+    hash(Sequence, h)
+end
+
+==(η1::Sequence, η2::Sequence) = η1.data == η2.data
 ==(seq::Sequence, str::AbstractString) = string(seq) == str
 ==(str::AbstractString, seq::Sequence) = seq == str
 
@@ -79,8 +90,9 @@ end
   - `minLength, maxLength`: bounds for sequence length.
 
 # Notes
-- To construct an empty sequence, use `empty(Sequence)`
-- To construct a Sequence from a string of bits, use `convert(Sequence, str)`
+
+  - To construct an empty sequence, use `empty(Sequence)`
+  - To construct a Sequence from a string of bits, use `convert(Sequence, str)`
 """
 function Sequence end
 
@@ -88,13 +100,15 @@ Sequence(::UndefInitializer, n) = Sequence(BitVector(undef, n))
 
 Sequence(rng::AbstractRNG, n) = Sequence(bitrand(rng, n))
 
-Sequence(rng::AbstractRNG, minlength, maxlength) =
+function Sequence(rng::AbstractRNG, minlength, maxlength)
     Sequence(rng, rand(rng, range(minlength, maxlength)))
+end
 
 Sequence(n::Integer) = Sequence(GLOBAL_RNG, n)
 
-Sequence(minlength::Integer, maxlength::Integer) =
+function Sequence(minlength::Integer, maxlength::Integer)
     Sequence(GLOBAL_RNG, minlength, maxlength)
+end
 
 function convert(::Type{Sequence}, str::AbstractString)
     data = zeros(length(str))
@@ -108,7 +122,72 @@ function convert(::Type{Sequence}, str::AbstractString)
     Sequence(data)
 end
 
-## Iteration.
+#############
+# Distances #
+#############
+
+export Distance
+abstract type Distance{T} end
+
+"""
+    distance(Dist, η1, η2)
+    distance(Dist, H)
+
+Compute distance between sequences.
+"""
+function distance end
+
+function distance(Dist::Type{<:Distance{T}}, H::AbstractVector) where T
+    n = length(H)
+    mat = Matrix{T}(undef, n, n)
+
+    @inbounds for j ∈ 1:n
+        mat[j, j] = 0
+        for i ∈ 1:n
+            mat[i, j] = distance(Dist, H[j], H[i])
+        end
+    end
+
+    mat
+end
+
+distance(Dist::Type{<:Distance}, H::AbstractVector) = distance(Dist{Float64}, H)
+
+## Flip10 "distance"
+export Flip10
+struct Flip10{T} <: Distance{T} end
+
+function distance(::Type{Flip10{T}}, η1::Sequence, η2::Sequence) where T
+    ## Works since unused bits of a BitArray are always set to 0.
+    d = zero(T)
+    nblocks = (length(η1) - 1) ÷ blocksize(η1) + 1
+
+    @inbounds for k ∈ 1:nblocks
+        b1, b2 = η1.data.chunks[k], η2.data.chunks[k]
+
+        ## Check for 0 -> 1 mutations.
+        if !iszero(~b1 & b2)
+            d = typemax(T)
+            break
+        end
+
+        ## The remaining mutations must be 1 -> 0.
+        d += count_ones(b1 ⊻ b2)
+    end
+
+    d
+end
+
+function distance(::Type{Flip10}, η1::Sequence, η2::Sequence)
+    distance(Flip10{Int}, η1, η2)
+end
+
+distance(::Type{Flip10}, H::AbstractVector) = distance(Flip10{Int}, H)
+
+#############
+# Iteration #
+#############
+
 function Base.iterate(seq::Sequence, state = 1)
     state > lastindex(seq) ? nothing : (seq[state], state + 1)
 end
