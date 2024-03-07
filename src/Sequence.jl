@@ -184,6 +184,28 @@ end
 
 distance(::Type{Flip10}, H::AbstractVector) = distance(Flip10{Int}, H)
 
+## Hamming distance
+export Hamming
+struct Hamming{T} <: Distance{T} end
+
+function distance(::Type{Hamming{T}}, η1::Sequence, η2::Sequence) where T
+    ## Works since unused bits of a BitArray are always set to 0.
+    d = zero(T)
+    nblocks = (length(η1) - 1) ÷ blocksize(η1) + 1
+
+    @inbounds for k ∈ 1:nblocks
+        d += count_ones(η1.data.chunks[k] ⊻ η2.data.chunks[k])
+    end
+
+    d
+end
+
+function distance(::Type{Hamming}, η1::Sequence, η2::Sequence)
+    distance(Hamming{Int}, η1, η2)
+end
+
+distance(::Type{Hamming}, H::AbstractVector) = distance(Hamming{Int}, H)
+
 #############
 # Iteration #
 #############
