@@ -153,6 +153,80 @@ end
 
 distance(Dist::Type{<:Distance}, H::AbstractVector) = distance(Dist{Float64}, H)
 
+export coalescence_matrix
+"""
+    coalescence_matrix(Dist, H; absorbing_states = [], μ = 1e-5, maximum_distance = ∞)
+
+Compute the transition matrix for the coalescence of sequences types.
+
+# Arguments
+
+  - `Dist`: discrete distance
+  - `H`: vector of sequences
+  - `absorbing_state`: vector of absorbing states
+  - `μ`: per locus mutation rate
+  - `maximum_distance`: distance beyond which a state is considered
+    inaccessible
+
+See also [`Distance`][@ref], [`Sequence`][@ref].
+"""
+function coalescence_matrix end
+
+function coalescence_matrix(Dist::Type{<:Distance{Int}}, H::AbstractVector;
+                            absorbing_states = [],
+                            μ = 1e-5, maximum_distance = ∞)
+    μ < eps(Float64) && return diagm(ones(length(H)))
+
+    distance_matrix = distance(Dist, H)
+    transition_matrix = similar(distance_matrix, Float64)
+
+    ## Absorbing state
+    for σ ∈ absorbing_states
+        transition_matrix[:, σ] .= 0
+        transition_matrix[σ, σ] = 1
+    end
+
+    for (σ, distances) ∈ (enumerate ∘ eachcol)(distance_matrix)
+        σ ∈ absorbing_states && continue
+
+        vec_norm = 0
+
+        for (δ, distance) ∈ enumerate(distances)
+            ## 1:      No self-loop;
+            ## (2, 3): A state at a distance greater than the maximum
+            ##         allowed distance is not accessible.
+            if σ == δ || distance == typemax(Int) || distance > maximum_distance
+                transition_matrix[δ, σ] = 0
+                continue
+            end
+
+            d = distances[δ]
+            logprob = d * log(μ) - sum(log, 2:d, init = zero(Float64))
+            transition_matrix[δ, σ] = exp(logprob)
+            vec_norm += transition_matrix[δ, σ]
+        end
+
+        ## If the norm of the vector is zero, we create an absorbing
+        ## state.
+        if iszero(vec_norm)
+            transition_matrix[σ, σ] = 1
+        else
+            ## Otherwise, normalize the vector.
+            transition_matrix[:, σ] ./= vec_norm
+        end
+    end
+
+    transition_matrix
+end
+
+function coalescence_matrix(Dist::Type{<:Distance}, H::AbstractVector;
+                            absorbing_states = [],
+                            μ = 1e-5, maximum_distance = Inf)
+    coalescence_matrix(Dist{Int}, H,
+                       absorbing_states = absorbing_states,
+                       μ = μ, maximum_distance = maximum_distance)
+end
+
 ## Flip10 "distance"
 export Flip10
 struct Flip10{T} <: Distance{T} end
