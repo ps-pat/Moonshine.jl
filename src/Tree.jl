@@ -6,6 +6,10 @@ using Random
 
 using Distributions
 
+import Base: iterate, eltype, length, size
+
+using RandomNumbers.PCG: PCGStateOneseq
+
 #######################
 # TreeCore Definition #
 #######################
@@ -216,6 +220,39 @@ function tree_coalesce!(rng, tree, vertices, nlive)
 
     _dad
 end
+
+## The Coalessor
+mutable struct Coalessor
+    const idx::Vector{Int}
+    rng::PCGStateOneseq{UInt128, Val{:XSH_RS}, UInt64}
+end
+
+Coalessor(rng, n) = Coalessor(collect(1:n), PCGStateOneseq(rand(rng, UInt)))
+
+function iterate(iter::Coalessor, state = 1)
+    n = length(iter)
+    state == n + 1 && return nothing
+
+    nlive = n - state + 2
+    idx = iter.idx
+    rng = iter.rng
+
+    i = rand(rng, 1:nlive)
+    x = idx[i]
+    idx[i] = idx[nlive]
+
+    j = rand(rng, 1:(nlive - 1))
+    y = idx[j]
+    idx[j] = n + state + 1
+
+    (x, y), state + 1
+end
+
+eltype(::Type{Coalessor}) = NTuple{2, Int}
+
+length(c::Coalessor) = length(c.idx) - 1
+
+size(c::Coalessor) = (length(c),)
 
 export build!
 """
