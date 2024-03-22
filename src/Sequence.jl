@@ -156,56 +156,79 @@ end
 
 distance(Dist::Type{<:Distance}, H::AbstractVector) = distance(Dist{Float64}, H)
 
+function compute_types(H::AbstractVector{Sequence})
+    types = unique(H)
+    sort!(types, by = bitcount)
+end
+
 export coalescence_matrix
 """
-    coalescence_matrix(Dist, H; absorbing_states = [], μ = 1e-5, maximum_distance = ∞)
+    coalescence_matrix(Dist, H; μ = 1e-5, maximum_distance = ∞, bias0 = ∞)
 
-Compute the transition matrix for the coalescence of sequences types.
+Compute the transition matrix for the coalescence of sequences types. H is
+expected to have been processed by [`compute_types`][@ref] or equivalent.
 
 # Arguments
 
   - `Dist`: discrete distance
   - `H`: vector of sequences
-  - `absorbing_state`: vector of absorbing states
   - `μ`: per locus mutation rate
-  - `maximum_distance`: distance beyond which a state is considered
+  - `maximum_distance`: distance beyond which a type is considered
     inaccessible
+  - `bias0`: biasing factor for 0->1 mutations
 
-See also [`Distance`][@ref], [`Sequence`][@ref].
+# Notes
+  - Assuming more than one type, μ must be strictly greater than 0 for the
+    chain to be recurrent.
+  - Each entry of the lower triangle of the distance matrix is multiplied
+    by bias0. In other words, the matrix used to compute transition
+    probabilities is the Hadamard product of the distance matrix with a lower
+    triangular matrix in which each entry is equal to bias0. Using bias0 = b is
+    thus equivalent to stretching every 0->1 distances by a factor of b.
+  - Relationship to maximum_distance is assessed *after* biasing.
+  - For a given source type, if every destination type is beyond
+    maximum_distance, the maximum distance for that source-destination pair is
+    used instead.
+
+See also [`compute_types`][@ref], [`Distance`][@ref], [`Sequence`][@ref].
 """
 function coalescence_matrix end
 
-function coalescence_matrix(Dist::Type{<:Distance{Int}}, H::AbstractVector;
-                            absorbing_states = [],
-                            μ = 1e-5, maximum_distance = ∞)
-    μ < eps(Float64) && return diagm(ones(length(H)))
-
+function coalescence_matrix(Dist::Type{<:Distance{Float64}}, H::AbstractVector;
+                            μ = 1e-5, maximum_distance = 1, bias0 = ∞)
+    ## Compute the distance matrix and apply bias.
     distance_matrix = distance(Dist, H)
-    transition_matrix = similar(distance_matrix, Float64)
 
-    ## Absorbing state
-    for σ ∈ absorbing_states
-        transition_matrix[:, σ] .= 0
-        transition_matrix[σ, σ] = 1
+    for σ ∈ axes(distance_matrix, 2)[2:end]
+        for δ ∈ (σ + 1):size(distance_matrix, 1)
+            distance_matrix[δ, σ] *= bias0
+        end
     end
 
-    for (σ, distances) ∈ (enumerate ∘ eachcol)(distance_matrix)
-        σ ∈ absorbing_states && continue
+    transition_matrix = similar(distance_matrix, Float64)
 
+    for (σ, distances) ∈ (enumerate ∘ eachcol)(distance_matrix)
         vec_norm = 0
+
+        ## If every other types is at a distance greater than the
+        ## maximum distance, the type of the mrca of the sample is not
+        ## well defined.
+        maximum_distance_σ = max(maximum_distance,
+                                 minimum(d -> iszero(d) ? typemax(d) : d,
+                                         distance_matrix[:,σ]))
 
         for (δ, distance) ∈ enumerate(distances)
             ## 1:      No self-loop;
             ## (2, 3): A state at a distance greater than the maximum
             ##         allowed distance is not accessible.
-            if σ == δ || distance == typemax(Int) || distance > maximum_distance
+            if σ == δ || distance == typemax(Int) || distance > maximum_distance_σ
                 transition_matrix[δ, σ] = 0
                 continue
             end
 
             d = distances[δ]
-            logprob = d * log(μ) - sum(log, 2:d, init = zero(Float64))
-            transition_matrix[δ, σ] = exp(logprob)
+            prob = exp(d * log(μ) - sum(log, 2:d, init = zero(Float64)))
+            transition_matrix[δ, σ] = prob
             vec_norm += transition_matrix[δ, σ]
         end
 
@@ -223,43 +246,12 @@ function coalescence_matrix(Dist::Type{<:Distance{Int}}, H::AbstractVector;
 end
 
 function coalescence_matrix(Dist::Type{<:Distance}, H::AbstractVector;
-                            absorbing_states = [],
-                            μ = 1e-5, maximum_distance = Inf)
-    coalescence_matrix(Dist{Int}, H,
-                       absorbing_states = absorbing_states,
-                       μ = μ, maximum_distance = maximum_distance)
+                            μ = 1e-7, maximum_distance = 1, bias0 = ∞)
+    coalescence_matrix(Dist{Float64}, H,
+                       μ = μ,
+                       maximum_distance = maximum_distance,
+                       bias0 = bias0)
 end
-
-## Flip10 "distance"
-export Flip10
-struct Flip10{T} <: Distance{T} end
-
-function distance(::Type{Flip10{T}}, η1::Sequence, η2::Sequence) where T
-    ## Works since unused bits of a BitArray are always set to 0.
-    d = zero(T)
-    nblocks = (length(η1) - 1) ÷ blocksize(η1) + 1
-
-    @inbounds for k ∈ 1:nblocks
-        b1, b2 = η1.data.chunks[k], η2.data.chunks[k]
-
-        ## Check for 0 -> 1 mutations.
-        if !iszero(~b1 & b2)
-            d = typemax(T)
-            break
-        end
-
-        ## The remaining mutations must be 1 -> 0.
-        d += count_ones(b1 ⊻ b2)
-    end
-
-    d
-end
-
-function distance(::Type{Flip10}, η1::Sequence, η2::Sequence)
-    distance(Flip10{Int}, η1, η2)
-end
-
-distance(::Type{Flip10}, H::AbstractVector) = distance(Flip10{Int}, H)
 
 ## Hamming distance
 export Hamming
