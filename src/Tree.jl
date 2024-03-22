@@ -202,14 +202,12 @@ mut_rate(tree::Tree, scaled = true) = tree.core.μ_loc * (scaled ? 4 * Ne(tree) 
 # Tree Building #
 #################
 
-## TODO: get rid of idx_weights.
 struct MutationSampler{T, W<:AbstractWeights}
     types::Vector{T}
     nlive::W
     transition_matrix::Matrix{Float64}
 
     idx::Vector{Vector{Int}}
-    idx_weights::Vector{W}
 
     n::Int
     event_number::Base.RefValue{Int}
@@ -221,14 +219,13 @@ function MutationSampler(data, Dist = Hamming, args = (), kwargs = ())
     ntypes = length(types)
 
     idx = [findall(==(type), data) for type ∈ types]
-    idx_weights = [FrequencyWeights(ones(Int, length(v)), length(v)) for v ∈ idx]
 
     nlive = FrequencyWeights(sum.(idx_weights), length(data))
 
     transition_matrix = coalescence_matrix(Dist, types, args...; kwargs...)
 
     MutationSampler(types, nlive,
-                    transition_matrix, idx, idx_weights,
+                    transition_matrix, idx,
                     length(data), Ref(0), Ref(big(0.0)))
 end
 
@@ -267,43 +264,55 @@ function sample_pair!(rng, ms)
     isempty(can_only_coalesce_with_type) || return sample_pair!(rng, ms)
 
     ## Otherwise, we're good to go!
-    nlive[type_idx] -= 1
     ms.event_number[] += 1
 
     ## Conditionally sample a pair of indices.
-    if iszero(nlive[type_idx])
+    if isone(nlive[type_idx])
         ## If there is only one item of the sampled type with a positive
         ## weight, we mutate it.
 
         ## Get first item.
-        η1 = ms.idx[type_idx][findfirst(!iszero, ms.idx_weights[type_idx])]
+        η1 = first(ms.idx[type_idx])
+        nlive[type_idx] -= 1
 
         ## Sample mutation.
         type_probs = ProbabilityWeights(P[:,type_idx] .* nlive)
         newtype_idx = sample(rng, eachindex(ms.types), type_probs)
         ms.logprob[] += log(ms.transition_matrix[newtype_idx, type_idx])
 
-        ## Get second item.
-        j = sample(rng, eachindex(ms.types), ms.idx_weights[newtype_idx])
+        ## Sample second item.
+        j = rand(rng, 1:nlive[newtype_idx])
         η2 = ms.idx[newtype_idx][j]
-        n = count(!iszero, ms.idx_weights[newtype_idx])
-        ms.logprob[] += -log(n)
 
         ## Update indices.
         ms.idx[newtype_idx][j] = ms.n + ms.event_number[]
+
+        ## Update probability.
+        ms.logprob[] -= log(nlive[newtype_idx])
     else
-        ## Sample items.
-        i, j = sample(rng, eachindex(ms.idx[type_idx]), ms.idx_weights[type_idx], 2,
-                      replace = false)
-        η1, η2 = ms.idx[type_idx][[i, j]]
+        idx = ms.idx[type_idx]
+        n = nlive[type_idx]
 
-        ## Compute probability.
-        n = count(!iszero, ms.idx_weights[type_idx])
+        ## Sample items. i and j are the indices of the first and
+        ## second sampled items respectively. η1 and η2 are the actual
+        ## items. After this iteration:
+        ##   1. nlive[type_idx] will be decreased by 1;
+        ##   2. idx[i] will contain the item that was previously at index
+        ##      nlive[type_idx];
+        ##   3. idx[j] will contain the item created by the coalescence of
+        ##      η1 with η2.
+
+        i = rand(rng, 1:n)
+        η1 = idx[i]
+        idx[i] = idx[n]
+        nlive[type_idx] -= 1
+
+        j = rand(rng, 1:(n - 1))
+        η2 = idx[j]
+        idx[j] = ms.n + ms.event_number[]
+
+        ## Update probability.
         ms.logprob[] += logtwo - log(n) - log(n - 1)
-
-        ## Update weights & indices
-        ms.idx_weights[type_idx][[i, j]] .= [0, 1]
-        ms.idx[type_idx][j] = ms.n + ms.event_number[]
     end
 
     η1, η2
