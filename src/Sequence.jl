@@ -10,7 +10,7 @@ import Base: empty,
 
 using Random
 
-using Base: bitcount
+import Base: bitcount
 
 using LinearAlgebra
 
@@ -58,8 +58,11 @@ for fun ∈ [:&, :|, :xor]
 end
 
 for fun ∈ [:<<, :>>, :>>>]
-    @eval $fun(sequence, k) = Sequence($fun(sequence, k))
+    @eval $fun(sequence::Sequence, k) = Sequence($fun(sequence.data, k))
 end
+
+bitcount(η::Sequence; init::T = 0) where T =
+    bitcount(η.data.chunks, init = init)
 
 function hash(η::Sequence, h::UInt)
     h = hash(η.data, h)
