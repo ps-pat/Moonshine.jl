@@ -6,6 +6,8 @@ using Random
 
 using Distributions
 
+using StatsBase: AbstractWeights, FrequencyWeights, ProbabilityWeights, sample
+
 import Base: iterate, eltype, length, size
 
 using RandomNumbers.PCG: PCGStateOneseq
@@ -195,6 +197,117 @@ end
 
 export mut_rate
 mut_rate(tree::Tree, scaled = true) = tree.core.μ_loc * (scaled ? 4 * Ne(tree) : 1)
+
+#################
+# Tree Building #
+#################
+
+## TODO: get rid of idx_weights.
+struct MutationSampler{T, W<:AbstractWeights}
+    types::Vector{T}
+    nlive::W
+    transition_matrix::Matrix{Float64}
+
+    idx::Vector{Vector{Int}}
+    idx_weights::Vector{W}
+
+    n::Int
+    event_number::Base.RefValue{Int}
+    logprob::Base.RefValue{BigFloat}
+end
+
+function MutationSampler(data, Dist = Hamming, args = (), kwargs = ())
+    types = compute_types(data)
+    ntypes = length(types)
+
+    idx = [findall(==(type), data) for type ∈ types]
+    idx_weights = [FrequencyWeights(ones(Int, length(v)), length(v)) for v ∈ idx]
+
+    nlive = FrequencyWeights(sum.(idx_weights), length(data))
+
+    transition_matrix = coalescence_matrix(Dist, types, args...; kwargs...)
+
+    MutationSampler(types, nlive,
+                    transition_matrix, idx, idx_weights,
+                    length(data), Ref(0), Ref(big(0.0)))
+end
+
+function sample_pair!(rng, ms)
+    nlive = ms.nlive
+    P = ms.transition_matrix
+
+    ## Sample a type of item.
+    type_idx = sample(rng, eachindex(ms.types), nlive)
+    ms.logprob[] += log(nlive[type_idx]) - log(nlive.sum)
+
+    ## Check if there is any type greather than the one sampled with
+    ## only one live item remaining which can only coalesce with
+    ## sampled type. If so, make one of those coalesce with sampled
+    ## type.
+    can_only_coalesce_with_type = type_idx .+
+        findall(range(type_idx + 1, length(ms.types))) do k
+            ## Check if a coalescence is possible. For that to be the
+            ## case, there has to be live items and the probability of a
+            ## coalescence must be > 0.
+            iszero(nlive[k] * P[type_idx, k]) && return false
+
+            ## Check if the coalescence with type_idx is the only
+            ## possibility. For that to be the case, there has to be live
+            ## items other than type_idx with coalescence probability > 0.
+            any(>(0),
+                nlive[1:end .≠ type_idx] .* P[1:end .≠ type_idx, k]) &&
+                    return false
+
+            true
+        end
+
+    ## At that point, if there is such an item, we cancel the
+    ## coalescence event and simulate a new one.
+    ## TODO: make sampled type_idx taboo for next call.
+    isempty(can_only_coalesce_with_type) || return sample_pair!(rng, ms)
+
+    ## Otherwise, we're good to go!
+    nlive[type_idx] -= 1
+    ms.event_number[] += 1
+
+    ## Conditionally sample a pair of indices.
+    if iszero(nlive[type_idx])
+        ## If there is only one item of the sampled type with a positive
+        ## weight, we mutate it.
+
+        ## Get first item.
+        η1 = ms.idx[type_idx][findfirst(!iszero, ms.idx_weights[type_idx])]
+
+        ## Sample mutation.
+        type_probs = ProbabilityWeights(P[:,type_idx] .* nlive)
+        newtype_idx = sample(rng, eachindex(ms.types), type_probs)
+        ms.logprob[] += log(ms.transition_matrix[newtype_idx, type_idx])
+
+        ## Get second item.
+        j = sample(rng, eachindex(ms.types), ms.idx_weights[newtype_idx])
+        η2 = ms.idx[newtype_idx][j]
+        n = count(!iszero, ms.idx_weights[newtype_idx])
+        ms.logprob[] += -log(n)
+
+        ## Update indices.
+        ms.idx[newtype_idx][j] = ms.n + ms.event_number[]
+    else
+        ## Sample items.
+        i, j = sample(rng, eachindex(ms.idx[type_idx]), ms.idx_weights[type_idx], 2,
+                      replace = false)
+        η1, η2 = ms.idx[type_idx][[i, j]]
+
+        ## Compute probability.
+        n = count(!iszero, ms.idx_weights[type_idx])
+        ms.logprob[] += logtwo - log(n) - log(n - 1)
+
+        ## Update weights & indices
+        ms.idx_weights[type_idx][[i, j]] .= [0, 1]
+        ms.idx[type_idx][j] = ms.n + ms.event_number[]
+    end
+
+    η1, η2
+end
 
 function tree_coalesce!(rng, tree, vertices, nlive)
     ## Sample coalescing vertices. A + log(2) is missing, don't forget
