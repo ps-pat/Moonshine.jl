@@ -220,7 +220,7 @@ function MutationSampler(data, Dist = Hamming, args = (), kwargs = ())
 
     idx = [findall(==(type), data) for type ∈ types]
 
-    nlive = FrequencyWeights(sum.(idx_weights), length(data))
+    nlive = FrequencyWeights(length.(idx), length(data))
 
     transition_matrix = coalescence_matrix(Dist, types, args...; kwargs...)
 
