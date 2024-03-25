@@ -20,7 +20,6 @@ struct TreeCore
     graph::SimpleDiGraph{VertexType}
     latitudes::Vector{Float64}
     sequences::Vector{Sequence}
-    nleaves::Int
 
     positions::Vector{Float64}
     seq_length::Float64
@@ -42,7 +41,7 @@ function TreeCore(leaves::AbstractVector{Sequence};
 
     positions = validate_positions(positions, (length ∘ first)(leaves))
 
-    TreeCore(SimpleDiGraph(n), zeros(Float64, n - 1), sequences, n,
+    TreeCore(SimpleDiGraph(n), zeros(Float64, n - 1), sequences,
                 positions, seq_length, Ne, μ_loc)
 end
 
@@ -95,7 +94,7 @@ end
 # Simple Methods #
 ##################
 
-for field ∈ [:(:nleaves), :(:sequences), :(:latitudes), :(:graph),
+for field ∈ [:(:sequences), :(:latitudes), :(:graph),
              :(:seq_length), :(:Ne), :(:positions)]
     fun_name = eval(field)
     @eval begin
@@ -106,6 +105,9 @@ for field ∈ [:(:nleaves), :(:sequences), :(:latitudes), :(:graph),
         end
     end
 end
+
+export nleaves
+nleaves(tree::Tree) = (length(sequences(tree)) + 1) ÷ 2
 
 ###############################
 # AbstractGenealogy Interface #
@@ -142,7 +144,7 @@ end
 # AbstractGraph Interface #
 ###########################
 
-function add_vertex!(tree::Tree, seq = Sequence(), lat = ∞)
+function add_vertex!(tree::Tree, seq, lat)
     latitudes(tree)[tree.nextvertex] = lat
     sequences(tree)[nleaves(tree) + tree.nextvertex] = seq
 
@@ -345,53 +347,40 @@ end
 
 export build!
 """
-    build!(rng, tree, idx)
+    build!(rng, tree)
 
 Build a coalescent tree consistent with a given marker.
 
 `tree` must only contain leaves.
 """
-function build!(rng, tree::Tree, idx = 1)
+function build! end
+
+function build!(rng, tree::Tree)
+    n = nleaves(tree)
     nv(tree) > nleaves(tree) && error("Tree contains non-leaf vertices")
 
-    _sequences = view(sequences(tree), 1:nleaves(tree))
+    ## Create internal vertices.
+    add_vertices!(graph(tree), n - 1)
 
-    derived = findall(σ -> getindex(σ, idx), _sequences)
-    wild = setdiff(range(1, nleaves(tree)), derived)
-
-    nlive = nleaves(tree)
-    nlive_derived, nlive_wild = length(derived), length(wild)
-
-    ## While there are more than 1 live derived vertex, we build two
-    ## distinct subtrees.
-    while nlive_derived > 1
-        ## Determine the type of coalescence.
-        wild_weight = nlive_wild * (nlive_wild - 1)
-        derived_weight = nlive_derived * (nlive_derived - 1)
-        derived_prob = derived_weight / (wild_weight + derived_weight)
-
-        coalescence_dist = Bernoulli(derived_prob)
-        derived_coalescence = rand(rng, coalescence_dist)
-        cvertices = derived_coalescence ? derived : wild
-        tree.logprob += logpdf(coalescence_dist, derived_coalescence)
-
-        ## Perform the coalescence.
-        tree_coalesce!(rng, tree, cvertices, nlive)
-
-        ## Update the number of live nodes.
-        nlive -= 1
-        nlive_derived -= derived_coalescence
-        nlive_wild -= !derived_coalescence
+    ## Sample coalescence vertices latitudes.
+    randexp!(rng, latitudes(tree))
+    latitudes(tree) ./= range(n - 1, 1, step = -1)
+    tree.logprob += sum((enumerate ∘ reverse)(big.(latitudes(tree)))) do (λ, t)
+        log(-expm1(-λ * t))
     end
 
-    cvertices = [derived; wild]
-    while nlive > 1
-        tree_coalesce!(rng, tree, cvertices, nlive)
-        nlive -= 1
+    ## Sample coalescence events
+    ms = MutationSampler((collect ∘ sequences)(tree, leaves(tree)))
+    for parent ∈ range(n + 1, length = n - 1)
+        child1, child2 = sample_pair!(rng, ms)
+        add_edge!(tree, parent, child1)
+        add_edge!(tree, parent, child2)
+
+        tree.core.sequences[parent] =
+            tree.core.sequences[child1] & tree.core.sequences[child2]
     end
 
-    ## Accounts for the the constant in the coalescence pprobabilities.
-    tree.logprob += (nleaves(tree) - 1) * log(2)
+    tree.logprob += ms.logprob[]
 
     tree
 end
