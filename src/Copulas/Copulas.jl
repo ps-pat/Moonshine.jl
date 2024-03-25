@@ -235,7 +235,7 @@ function loglikelihood(rng::AbstractRNG, copula::AbstractΦCopula{<:Bernoulli},
 
     for k ∈ eachindex(fs)
         genealogy = G(H; genpars...)
-        build!(rng, genealogy, idx)
+        build!(rng, genealogy)
 
         mults, dists = compute_distances(genealogy, Φ)
 
