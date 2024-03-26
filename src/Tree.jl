@@ -320,31 +320,6 @@ function sample_pair!(rng, ms)
     η1, η2
 end
 
-function tree_coalesce!(rng, tree, vertices, nlive)
-    ## Sample coalescing vertices. A + log(2) is missing, don't forget
-    ## to account for it!
-    n = length(vertices)
-    tree.logprob -= log(n) + log(n - 1)
-    shuffle!(rng, vertices)
-    child1, child2 = pop!(vertices), pop!(vertices)
-
-    ## Sample a latitude for the coalescence event.
-    Δdist = Exponential(inv(nlive - 1))
-    Δ = rand(rng, Δdist)
-    tree.logprob += logpdf(Δdist, Δ)
-    newlat = latitude(tree, nv(tree)) + Δ
-
-    ## Perform the coalescence.
-    _dad = coalesce!(tree, child1, child2, newlat)
-
-    ## Update live vertices.
-    push!(vertices, _dad)
-
-    @debug("$child1 and $child2 coalesced into $_dad at $(latitude(tree, dad))")
-
-    _dad
-end
-
 export build!
 """
     build!(rng, tree)
