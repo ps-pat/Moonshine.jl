@@ -8,7 +8,7 @@ using Distributions
 
 using StatsBase: AbstractWeights, FrequencyWeights, ProbabilityWeights, sample
 
-import Base: iterate, eltype, length, size
+import Base: iterate, eltype, length, size, isempty
 
 using RandomNumbers.PCG: PCGStateOneseq
 
@@ -26,6 +26,9 @@ struct TreeCore
     Ne::Float64
     μ_loc::Float64
 end
+
+TreeCore() = TreeCore(SimpleDiGraph{VertexType}(), [], [], [],
+                      typemin(Float64), typemin(Float64), typemin(Float64))
 
 function TreeCore(leaves::AbstractVector{Sequence};
                   positions = (collect ∘ range)(0, 1, length = length(leaves)),
@@ -72,6 +75,8 @@ mutable struct Tree <: AbstractGenealogy
     nextvertex::Int
 end
 
+Tree() = Tree(TreeCore(), typemin(BigFloat), typemin(Int))
+
 function Tree(leaves::AbstractVector{Sequence}; genpars...)
     Tree(TreeCore(leaves; genpars...), zero(BigFloat), one(Int))
 end
@@ -108,6 +113,10 @@ end
 
 export nleaves
 nleaves(tree::Tree) = (length(sequences(tree)) + 1) ÷ 2
+
+isempty(treecore::TreeCore) = isempty(treecore.sequences)
+
+isempty(tree::Tree) = isempty(tree.core)
 
 ###############################
 # AbstractGenealogy Interface #

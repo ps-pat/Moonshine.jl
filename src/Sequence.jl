@@ -22,7 +22,7 @@ end
 
 isempty(seq::Sequence) = isempty(seq.data)
 
-@generated empty(::Sequence) = Sequence(BitVector())
+@generated empty(::Sequence) = Sequence()
 
 string(sequence::Sequence) = filter(!isspace, bitstring(sequence.data))
 
@@ -98,6 +98,8 @@ end
   - To construct a Sequence from a string of bits, use `convert(Sequence, str)`
 """
 function Sequence end
+
+Sequence() = Sequence(BitVector())
 
 Sequence(::UndefInitializer, n) = Sequence(BitVector(undef, n))
 

@@ -292,6 +292,11 @@ ancestral_mask(genealogy, x::EdgeType) =
 ###################
 
 function show(io::IO, ::MIME"text/plain", genealogy::AbstractGenealogy)
+    if isempty(genealogy)
+        println(io, "Empty " * describe(genealogy))
+        return
+    end
+
     println(io, describe(genealogy) * ":")
     println(io, nleaves(genealogy), " leaves, ",
             nmarkers(genealogy), " markers")
@@ -299,6 +304,11 @@ function show(io::IO, ::MIME"text/plain", genealogy::AbstractGenealogy)
 end
 
 function show(io::IO, genealogy::AbstractGenealogy)
+    if isempty(genealogy)
+        println(io, "Empty " * describe(genealogy, false))
+        return
+    end
+
     print(io, describe(genealogy, false) * "(")
     print(io, nleaves(genealogy))
     print(io, " leaves, ")
