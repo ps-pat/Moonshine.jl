@@ -31,7 +31,7 @@ TreeCore() = TreeCore(SimpleDiGraph{VertexType}(), [], [], [],
                       typemin(Float64), typemin(Float64), typemin(Float64))
 
 function TreeCore(leaves::AbstractVector{Sequence};
-                  positions = (collect ∘ range)(0, 1, length = length(leaves)),
+                  positions = nothing,
                   seq_length = one(Float64),
                   Ne = one(Float64),
                   μ_loc = zero(Float64))
@@ -42,7 +42,12 @@ function TreeCore(leaves::AbstractVector{Sequence};
         sequences[k] = leaf
     end
 
-    positions = validate_positions(positions, (length ∘ first)(leaves))
+    if isnothing(positions)
+        positions =
+            isone(n) ? zeros(1) : (collect ∘ range)(0, 1, length = length(leaves))
+    else
+        positions = validate_positions(positions, (length ∘ first)(leaves))
+    end
 
     TreeCore(SimpleDiGraph(n), zeros(Float64, n - 1), sequences,
                 positions, seq_length, Ne, μ_loc)
@@ -52,8 +57,8 @@ function TreeCore(rng::AbstractRNG,
                   nmin::Integer, minlength::Integer,
                   nmax::Integer = 0, maxlength::Integer = 0;
                   genpars...)
-    n = iszero(nmax) ? nmin : rang(rng, nmin:nmax)
-    nmarkers = iszero(maxlength) ? minlength : rang(rng, minlength:maxlength)
+    n = iszero(nmax) ? nmin : rand(rng, nmin:nmax)
+    nmarkers = iszero(maxlength) ? minlength : rand(rng, minlength:maxlength)
 
     TreeCore([Sequence(rng, nmarkers) for _ ∈ 1:n]; genpars...)
 end
@@ -369,7 +374,7 @@ function build!(rng, tree::Tree)
     tree
 end
 
-build!(tree::Tree, idx = 1) = build!(GLOBAL_RNG, tree, idx)
+build!(tree::Tree) = build!(GLOBAL_RNG, tree)
 
 function isvalid(tree::Tree)
     n = nleaves(tree)
