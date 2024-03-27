@@ -135,7 +135,7 @@ leaves(tree::Tree) = Base.OneTo(nleaves(tree))
 ivertices(tree::Tree) = range(nleaves(tree) + 1, nv(tree))
 
 function mrca(tree::Tree)
-    any(iszero.(latitudes(tree))) ?
+    any(iszero, latitudes(tree)) ?
     zero(VertexType) : argmax(latitudes(tree)) + nleaves(tree)
 end
 
@@ -347,9 +347,9 @@ function build!(rng, tree::Tree)
     add_vertices!(graph(tree), n - 1)
 
     ## Sample coalescence vertices latitudes.
-    randexp!(rng, latitudes(tree))
-    latitudes(tree) ./= range(n - 1, 1, step = -1)
-    tree.logprob += sum((enumerate ∘ reverse)(big.(latitudes(tree)))) do (λ, t)
+    Δlatitudes = randexp!(rng, latitudes(tree)) ./ range(n - 1, 1, step = -1)
+    cumsum!(latitudes(tree), Δlatitudes)
+    tree.logprob += sum((enumerate ∘ reverse)(big.(Δlatitudes))) do (λ, t)
         log(-expm1(-λ * t))
     end
 
