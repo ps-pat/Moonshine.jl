@@ -1,6 +1,7 @@
 sequence_qc = Quickcheck("Tests Sequence Properties", serialize_fails = false)
 
-const Seq = Sequence{UInt}
+const Seq = Sequence
+# const SeqN = SequenceN
 
 ## Equality.
 @add_predicate(sequence_qc,
@@ -19,7 +20,7 @@ const Seq = Sequence{UInt}
 
 # @add_predicate(sequence_qc,
 #                "Xor commutativity",
-#                (seq1::Seq, seq2::Seq) -> seq1 ⊻ seq2 == seq2 ⊻ seq1)
+#                (seq1::SeqN{200}, seq2::SeqN{200}) -> seq1 ⊻ seq2 == seq2 ⊻ seq1)
 
 # @add_predicate(sequence_qc,
 #                "Xor associativity",
@@ -27,7 +28,7 @@ const Seq = Sequence{UInt}
 
 @add_predicate(sequence_qc,
                "Xor identity element",
-               seq::Seq -> seq ⊻ Sequence(false(length(seq))) == seq)
+               seq::Seq -> seq ⊻ Sequence(falses(length(seq))) == seq)
 
 @add_predicate(sequence_qc,
                "Xor 2-idempotency",

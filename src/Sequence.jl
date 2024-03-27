@@ -24,7 +24,7 @@ isempty(seq::Sequence) = isempty(seq.data)
 
 @generated empty(::Sequence) = Sequence()
 
-string(sequence::Sequence) = filter(!isspace, bitstring(sequence.data))
+string(sequence::Sequence) = replace(bitstring(sequence.data), r"[ :]" => "")
 
 function show(io::IO, ::MIME"text/plain", seq::Sequence)
     len = length(seq)

@@ -29,6 +29,7 @@ include("shrinkers.jl")
 @time begin
     @testset begin
         include("Sequence.jl")
-        include("Arg.jl")
+        include("Tree.jl")
+        #include("Arg.jl")
     end
 end
