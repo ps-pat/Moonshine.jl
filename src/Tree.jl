@@ -370,3 +370,58 @@ function build!(rng, tree::Tree)
 end
 
 build!(tree::Tree, idx = 1) = build!(GLOBAL_RNG, tree, idx)
+
+function isvalid(tree::Tree)
+    n = nleaves(tree)
+
+    ## Check that the latitudes of the internal vertices is increasing.
+    let (last_latitude, latitudes_iterator) = Iterators.peel(latitudes(tree))
+        for (k, latitude) ∈ enumerate(latitudes_iterator)
+            v = n + k + 1
+            if latitude < last_latitude
+                @info "Non increasing latitude" vertex = v
+                return false
+            end
+            last_latitude = latitude
+        end
+    end
+
+    ## Check that the children of every internal vertices are lesser
+    ## than itself.
+    for v ∈ ivertices(tree)
+        _children = children(tree, v)
+        all(<(v), _children) && continue
+
+        @info "Invalid ordering" vertex = v children = _children
+        return false
+    end
+
+    ## Check the number of children and number of parents of each
+    ## vertex.
+
+    ## The root must have 2 children and no parent.
+    let r = mrca(tree)
+        if !isempty(dads(tree, r)) || length(children(tree, r)) ≠ 2
+            @info "Invalid tree mrca" mrca = r parents = dads(tree, r) children = children(tree, r)
+            return false
+        end
+    end
+
+    ## Non root internal vertices must have 2 children and 1 parent.
+    for v ∈ setdiff(ivertices(tree), mrca(tree))
+        isone(length(dads(tree, v))) && length(children(tree, v)) == 2 && continue
+
+        @info "Invalid internal vertex" vertex = v parents = dads(tree, v) children = children(tree, v)
+        return false
+    end
+
+    ## Leaves must have no children and 1 parent
+    for v ∈ leaves(tree)
+        isone(length(dads(tree, v))) && isempty(children(tree, v)) && continue
+
+        @info "Invalid leaf" vertex = v parents = dads(tree, v) children = children(tree, v)
+        return false
+    end
+
+    true
+end
