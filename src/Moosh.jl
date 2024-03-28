@@ -4,8 +4,6 @@ using Base: Fix1
 
 using PrecompileTools
 
-using Transducers
-
 using StatsFuns: logtwo
 
 include("Sequence.jl")
