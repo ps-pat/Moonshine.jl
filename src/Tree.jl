@@ -249,37 +249,36 @@ function sample_pair!(rng, ms)
     nlive = ms.nlive
     P = ms.transition_matrix
 
-    ## Sample a type of item.
-    type_idx = sample(rng, eachindex(ms.types), nlive)
-    ms.logprob[] += log(nlive[type_idx]) - log(nlive.sum)
+    type_idx = 0
+    while true
+        ## Sample a type of item.
+        type_idx = sample(rng, eachindex(ms.types), nlive)
+        ms.logprob[] += log(nlive[type_idx]) - log(nlive.sum)
 
-    ## Check if there is any type greather than the one sampled with
-    ## only one live item remaining which can only coalesce with
-    ## sampled type. If so, make one of those coalesce with sampled
-    ## type.
-    can_only_coalesce_with_type = type_idx .+
-        findall(range(type_idx + 1, length(ms.types))) do k
-            ## Check if a coalescence is possible. For that to be the
-            ## case, there has to be live items and the probability of a
-            ## coalescence must be > 0.
-            iszero(nlive[k] * P[type_idx, k]) && return false
+        ## Check if there is any type greather than the one sampled with
+        ## only one live item remaining which can only coalesce with
+        ## sampled type. If so, sample a new type.
+        can_only_coalesce_with_type = type_idx .+
+            findall(range(type_idx + 1, length(ms.types))) do k
+                ## Check if a coalescence is possible. For that to be the
+                ## case, there has to be live items and the probability of a
+                ## coalescence must be > 0.
+                iszero(nlive[k] * P[type_idx, k]) && return false
 
-            ## Check if the coalescence with type_idx is the only
-            ## possibility. For that to be the case, there has to be live
-            ## items other than type_idx with coalescence probability > 0.
-            any(>(0),
-                nlive[1:end .≠ type_idx] .* P[1:end .≠ type_idx, k]) &&
-                    return false
+                ## Check if the coalescence with type_idx is the only
+                ## possibility. For that to be the case, there has to be live
+                ## items other than type_idx with coalescence probability > 0.
+                any(>(0),
+                    nlive[1:end .≠ type_idx] .* P[1:end .≠ type_idx, k]) &&
+                        return false
 
-            true
-        end
+                true
+            end
 
-    ## At that point, if there is such an item, we cancel the
-    ## coalescence event and simulate a new one.
-    ## TODO: make sampled type_idx taboo for next call.
-    isempty(can_only_coalesce_with_type) || return sample_pair!(rng, ms)
+        ## TODO: make sampled_idx type_idx taboo for next call.
+        isempty(can_only_coalesce_with_type) && break
+    end
 
-    ## Otherwise, we're good to go!
     ms.event_number[] += 1
 
     ## Conditionally sample a pair of indices.
