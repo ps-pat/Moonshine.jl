@@ -35,11 +35,14 @@ struct CoalDensity
     ## Probability of a topology on n leaves.
     ptopo_log::BigFloat
 
-    function CoalDensity(n)
+    ## Positions of the markers on [0,1].
+    positions::Vector{Float64}
+
+    function CoalDensity(n, positions = [0])
         N = big(n)
         ptopo_log = log(N) + (N - 1) * log(2) - 2 * sum(log, 2:N)
 
-        new(n, ptopo_log)
+        new(n, ptopo_log, positions)
     end
 end
 
@@ -64,7 +67,7 @@ end
 genpars(D::CoalDensity) = (Ne = zero(Float64),
                            μ_loc = zero(Float64),
                            seq_length = zero(Float64),
-                           positions = [0])
+                           positions = positions)
 
 ############################
 # Coalescent with mutation #
@@ -95,13 +98,14 @@ struct CoalMutDensity
 
     seq_length::BigFloat
 
-    CoalMutDensity(n, Ne, μ, seq_length) = new(CoalDensity(n), Ne, μ, seq_length)
+    CoalMutDensity(n, Ne, μ, seq_length, positions = [0]) =
+        new(CoalDensity(n, positions), Ne, μ, seq_length)
 end
 
 genpars(D::CoalMutDensity) = (Ne = D.Ne,
                               μ_loc = D.μ_loc,
                               seq_length = D.seq_length,
-                              positions = [0])
+                              positions = D.fC.positions)
 
 function (D::CoalMutDensity)(tree::Tree; logscale = false)
     fC = D.fC
