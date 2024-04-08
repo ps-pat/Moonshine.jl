@@ -8,8 +8,9 @@ Aqua.test_all(Moosh,
               project_extras = false,
               ambiguities = false,
               unbound_args = false,
-              piracy = false,
-              deps_compat = false)
+              piracies = false,
+              deps_compat = false,
+              persistent_tasks = false)
 
 using Test:
     @test,

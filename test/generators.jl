@@ -32,7 +32,7 @@ function generate(rng::AbstractRNG, ::Type{Tree}, n)
     seq_length = 10
     Ne = 1000
 
-    ret = [Tree(rng, 1, 1, 500, 500, seq_length = seq_length, Ne = Ne, μ_loc = μ_loc)
+    ret = [Tree(rng, 1, 1, 100, 100, seq_length = seq_length, Ne = Ne, μ_loc = μ_loc)
            for _ ∈ 1:n]
 
     for k ∈ 1:n
