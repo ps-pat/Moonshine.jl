@@ -91,12 +91,13 @@ let
         Exponential =
             ((t, λ) -> -expm1(-λ * t),
              (t, λ) -> t * exp(-λ * t),
+             (t, λ) -> -t^2 * exp(-λ * t),
              (; λ = ("rate", 1, zeroinf)),
-             "CDF of an exponential random variable."),
-        Gompertz =
-            ((t, b, η) -> -expm1(-η * expm1(b * t)), ∇gompertz,
-             (b = ("scale", 1, zeroinf), η = ("shape", 1, zeroinf)),
-             "CDF of a shifted Gompertz distributed random variable."))
+             "CDF of an exponential random variable."),)
+        # Gompertz =
+        #     ((t, b, η) -> -expm1(-η * expm1(b * t)), ∇gompertz,
+        #      (b = ("scale", 1, zeroinf), η = ("shape", 1, zeroinf)),
+        #      "CDF of a shifted Gompertz distributed random variable."))
 
 #     As = (
 #         MaxwellBoltzmann =
@@ -183,10 +184,10 @@ let
 #              (b = ("scale", 1, zeroinf), η = ("shape", 1, zeroinf)),
 #              "CDF of a shifted Gompertz distributed random variable."))
     #! format: on
-    export grad
+    export grad, hessian
 
     for (A, pars) ∈ pairs(As)
-        fun, grad, parameters, description = pars
+        fun, grad, hessian, parameters, description = pars
 
         ## Generate name
         Astring = string(A)
@@ -243,6 +244,12 @@ $description
             function grad(α::$A)
                 parameter_values = map(par -> getfield(α, par), parameters(α))
                 (t, $(args...)) -> $grad(t, $(args...))
+            end
+
+            ## Hessian
+            function hessian(α::$A)
+                parameter_values = map(par -> getfield(α, par), parameters(α))
+                (t, $(args...)) -> $hessian(t, $(args...))
             end
 
             ## AbstractAlpha interface

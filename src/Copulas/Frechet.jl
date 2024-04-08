@@ -42,14 +42,13 @@ function pdf_conditional(copula::CopulaFrechet{<:Bernoulli})
     end
 end
 
-function ∇logpdf_joint(copula::CopulaFrechet{<:Bernoulli})
+function deriv_frechet(copula::CopulaFrechet{<:Bernoulli}, deriv_fun)
     α = alpha(copula)
-    ∇α = grad(α)
+    ∇α = deriv_fun(α)
 
     function (φ, ψ, t, αpars...)
         num = ∇α(t, αpars...)
         denum = α(t, αpars...)
-
         φ ⊻ ψ && return num ./ denum
 
         if φ
@@ -60,4 +59,11 @@ function ∇logpdf_joint(copula::CopulaFrechet{<:Bernoulli})
 
         (mult .* num) ./ ( mult .* denum .- 1)
     end
+end
+
+∇logpdf_joint(copula::CopulaFrechet{<:Bernoulli}) = deriv_frechet(copula, grad)
+
+∇²logpdf_joint(copula::CopulaFrechet{<:Bernoulli}) = function (φ, ψ, t, αpars...)
+    deriv_frechet(copula, hessian)(φ, ψ, t, αpars...) .-
+        (∇logpdf_joint(copula)(φ, ψ, t, αpars...)).^2
 end

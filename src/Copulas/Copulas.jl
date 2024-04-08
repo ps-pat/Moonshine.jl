@@ -46,7 +46,6 @@ abstract type AbstractΦCopula{P<:Distribution,A<:AbstractAlpha} end
 (Logarithm of) the marginal/joint/conditional probability density
 function of the copula.
 
-
 # Implementation
 
 - Only one of `logpdf_joint` or `pdf_joint` need to be implemented.
@@ -62,8 +61,7 @@ function logpdf_marginal end,
 function pdf_joint end,
 function logpdf_joint end,
 function pdf_conditional end,
-function logpdf_conditional end,
-function ∇logpdf_joint end
+function logpdf_conditional end
 
 for pdftype ∈ ["marginal", "joint", "conditional"]
     fun_str = "pdf_" * pdftype
@@ -90,17 +88,22 @@ end
 ## Gradient
 
 export ∇logpdf_joint
+export ∇²logpdf_joint
 """
     ∇logpdf_joint(copula)
 
-Logarithmic derivative of the joint pdf.
+Logarithmic derivatives of the joint pdf.
 
 # Implementation
 
-If `∇logpdf_joint`is not implemented, automatic differentiation will be used by
-[`fit!`](@ref) if needed.
+If `∇logpdf_joint` or `∇²logpdf_joint` are not implemented, automatic
+differentiation will be used by [`fit!`](@ref) if needed.
 """
+function ∇logpdf_joint end,
+function ∇²logpdf_joint end
+
 ∇logpdf_joint(copula::AbstractΦCopula) = nothing
+∇²logpdf_joint(copula::AbstractΦCopula) = nothing
 
 export alpha
 """
