@@ -1,5 +1,3 @@
-using StaticArrays: SA
-
 using Distributions: logpdf
 
 #############

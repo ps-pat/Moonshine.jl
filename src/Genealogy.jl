@@ -13,8 +13,6 @@ using LayeredLayouts
 
 using IntervalSets
 
-using StaticArrays: SA
-
 using GeometryBasics: Point
 
 using Bumper
@@ -576,7 +574,7 @@ function coalesce!(genealogy, v1, v2, lat)
         @error "Could not add vertex to genealogy"
     _dad = nv(genealogy)
 
-    for child ∈ SA[v1, v2]
+    for child ∈ (v1, v2)
         e = Edge(_dad, child)
         add_edge!(genealogy, e)
     end
