@@ -38,7 +38,7 @@ struct CoalDensity
 
     function CoalDensity(n, positions = [0])
         N = big(n)
-        ptopo_log = log(N) + (N - 1) * log(2) - 2 * sum(log, 2:N)
+        ptopo_log = log(N) + (N - 1) * logtwo - 2 * sum(log, 2:N)
 
         new(n, ptopo_log, positions)
     end

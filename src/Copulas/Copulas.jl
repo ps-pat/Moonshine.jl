@@ -6,9 +6,7 @@ import Distributions
 
 using Random: AbstractRNG, GLOBAL_RNG
 
-using JuMP
-
-using NLopt: NLopt
+using JuMP, Ipopt
 
 using FunctionWrappers: FunctionWrapper
 
@@ -190,7 +188,11 @@ function decode_phenos(k)
     .!iszero.((k ⊻ (k >> 1)) .& (1, 2))
 end
 
-ll_bernoulli(mults, dists, f) = function (pars::T...) where T<:Real
+fun_bernoulli(mults, dists, f, ::Val{N}) where N =
+    isone(N) ? fun_bernoulli(mults, dists, f) :
+    fun_bernoulli_vector(mults, dists, f, Val(N))
+
+fun_bernoulli(mults, dists, f) = function (pars::T...) where T<:Real
     z0 = zero(promote_type(T, Float64))
 
     sum((enumerate ∘ eachcol)(mults), init = z0) do (k, mults_col)
@@ -205,9 +207,8 @@ ll_bernoulli(mults, dists, f) = function (pars::T...) where T<:Real
     end
 end
 
-score_bernoulli(mults, dists, f, npars) = function (pars::T...) where T<:Real
-    z0 = zero(promote_type(T, Float64))
-    z = isone(npars) ? z0 : fill(z0, npars)
+fun_bernoulli_vector(mults, dists, f, npars) = function (pars::T...) where T<:Real
+    z = fill(z0, npars)
 
     sum((enumerate ∘ eachcol)(mults), init = z) do (k, mults_col)
         ## Phenotypes are Gray-encoded in k - 1.
@@ -307,79 +308,75 @@ default values are:
   - `global_attrs = ("algorithm" => :GN_ESCH, "maxtime" => 5 * (length ∘ parameters)(alpha(copula)), "maxeval" => 2000)`
   - `local_attrs = ("algorithm" => :LN_NELDERMEAD, "maxtime" => 5 * (length ∘ parameters)(alpha(copula)))`
 """
+function fit! end
+
 function fit!(rng, copula::AbstractΦCopula, Φ, H, G;
-              global_attrs = ("algorithm" => :GN_DIRECT,
-                              "maxeval" => 10000),
-              local_attrs = ("algorithm" => :LD_MMA,
-                             "maxeval" => 10000),
+              n = 100,
+              solver = "mumps",
+              local_attributes = ("derivative_test" => "none",
+                                  "nlp_lower_bound_inf" => -1e-19,
+                                  "nlp_upper_bound_inf" => 1e-19),
               genpars...)
     α = alpha(copula)
 
-    ## Models
-    global_model, local_model = Model(NLopt.Optimizer), Model(NLopt.Optimizer)
+    local_model = Model(Ipopt.Optimizer)
 
-    ## Add variables to model.
+    ## Add variables to the model.
     _bounds = bounds(α)
 
     ## It is mandatory for variables to be added to the model in the order
     ## they appear in the signature of the objective function.
     for arg ∈ parameters(α)
         if arg ∈ keys(_bounds)
-            @variable(global_model, base_name = string(arg),
-                      lower_bound = first(_bounds[arg]),
-                      upper_bound = last(_bounds[arg]))
             @variable(local_model, base_name = string(arg),
                       lower_bound = first(_bounds[arg]),
                       upper_bound = last(_bounds[arg]))
         else
-            @variable(global_model, base_name = string(arg))
             @variable(local_model, base_name = string(arg))
         end
 
-        set_start_value(variable_by_name(global_model, string(arg)),
+        set_start_value(something(variable_by_name(local_model, string(arg))),
                         getparameter(α, arg))
     end
-    global_vars, local_vars = all_variables(global_model), all_variables(local_model)
 
-    ## Objective Function
-    f, ∇f = loglikelihood(rng, copula, Φ, H, G; genpars...)
-    nparameters = length(parameters(α))
-    if isnothing(∇f)
-        register(global_model, :f, nparameters, f, autodiff = true)
-        register(local_model, :f, nparameters, f, autodiff = true)
-    else
-        register(global_model, :f, nparameters, f, ∇f, autodiff = isone(nparameters))
-        register(local_model, :f, nparameters, f, ∇f, autodiff = isone(nparameters))
+    ## Objective function.
+
+    ## Create n JuMP operators and assign them to both models. Each
+    ## operator is the log-likelihood of a randomly sampled genealogy.
+    let logpdf = logpdf_joint(copula),
+        ∇logpdf = ∇logpdf_joint(copula),
+        ∇²logpdf = ∇²logpdf_joint(copula),
+        npars = (length ∘ parameters)(α)
+
+        local_model[:logliks] = Vector{NonlinearOperator}(undef, n)
+
+        for k ∈ 1:n
+            genealogy = G(H; genpars...)
+            build!(rng, genealogy)
+            mults, dists = compute_distances(genealogy, Φ)
+
+            opname = Symbol("llik" * string(k))
+            f = fun_bernoulli(mults, dists, logpdf)
+            ∇f = fun_bernoulli(mults, dists, ∇logpdf, Val(npars))
+            ∇²f = fun_bernoulli(mults, dists, ∇²logpdf, Val(npars))
+            local_model[:logliks][k] =
+                add_nonlinear_operator(local_model, npars, f, ∇f, ∇²f, name = opname)
+        end
     end
 
-    @NLobjective(global_model, Max, f(global_vars...))
-    @NLobjective(local_model, Max, f(local_vars...))
+    local_vars = all_variables(local_model)
+    @objective(local_model, Max, sum(f -> f(local_vars...), local_model[:logliks]))
 
-    ## Global Optimization
-    set_attributes(global_model, global_attrs...)
-    optimize!(global_model)
-
-    termination_status(global_model) ∈
-    (LOCALLY_SOLVED, OPTIMAL, TIME_LIMIT, ITERATION_LIMIT) ||
-        @warn "Global optimization did not converge"
-
-    ## Local Optimization
-    for (global_var, local_var) ∈ zip(global_vars, local_vars)
-        set_start_value(local_var, value(global_var))
-    end
-
-    set_attributes(local_model, local_attrs...)
+    set_attribute(local_model, "linear_solver", solver)
+    set_attributes(local_model, local_attributes...)
     optimize!(local_model)
 
-    termination_status(local_model) ∈ (LOCALLY_SOLVED, OPTIMAL) ||
-        @warn "Local optimization did not converge"
-
-    ## Store estimated values.
+    ## Store estimations.
     for (var, val) ∈ zip(Symbol.(local_vars), value.(local_vars))
         setparameter!(α, var, val)
     end
 
-    (global_model = global_model, local_model = local_model)
+    local_model
 end
 
 function fit!(copula::AbstractΦCopula, Φ, H, G; kwargs...)

@@ -166,12 +166,12 @@ let
 #               β = ("rate", 1, zeroinf)),
 #              "CDF of an exponential-logarithm distributed random variable."),
 #         LogCauchy =
-#             ((t, μ, σ) -> inv(π) * atan((log(t) - μ) / σ) + 0.5,
+#             ((t, μ, σ) -> invπ * atan((log(t) - μ) / σ) + 0.5,
 #              (μ = ("location", 0, (-Inf, Inf)),
 #               σ = ("scale", 1, zeroinf)),
 #              "CDF of a log-Cauchy distributed random variable."),
 #         Levy =
-#             ((t, c) -> erfc(sqrt(c / (2 * t))),
+#             ((t, c) -> erfc(invsqrt2 * sqrt(c / t)),
 #              (; c = ("scale", 1, zeroinf)),
 #              "CDF of a Levy distributed random variable."),
 #         Gompertz =
