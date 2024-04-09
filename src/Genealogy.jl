@@ -183,7 +183,6 @@ Distance between two vertices.
 # Implementation,
 
 Only mandatory if copulas are to be fitted on the genealogy.
-See [`loglikelihood`](@ref).
 """
 function distance end
 
@@ -196,7 +195,6 @@ Probability of the genealogy.
 # Implementation,
 
 Only mandatory if copulas are to be fitted on the genealogy.
-See [`loglikelihood`](@ref).
 """
 function prob end
 

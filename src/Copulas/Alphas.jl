@@ -26,10 +26,9 @@ Bounds for the parameters of an α.
 
 # Implementation
 
-Must return a named tuple. The key of an entry must be the name of an
-argument of `loglikelihood(::T, ...)`. The corresponding value must be a
-container of length 2 where the first and last entries are the lower and
-upper bounds respectively. The bounds
+Must return a named tuple. Keys must be symbols representing parameters. The
+corresponding value must be a container of length 2 where the first and last
+entries are lower and upper bounds for the parameter respectively.
 """
 function bounds end
 

@@ -1,4 +1,4 @@
-import StatsAPI: loglikelihood, fit!
+import StatsAPI: fit!
 
 using Combinatorics: combinations
 
@@ -7,6 +7,8 @@ import Distributions
 using Random: AbstractRNG, GLOBAL_RNG
 
 using JuMP, Ipopt
+
+using NLopt: NLopt
 
 using FunctionWrappers: FunctionWrapper
 
@@ -132,30 +134,6 @@ marginal(copula::AbstractΦCopula) = getfield(copula, :marginal_distribution)
 # Inference #
 #############
 
-export loglikelihood
-"""
-    loglikelihood(copula, Φ, genealogy)
-    loglikelihood([rng, ]copula, Φ, H, G; idx = 1, n = 1000, genpars...)
-
-Log-likelihood of a copula.
-
-Both forms return functions that take one positional argument by parameter in
-the order given by `(parameters ∘ alpha)(copula)`.
-
-# Arguments
-
-  - `rng::AbstractRNG`: random number generator
-  - `copula::AbstractΦCopula`: copula for the phenotypes
-  - `Φ`: iterable of phenotypes
-  - `H`: iterable of genetic sequences
-  - `G`: type of genealogy
-  - `idx`: index of the marker for which to build genealogies
-  - `n`: number of genealogy to sample
-  - `genpars...`: genetic parameters passed as keyword arguments to the
-    constructor of `G`
-"""
-function loglikelihood end
-
 function compute_distances(tree::Tree, Φ::AbstractVector{Bool})
     n = nleaves(tree)
 
@@ -222,104 +200,67 @@ fun_bernoulli_vector(mults, dists, f, npars) = function (pars::T...) where T<:Re
     end
 end
 
-function loglikelihood(rng::AbstractRNG, copula::AbstractΦCopula{<:Bernoulli},
-                       Φ, H, G; idx = 1, n = 1000, genpars...)
-    logpdf = logpdf_joint(copula)
-    ∇logpdf = ∇logpdf_joint(copula)
-    npars = (length ∘ parameters)(alpha(copula))
-
-    fs = Vector{FunctionWrapper{Real, NTuple{npars, Real}}}(undef, n)
-    if isone(npars)
-        ret = Real
-    else
-        ret = AbstractVector{Real}
-    end
-
-    ∇fs = Vector{FunctionWrapper{ret, NTuple{npars, Real}}}(undef, n)
-
-    for k ∈ eachindex(fs)
-        genealogy = G(H; genpars...)
-        build!(rng, genealogy)
-
-        mults, dists = compute_distances(genealogy, Φ)
-
-        fs[k] = ll_bernoulli(mults, dists, logpdf)
-
-        ∇fs[k] = score_bernoulli(mults, dists, ∇logpdf, npars)
-    end
-
-    f = function (pars::T...) where T<:Real
-        sum(f -> f(pars...)::promote_type(T, Float64), fs,
-            init = zero(promote_type(T, Float64)))
-    end
-
-    ## Gradient
-    if isone(npars)
-        ∇f = function(pars::T...) where T<:Real
-            z0 = zero(promote_type(T, Float64))
-            sum(∇f -> ∇f(pars...)::promote_type(T, Float64), ∇fs, init = z0)
-        end
-    else
-        ∇f = function (g::AbstractVector{T}, pars::T...) where T<:Real
-            fill!(g, zero(T))
-
-            for ∇f ∈ ∇fs
-                g .+= convert.(T, ∇f(pars...))
-            end
-
-            g
-        end
-    end
-
-    f, ∇f
-end
-
-function loglikelihood(copula::AbstractΦCopula, Φ, H, G; kwargs...)
-    loglikelihood(GLOBAL_RNG, copula, Φ, H, G; kwargs...)
-end
-
 export fit!
 """
-    fit!(copula, Φ, H, G; global_attrs, local_attrs, genpars...)
+    fit!([rng, ]copula, Φ, H, G; n = 10, linsolver = "mumps",
+         global_attrs, local_attrs, genpars...)
 
 Fit a copula. The domain of the parameters is assumed to be unbounded unless
-stated otherwise by `bounds(alpha(colupa))`
+stated otherwise by `bounds(alpha(colupa))`. Optimization is done in two passes:
 
-# Implementation
+ 1. global optimizations using DIRECT;
+ 2. local optimization using Ipopt.
 
-The default implementation fits parameters by maximizing the loglikelihood of
-the copula. The optimization is done in two passes:
+The algorithms are implemented by
+[NLopt](https://nlopt.readthedocs.io/en/latest/) and
+[Ipopt](https://github.com/coin-or/Ipopt) respectively.
 
- 1. global optimizations using ESCH (an evolutionary algorithm);
- 2. local optimization using LBFGS.
-    Both implementation are from the [NLopt](https://nlopt.readthedocs.io/en/latest/)
-    library. Since only finite domain is supported by ESCH, a call to
-    `bound(::T)` must return a bounded domain for each parameter of the likelihood
-    in order to use the default `fit!(::AbstractΦCopula, ...)` method.
+# Arguments
 
-## Arguments
+ - `rng`: Random number generator
+ - `copula`: Copula to fit
+ - `Φ`: Phenotypes
+ - `H`: Haplotypes
+ - `G`: Type of genealogy
+ - `n`: Number of genealogies to sample
+ - `linsolver`: Linear solver used by Ipopt
+ - `global_attrs`: attributes for the global optimizer
+ - `local_attrs`: attributes for the local optimizer
+ - `genpars`: parameters passed directly to the constructor of the genealogies.
 
-The default implementation accepts two keyword arguments `global_attrs` and
-`local_attrs` which must be iterable of attribute/value pairs. They are used to
-set the attributes of the global/local optimizer respectively. See
-[NLopt.jl documentation](https://github.com/JuliaOpt/NLopt.jl). Their
-default values are:
+# Linear Solver
 
-  - `global_attrs = ("algorithm" => :GN_ESCH, "maxtime" => 5 * (length ∘ parameters)(alpha(copula)), "maxeval" => 2000)`
-  - `local_attrs = ("algorithm" => :LN_NELDERMEAD, "maxtime" => 5 * (length ∘ parameters)(alpha(copula)))`
+Two linear solvers for Ipopt are available out of the box for Julia ≥
+1.9: MUMPS and SPRAL. If you want to use the latter, both
+OMP_CANCELLATION and OMP_PROC_BIND environment have to be set to TRUE.
+
+# Default attributes
+
+Overriden by the `global_attrs` and `local_attrs` arguments.
+
+## Global solver:
+
+ - `"maxtime" => 1`
+
+A complete list is available on
+[NLopt.jl](https://github.com/JuliaOpt/NLopt.jl).
+
+## Local solver:
+ - `"check_derivatives_for_naninf" => "yes"`
+
+A complete list is available on
+[Ipopt.jl](https://github.com/jump-dev/Ipopt.jl).
 """
 function fit! end
 
 function fit!(rng, copula::AbstractΦCopula, Φ, H, G;
               n = 100,
-              solver = "mumps",
-              local_attributes = ("derivative_test" => "none",
-                                  "nlp_lower_bound_inf" => -1e-19,
-                                  "nlp_upper_bound_inf" => 1e-19),
+              linsolver = "mumps",
+              global_attrs = (), local_attrs = (),
               genpars...)
     α = alpha(copula)
 
-    local_model = Model(Ipopt.Optimizer)
+    global_model, local_model = Model(NLopt.Optimizer), Model(Ipopt.Optimizer)
 
     ## Add variables to the model.
     _bounds = bounds(α)
@@ -328,14 +269,18 @@ function fit!(rng, copula::AbstractΦCopula, Φ, H, G;
     ## they appear in the signature of the objective function.
     for arg ∈ parameters(α)
         if arg ∈ keys(_bounds)
+            @variable(global_model, base_name = string(arg),
+                      lower_bound = first(_bounds[arg]),
+                      upper_bound = last(_bounds[arg]))
             @variable(local_model, base_name = string(arg),
                       lower_bound = first(_bounds[arg]),
                       upper_bound = last(_bounds[arg]))
         else
+            @variable(global_model, base_name = string(arg))
             @variable(local_model, base_name = string(arg))
         end
 
-        set_start_value(something(variable_by_name(local_model, string(arg))),
+        set_start_value(something(variable_by_name(global_model, string(arg))),
                         getparameter(α, arg))
     end
 
@@ -348,27 +293,59 @@ function fit!(rng, copula::AbstractΦCopula, Φ, H, G;
         ∇²logpdf = ∇²logpdf_joint(copula),
         npars = (length ∘ parameters)(α)
 
+        global_model[:logliks] = Vector{NonlinearOperator}(undef, n)
         local_model[:logliks] = Vector{NonlinearOperator}(undef, n)
+        legacy_∇fs = Vector{Function}(undef, n)
+        legacy_∇²fs = Vector{Function}(undef, n)
 
         for k ∈ 1:n
             genealogy = G(H; genpars...)
             build!(rng, genealogy)
             mults, dists = compute_distances(genealogy, Φ)
 
-            opname = Symbol("llik" * string(k))
+            opname = Symbol("l" * string(k))
             f = fun_bernoulli(mults, dists, logpdf)
             ∇f = fun_bernoulli(mults, dists, ∇logpdf, Val(npars))
+            legacy_∇fs[k] = ∇f
             ∇²f = fun_bernoulli(mults, dists, ∇²logpdf, Val(npars))
+            legacy_∇²fs[k] = ∇²f
+
+            global_model[:logliks][k] =
+                add_nonlinear_operator(local_model, npars, f, ∇f, ∇²f, name = opname)
             local_model[:logliks][k] =
                 add_nonlinear_operator(local_model, npars, f, ∇f, ∇²f, name = opname)
         end
+
+        ## Support for legacy interface :(
+        legacy_f = x -> sum(f -> f(x), global_model[:logliks])
+        legacy_∇f = x -> sum(f -> f(x), legacy_∇fs)
+        legacy_∇²f = x -> sum(f -> f(x), legacy_∇²fs)
+
+        register(global_model, :f, npars, legacy_f, legacy_∇f, legacy_∇²f)
     end
 
-    local_vars = all_variables(local_model)
+    global_vars, local_vars = all_variables(global_model), all_variables(local_model)
+    @NLobjective(global_model, Max, f(global_vars...))
     @objective(local_model, Max, sum(f -> f(local_vars...), local_model[:logliks]))
 
-    set_attribute(local_model, "linear_solver", solver)
-    set_attributes(local_model, local_attributes...)
+
+    ## Global optimization.
+    ## TODO: Switch to STOGO
+    set_attributes(global_model,
+                   "algorithm" => :GN_DIRECT,
+                   "maxtime" => 1,
+                   global_attrs...)
+    optimize!(global_model)
+
+    ## Local optimization. Warm start from the global optimization step.
+    for (global_var, local_var) ∈ zip(global_vars, local_vars)
+        set_start_value(local_var, value(global_var))
+    end
+
+    set_attributes(local_model,
+                   "linear_solver" => linsolver,
+                   "check_derivatives_for_naninf" => "yes",
+                   local_attrs...)
     optimize!(local_model)
 
     ## Store estimations.
@@ -376,7 +353,7 @@ function fit!(rng, copula::AbstractΦCopula, Φ, H, G;
         setparameter!(α, var, val)
     end
 
-    local_model
+    (global_model = global_model, local_model = local_model)
 end
 
 function fit!(copula::AbstractΦCopula, Φ, H, G; kwargs...)
