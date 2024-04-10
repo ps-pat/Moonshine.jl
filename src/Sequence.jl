@@ -264,14 +264,6 @@ function coalescence_matrix(Dist::Type{<:Distance{Float64}}, H::AbstractVector;
     transition_matrix
 end
 
-function coalescence_matrix(Dist::Type{<:Distance}, H::AbstractVector;
-                            μ = 1e-7, maximum_distance = 1, bias0 = ∞)
-    coalescence_matrix(Dist{Float64}, H,
-                       μ = μ,
-                       maximum_distance = maximum_distance,
-                       bias0 = bias0)
-end
-
 ## Hamming distance
 export Hamming
 struct Hamming{T} <: Distance{T} end

@@ -231,7 +231,7 @@ struct MutationSampler{T, W<:AbstractWeights}
     logprob::Base.RefValue{BigFloat}
 end
 
-function MutationSampler(data, Dist = Hamming, args = (), kwargs = ())
+function MutationSampler(data, Dist = Hamming{Float64}, args = (), kwargs = ())
     types = compute_types(data)
     ntypes = length(types)
 
@@ -247,41 +247,40 @@ function MutationSampler(data, Dist = Hamming, args = (), kwargs = ())
 end
 
 function sample_pair!(rng, ms)
+    ms.event_number[] += 1
+
     nlive = ms.nlive
     P = ms.transition_matrix
 
     ## Sample a type of item.
-    type_idx = sample(rng, eachindex(ms.types), nlive)
+    type_idx = something(sample(rng, eachindex(ms.types), nlive))
     ms.logprob[] += log(nlive[type_idx]) - log(nlive.sum)
 
-    ## Check if there is any type greather than the one sampled with
+    ## Check if there is any type greater than the one sampled with
     ## only one live item remaining which can only coalesce with
-    ## sampled type. If so, make one of those coalesce with sampled
-    ## type.
-    can_only_coalesce_with_type = type_idx .+
-        findall(range(type_idx + 1, length(ms.types))) do k
-            ## Check if a coalescence is possible. For that to be the
-            ## case, there has to be live items and the probability of a
-            ## coalescence must be > 0.
-            iszero(nlive[k] * P[type_idx, k]) && return false
+    ## sampled type. If any is found, switch type_idx for the greatest
+    ## element with at least 1 live item.
+    for i ∈ range(type_idx + 1, length(ms.types))
+        ## Check if a coalescence is possible. For that to be the
+        ## case, there has to be live items and the probability of a
+        ## coalescence must be > 0.
+        iszero(nlive[i]) || iszero(P[type_idx, i]) && continue
 
-            ## Check if the coalescence with type_idx is the only
-            ## possibility. For that to be the case, there has to be live
-            ## items other than type_idx with coalescence probability > 0.
-            any(>(0),
-                nlive[1:end .≠ type_idx] .* P[1:end .≠ type_idx, k]) &&
-                    return false
-
-            true
+        ## Check if the coalescence with type_idx is the only
+        ## possibility. For that to be the case, there has to be live
+        ## items other than type_idx with coalescence probability > 0.
+        for j ∈ eachindex(nlive)
+            j == type_idx && continue
+            !iszero(nlive[j]) && !iszero(P[j, i]) && @goto bypass
         end
 
-    ## At that point, if there is such an item, we cancel the
-    ## coalescence event and simulate a new one.
-    ## TODO: make sampled type_idx taboo for next call.
-    isempty(can_only_coalesce_with_type) || return sample_pair!(rng, ms)
+        ## If we reached that point (and didn't jump straight to the
+        ## bypass), there is such an item.
+        type_idx = something(findlast(!iszero, nlive))
+        break
 
-    ## Otherwise, we're good to go!
-    ms.event_number[] += 1
+        @label bypass
+    end
 
     ## Conditionally sample a pair of indices.
     if isone(nlive[type_idx])
@@ -293,7 +292,7 @@ function sample_pair!(rng, ms)
         nlive[type_idx] -= 1
 
         ## Sample mutation.
-        type_probs = ProbabilityWeights(P[:,type_idx] .* nlive)
+        type_probs = ProbabilityWeights(P[:,type_idx] .* nlive.values)
         newtype_idx = sample(rng, eachindex(ms.types), type_probs)
         ms.logprob[] += log(ms.transition_matrix[newtype_idx, type_idx])
 
