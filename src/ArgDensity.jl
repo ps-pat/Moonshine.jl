@@ -1,5 +1,7 @@
 using Distributions: logpdf
 
+using DataStructures: Stack, Queue, enqueue!, dequeue!
+
 #############
 # Interface #
 #############
@@ -139,67 +141,84 @@ struct PhenotypeDensity{T,C<:AbstractΦCopula}
     copula::C
 end
 
+function postorder_traversal(tree::Tree)
+    ## Stack used for postorder traversal.
+    vstack = Stack{eltype(tree)}(min(nleaves(tree) - 1, 1024))
+    push!(vstack, mrca(tree))
+
+    ## Queue storing vertices as visited following postorder traversal.
+    vqueue = Queue{eltype(tree)}(min(nv(tree), 1024))
+
+    ## Current and last visited vertices.
+    v = (minimum ∘ children)(tree, mrca(tree))
+    lastvisited = 0
+
+    while !isempty(vstack)
+        if iszero(v)
+            peekv = first(vstack)
+            isleaf(tree, peekv) && @goto enqueue
+
+            peekv_maxchild = (maximum ∘ children)(tree, peekv)
+
+            if peekv_maxchild ≠ lastvisited
+                v = peekv_maxchild
+            else
+                @label enqueue
+                enqueue!(vqueue, peekv)
+                lastvisited = pop!(vstack)
+            end
+        else
+            push!(vstack, v)
+            v = isleaf(tree, v) ? 0 : (minimum ∘ children)(tree, v)
+        end
+    end
+
+    vqueue
+end
+
 function (D::PhenotypeDensity)(tree::Tree)
+    n = nleaves(tree)
     ## TODO: Manage this case more cleanly
-    nleaves(tree) <= 1 && error("tree must have at least two leaves")
+    n <= 1 && error("tree must have at least two leaves")
 
-    ## Belief propagation through postorder traversal.
-    copula = D.copula
-    Φ = D.Φ
+    ## Queue of vertices to process.
+    vqueue = postorder_traversal(tree)
 
-    ## Stack used to compute the postorder traversal.
-    vertices_stack = CheapStack(eltype(tree), nv(tree))
-
-    push!(vertices_stack, (minimum ∘ children)(tree, mrca(tree)))
-    push!(vertices_stack, mrca(tree))
-    v = (maximum ∘ children)(tree, mrca(tree))
-
+    ## TODO: rewrite explanation.
     ## Stack used to store messages. Entry (i, j) contains the value
     ## of f(φ = g(i) | ψ = g(j), t) where φ and ψ are the source and
     ## destination of the message respectively and g is some functions
     ## that compute phenotype from an integer.
-    messages_stack = CheapStack(Matrix{Float64}, nv(tree))
+    mstack = Stack{Matrix{Float64}}(min(n, 1024))
 
-    ## Conditional and marginal pdfs for the phenotype.
+    ## Necessary to keep track of the order.
+    idstack = Stack{eltype(vqueue)}(min(n, 1024))
+
+    copula = D.copula
     marginal_pdf = pdf_marginal(copula)
     conditional_pdf = pdf_conditional(copula)
+    Φ = D.Φ
 
-    res = zero(Float64)
-    while !isempty(vertices_stack)
-        while !iszero(v)
-            if !isleaf(tree, v)
-                v_children = children(tree, v)
-                push!(vertices_stack, minimum(v_children))
-                push!(vertices_stack, v)
+    for _ ∈ 1:ne(tree)
+        v = dequeue!(vqueue)
+        μ = cmatrix(tree, conditional_pdf, v, Φ)
 
-                v = maximum(v_children)
-            else
-                push!(vertices_stack, v)
-                v = zero(v)
-            end
+        ## If v is an internal vertex, multiply μ by the K-R product
+        ## of the messages of its children.
+        if !isleaf(tree, v)
+            idx, idy = pop!(idstack), pop!(idstack)
+            x, y = pop!(mstack), pop!(mstack)
+
+            μ = (x ⊙ y) * μ
         end
 
-        v = pop!(vertices_stack)
-        if !isleaf(tree, v) &&
-            !isempty(vertices_stack) &&
-            (first ∘ children)(tree, v) == first(vertices_stack)
-            v2 = pop!(vertices_stack)
-            push!(vertices_stack, v)
-            v = v2
-        else # Compute message!
-            pdf = isempty(vertices_stack) ? marginal_pdf : conditional_pdf
-            μ = cmatrix(tree, pdf, v, Φ)
-
-            if !isleaf(tree, v)
-                μ = (pop!(messages_stack) ⊙ pop!(messages_stack)) * μ
-            end
-            push!(messages_stack, μ)
-
-            v = zero(v)
-        end
+        push!(mstack, μ)
+        push!(idstack, v)
     end
 
-    pop!(messages_stack)
+    ## Final message, computed with the marginal pdf.
+    v = dequeue!(vqueue)
+    (pop!(mstack) ⊙ pop!(mstack)) * cmatrix(tree, marginal_pdf, v, Φ)
 end
 
 phenotypes(D::PhenotypeDensity) = D.Φ
@@ -224,8 +243,10 @@ function cmatrix(tree::Tree, pdf, σ, Φ)
     ## The phenotype of σ might be known if it is a leaf.
     if isleaf(tree, σ)
         φσ = Φ[σ]
-        φsσ = ismissing(φσ) ? [false, true] : [φσ]
+        ismissing(φσ) && @goto unknownpheno2
+        φsσ = [φσ]
     else # non-root internal vertex
+        @label unknownpheno2
         φsσ = [false, true]
     end
 

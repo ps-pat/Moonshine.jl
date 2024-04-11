@@ -1,6 +1,6 @@
 using Graphs
 
-import Graphs: add_vertex!, add_edge!, rem_edge!
+import Graphs: add_vertex!, add_edge!, rem_edge!, ne
 
 using Random
 
@@ -8,7 +8,7 @@ using Distributions
 
 using StatsBase: AbstractWeights, FrequencyWeights, ProbabilityWeights, sample
 
-import Base: iterate, eltype, length, size, isempty
+import Base: iterate, length, size, isempty
 
 using RandomNumbers.PCG: PCGStateOneseq
 
@@ -214,6 +214,59 @@ end
 
 export mut_rate
 mut_rate(tree::Tree, scaled = true) = tree.core.μ_loc * (scaled ? 4 * Ne(tree) : 1)
+
+export depth
+"""
+    depth(tree, v)
+
+Depth of a vertex.
+"""
+function depth(tree, v)
+    d = zero(Int)
+    _mrca = mrca(tree)
+
+    while v ≠ _mrca
+        v = dad(tree, v)
+        d += 1
+    end
+
+    d
+end
+
+export leaves_permutation
+"""
+    leaves_permutation(tree)
+    leaves_permutation(tree, vs)
+
+Permutation of (a subset of ) 1:n induced by a tree.
+"""
+function leaves_permutation(tree, vs)
+    sort!(vs)
+    adepths = Dict{Int, Vector{eltype(tree)}}()
+
+    for v ∈ vs
+        d = depth(tree, v)
+        if !haskey(adepths, d)
+            adepths[d] = Vector{eltype(tree)}()
+        end
+        push!(adepths[d], v)
+    end
+
+    depths = (sort ∘ collect)(keys(adepths))
+
+    ret = similar(vs)
+    retptr = 1
+    @inbounds for d ∈ depths
+        for v ∈ adepths[d]
+            ret[retptr] = v
+            retptr += 1
+        end
+    end
+
+    ret
+end
+
+leaves_permutation(tree) = leaves_permutation(tree, leaves(tree))
 
 #################
 # Tree Building #

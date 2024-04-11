@@ -43,8 +43,7 @@ IsChain{G}(fG, haplotypes::AbstractVector{Sequence}, n) where G =
     IsChain{G}(fG, haplotypes::AbstractVector{Sequence}, n, rand(UInt128))
 
 ## ChunkSplitters
-chunks(x::IsChain, nchunks::Int, type = :batch) =
-    chunks(x.genealogies, nchunks, type)
+chunks(x::IsChain; kwargs...) = chunks(x.genealogies; kwargs...)
 
 view(chain::IsChain, idx) = view(chain.genealogies, idx)
 
@@ -144,13 +143,14 @@ function sample_dist(chain::IsChain{G,H}, fΦ::P) where {G,H,P<:PhenotypeBernoul
     fG = chain.fG
     nmissing = sum(ismissing.(phenotypes(fΦ)))
 
-    res_parts = map(chunks(chain, Threads.nthreads())) do (rg, _)
+    res_parts = map(chunks(chain, n = Threads.nthreads())) do (rg, _)
         @spawn begin
             local acc = zeros(BigFloat, Int(exp2(nmissing)))
 
             for genealogy ∈ view(chain, rg)
                 local log_fΦ = log.(fΦ(genealogy))
-                local log_w =  fG(genealogy, logscale = true) - prob(genealogy, logscale = true)
+                local log_w =  fG(genealogy, logscale = true) -
+                    prob(genealogy, logscale = true)
 
                 acc .+= exp.(log_fΦ .+ log_w)
             end
@@ -159,7 +159,10 @@ function sample_dist(chain::IsChain{G,H}, fΦ::P) where {G,H,P<:PhenotypeBernoul
         end
     end
 
-    res = sum(fetch, res_parts)
+    res = zeros(BigFloat, Int(exp2(nmissing)))
+    for res_part ∈ res_parts
+        res += fetch(res_part)::Vector{BigFloat}
+    end
 
     BernoulliMulti(res ./ sum(res, dims = 1))
 end
