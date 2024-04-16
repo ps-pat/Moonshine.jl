@@ -6,6 +6,8 @@ using Distributions: BetaPrime, Chi, Chisq, cdf
 
 using StatsFuns
 
+using LinearAlgebra: Symmetric
+
 export AbstractAlpha
 """
     AbstractAlpha
@@ -60,232 +62,317 @@ function setparameter! end
 # Alpha Factory #
 #################
 
-let
-    zeroinf = (1e-4, 1e2)
-    zeroone = (1e-4, 1 - 1e-4)
+export grad, grad!, hessian, hessian!
 
-    ## Maxwell-Boltzmann
-    maxwellboltzmann_cdf = function (t, a)
-        erf(t * invsqrt2 / a) - inv(sqrthalfπ) * (t / a) * exp(-t^2 * 0.5 / a^2)
-    end
+export @Alpha
+"""
+    @Alpha(A, f, ∇f, ∇²f, description, parameters...)
 
-    ## Folded Normal
-    foldednormal_cdf = function (t, μ, σ)
-        c = invsqrt2 / σ
+Generate types for simple alpha functions.
 
-        0.5 * (erf((t + μ) * c) + erf((t - μ) * c))
-    end
+# Arguments
 
-    ## Gompertz
-    ∇gompertz = function (t, b, η)
-        p = b * t
-        q = expm1(p)
-        s = exp(-η * q)
+  - `A`: name of the function; "Alpha" will be prepended to the name of the type
+    automatically
+  - `f`: alpha function; its signature must be `(t, αpars...)`
+  - `∇f`, `∇²f`: gradient and Hessian of `f`; details below
+  - `description`: short description
+  - `parameters...`: optimizable parameters; details below
 
-        [η * t * s * exp(p), q * s]
-    end
+# Gradient & Hessian
+## One parameter
 
-    #! format: off
-    As = (
-        Exponential =
-            ((t, λ) -> -expm1(-λ * t),
-             (t, λ) -> t * exp(-λ * t),
-             (t, λ) -> -t^2 * exp(-λ * t),
-             (; λ = ("rate", 1, zeroinf)),
-             "CDF of an exponential random variable."),)
-        # Gompertz =
-        #     ((t, b, η) -> -expm1(-η * expm1(b * t)), ∇gompertz,
-        #      (b = ("scale", 1, zeroinf), η = ("shape", 1, zeroinf)),
-        #      "CDF of a shifted Gompertz distributed random variable."))
+Signature of both functions must be the same as for `f`. Functions must return
+the first and second derivatives of `f`.
 
-#     As = (
-#         MaxwellBoltzmann =
-#             (maxwellboltzmann_cdf,
-#              (; a = ("scale", 1, zeroinf)),
-#              "CDF of a Maxwell-Boltzmann distributed random variable."),
-#         BetaPrime =
-#             ((t, a, b) -> cdf(BetaPrime(a, b), t),
-#              (a = ("shape", 1, zeroinf), b = ("shape", 1, zeroinf)),
-#              "CDF of a beta prime random variable."),
-#         Dagum =
-#             ((t, p, a, b) -> inv(1 + (b / t)^a)^p,
-#              (p = ("shape", 1, zeroinf),
-#               a = ("shape", 1, zeroinf),
-#               b = ("scale", 1, zeroinf)),
-#              """
-# CDF of a Dagum distributed random variable.
+## Multiple parameters
+### Gradient
 
-# See also [`AlphaLogLogistic`](@ref) for the p = 1 constrained case.
-#     """),
-#         LogLogistic =
-#             ((t, a, b) -> inv(1 + b * inv(t)^a),
-#              (a = ("shape", 1, (1e-1, 1e1)),
-#               b = ("scale", 1, (1e-1, 1e1))),
-#              """
-# CDF of a log-logistic distributed random variable.
+Signature must be `(g, scale, t, αpars...)`. `∇f` must mutate vector `g` by
+adding the gradient evaluated at point `(t, αpars...)` multiplied by scalar
+`scale` to it.
 
-# See also [`AlphaDagum`](@ref) for a 3 parameters parametrization.
-#     """),
-#         Pareto =
-#             ((t, σ, ξ) -> 1 - (1 + ξ * t / σ)^(-inv(ξ)),
-#              (σ = ("scale", 1, zeroinf), ξ = ("scale", 1, zeroinf)),
-#              """
-# CDF of a generalized Pareto distributed random variable with μ = 0.
+### Hessian
 
-# See also [`AlphaLomax`](@ref).
-#     """),
-#         FoldedNormal =
-#             (foldednormal_cdf,
-#              (μ = ("location", 0, (0, last(zeroinf))),
-#               σ = ("scale", 1, zeroinf)),
-#              "CDF of a folded-normal distributed random variable"),
-#         Lomax =
-#             ((t, a, λ) -> 1 - (1 + t / λ)^(-a),
-#              (a = ("shape", 1, zeroinf), λ = ("scale", 1, zeroinf)),
-#              """
-# CDF of a Lomax distributed random variable. Special case of the generalized Pareto distribution.
+Signature must be `(g, scale, scale2, mult, t, αpars...)`. `∇²f` must mutate
+the lower triangle of matrix `H` by adding v_ij to `H[i, j]` where
 
-# See also [`AlphaPareto`](@ref).
-#     """),
-#         Rayleigh =
-#             ((t, σ) -> 1 - exp(-t^2 / (2 * σ^2)),
-#              (;σ = ("scale", 1, zeroinf)),
-#              "CDF of a Rayleigh distributed random variable."),
-#         Chi =
-#             ((t, k) -> cdf(Chi(k), t),
-#              (;k = ("degrees of freedom", 1, zeroinf)),
-#              "CDF of a chi distributed random variable."),
-#         Chisq =
-#             ((t, k) -> cdf(Chisq(k), t),
-#              (;k = ("degrees of freedom", 1, zeroinf)),
-#              "CDF of a chi-squared distributed random variable."),
-#         ExpLog =
-#             ((t, p, β) -> 1 - log(1 - (1 - p) * exp(-β * t)) / log(p),
-#              (p = ("probability", 0.5, zeroone),
-#               β = ("rate", 1, zeroinf)),
-#              "CDF of an exponential-logarithm distributed random variable."),
-#         LogCauchy =
-#             ((t, μ, σ) -> invπ * atan((log(t) - μ) / σ) + 0.5,
-#              (μ = ("location", 0, (-Inf, Inf)),
-#               σ = ("scale", 1, zeroinf)),
-#              "CDF of a log-Cauchy distributed random variable."),
-#         Levy =
-#             ((t, c) -> erfc(invsqrt2 * sqrt(c / t)),
-#              (; c = ("scale", 1, zeroinf)),
-#              "CDF of a Levy distributed random variable."),
-#         Gompertz =
-#             ((t, b, η) -> -expm1(-η * expm1(b * t)),
-#              (t, b, η) -> b * η * exp(η + b * t - η * exp(b * t)),
-#              (b = ("scale", 1, zeroinf), η = ("shape", 1, zeroinf)),
-#              "CDF of a shifted Gompertz distributed random variable."),
-#         GompertzShifted =
-#             ((t, b, η) -> -expm1(-b * t) * exp(-η * exp(-b * t)),
-#              (b = ("scale", 1, zeroinf), η = ("shape", 1, zeroinf)),
-#              "CDF of a shifted Gompertz distributed random variable."))
-    #! format: on
-    export grad, hessian
+vij = `scale * f_ij(t, αpars...) + f_i(t, αpars...) * f_i(t, αpars...) * (scale2 - scale^2)`.
 
-    for (A, pars) ∈ pairs(As)
-        fun, grad, hessian, parameters, description = pars
+`f_i`, `f_j` and `f_ij` are partial derivatives of `f`.
 
-        ## Generate name
-        Astring = string(A)
-        if length(Astring) < 5 || Astring[1:5] != "Alpha"
-            A = Symbol("Alpha" * Astring)
-        end
+#### JuMP compatibility warning!
 
-        ## Generate fields
-        fields = [quote
-                      $parameter::Float64
-                      $(Symbol(string(parameter) * "bounds"))::NTuple{2,Float64}
-                  end
-                  for parameter ∈ keys(parameters)]
-
-        ## Generate docstring.
-        docstring = """
-$A
-
-$description
+`∇²f` must mutate **only the lower triangle of the matrix**. Mutating
+`H[i, j]` where j > i may cause undefined behaviour.
 
 # Parameters
-    """
+Each of those arguments must have the structure
 
-        for (key, val) ∈ pairs(parameters)
-            docstring *= "\n- `$(string(key))::Float64`: $(first(val))"
-        end
+`arg = ("type", default_value, (lower_bound, upper_bound))`.
 
-        ## Generate methods signature
-        args = [:($(parameter)) for parameter ∈ keys(parameters)]
-        default_bounds = [:($(last(p))) for p ∈ values(parameters)]
-        complete_args = mapreduce(vcat, vcat, args, default_bounds)
+For instance, the rate parameter of the exponential alpha is provided by
 
-        @eval begin
-            export $A
-            @doc $docstring
+`λ = ("rate", 1, (1e-6, 10))`.
+"""
+macro Alpha(A, f, ∇f, ∇²f, description, parameters...)
+    ## Generate name
+    A_string = string(A)
+    if length(A_string) < 5 || A_string[1:5] != "Alpha"
+        A = Symbol("Alpha" * A_string)
+    end
+
+    ## Arguments
+    args = [:($(first(parameter.args))) for parameter ∈ parameters]
+    nargs = length(args)
+    default_bounds = [:($(last(parameter.args).args[3])) for parameter ∈ parameters]
+    complete_args = mapreduce(vcat, vcat, args, default_bounds)
+
+    ## Docstring.
+    docstring_parameters = ""
+    for parameter ∈ parameters
+        arg = string(first(parameter.args))
+        type = string(last(parameter.args).args[1])
+        docstring_parameters *= "\n- `$(arg)::Float64`: $type"
+    end
+
+    ## Fields.
+    fields = [quote
+                  $(parameter.args[1])::Float64
+                  $(Symbol(string(parameter.args[1]) * "bounds"))::NTuple{2, Float64}
+              end
+              for parameter ∈ parameters]
+
+    ## Constructors
+    constructors = [quote
+                        function $A()
+                            arguments = mapreduce(vcat, $parameters) do parameter
+                                values = last(parameter.args).args
+                                init = values[2]
+                                bounds = Tuple(values[3].args)
+
+                                init, bounds
+                            end
+
+                            mod = $nargs > 1 ? Iterators.flatten : identity
+                            $A(mod(arguments)...)
+                        end
+
+                        $A($(args...)) = $A($(complete_args...))
+                    end
+                    for parameter ∈ parameters]
+
+    esc(quote
+            @doc """
+    $(string($A))
+
+$(string($description))
+
+# Parameters
+""" * $docstring_parameters
             mutable struct $A <: AbstractAlpha
                 $(fields...)
             end
 
-            # Constructors
-            $A() = $A(mapreduce(x -> getindex(x, 2), vcat, $parameters)...)
-
-            $A($(args...)) = $A($(complete_args...))
+            ## Constructors
+            $(constructors...)
 
             ## Evaluation
-            (α::$A)(t, $(args...)) = $fun(t, $(args...))
+            (α::$A)(t, $(args...)) = $f(t, $(args...))
 
+            ## TODO: make such function for gradient and hessian too.
             function (α::$A)(t)
                 parameter_values = map(par -> getfield(α, par), parameters(α))
                 α(t, parameter_values...)
             end
 
-            ## Gradient
-            function grad(α::$A)
-                parameter_values = map(par -> getfield(α, par), parameters(α))
-                (t, $(args...)) -> $grad(t, $(args...))
-            end
+            ## Derivatives
+            ## TODO: do that more elegantly, probably outside of quote.
+            if $nargs > 1
+                grad!(α::$A) = (g, scale, t, $(args...)) ->
+                    $∇f(g, scale, t, $(args...))
 
-            ## Hessian
-            function hessian(α::$A)
-                parameter_values = map(par -> getfield(α, par), parameters(α))
-                (t, $(args...)) -> $hessian(t, $(args...))
+                grad(α::$A) = function (t::T, $(args...)) where T
+                    g = zeros(T, $nargs)
+                    grad!(α)(g, 1, t, $(args...))
+                    g
+                end
+
+                hessian!(α::$A) = (H, scale, scale2, mult, t, $(args...)) ->
+                    $∇²f(H, scale, scale2, mult, t, $(args...))
+
+                hessian(α::$A) = function (t::T, $(args...)) where T
+                    H = zeros(T, $nargs, $nargs)
+                    hessian!(α)(H, 1, 1, 1, t, $(args...))
+                    Symmetric(H, :L)
+                end
+            else
+                grad(α::$A) = (t, $(args...)) -> $∇f(t, $(args...))
+
+                hessian(α::$A) = (t, $(args...)) -> $∇²f(t, $(args...))
             end
 
             ## AbstractAlpha interface
             function bounds(α::$A)
-                bs = map(p -> getfield(α, Symbol(string(p) * "bounds")),
+                bs = map(p -> getfield(α, Symbol(string(p) * "bounds"))::NTuple{2, Float64},
                          parameters(α))
                 NamedTuple{parameters(α)}(Tuple(bs))
             end
 
             @generated parameters(::$A) = Tuple($args)
 
-            ## TODO: Skip type assertion
             getparameter(α::$A, parameter) = getfield(α, parameter)::Float64
 
             function setparameter!(α::$A, parameter, value)
                 setfield!(α, parameter, convert(Float64, value))
             end
-        end
-    end
+        end)
 end
 
-## TODO: Implement phase-type distribution.
-## Phase-type distribution
-mutable struct AlphaPhaseType <: AbstractAlpha
-    α::Vector{Float64}
-    S::Matrix{Float64}
+## Exponential
+export AlphaExponential
+
+const exponential = (t, λ) -> -expm1(-λ * t)
+const ∇exponential = (t, λ) -> t * exp(-λ * t)
+const ∇²exponential = (t, λ) -> -t^2 * exp(-λ * t)
+const exponential_description = "CDF of an exponential random variable."
+@Alpha(Exponential, exponential, ∇exponential, ∇²exponential,
+       exponential_description,
+       λ = ("rate", 1, (1e-6, 10)))
+
+## Gompertz
+export AlphaGompertz
+
+const gompertz = (t, η, b) -> -expm1(-η * expm1(b * t))
+
+const ∇gompertz = function (g, scale, t, η, b)
+    p = b * t
+    q = expm1(p)
+    s = exp(-η * q)
+
+    g[1] += q * s * scale
+    g[2] += η * t * exp(p) * s * scale
+    g
 end
 
-function AlphaPhaseType(n)
-    α = ones(n) / n
+const ∇²gompertz = function (H, scale, scale2, mult, t::T, η, b) where T
+    ∇α = zeros(T, 2)
+    ∇gompertz(∇α, 1, t, η, b)
 
-    S = zeros(n, n)
-    for k ∈ 1:n
-        S[k, k] = -1
-    end
+    p = b * t
+    q = expm1(p)
+    s = exp(-η * q)
 
-    AlphaPhaseType(α, S)
+    H[1, 1] += (-q^2 * s *
+        scale + ∇α[1]^2 * (scale2 - scale^2)) * mult
+    H[2, 2] += (η * t^2 * exp(p) * s * (1 - η * exp(b * t)) *
+        scale + ∇α[2]^2 * (scale2 - scale^2)) * mult
+    H[2, 1] += (t * exp(p) * s * (1 - η * q) *
+        scale + ∇α[1] * ∇α[2] * (scale2 - scale^2)) * mult
+
+    H
 end
 
-## TODO: Implement metalog distribution.
+const gompertz_description = "CDF of a Gompertz distributed random variable."
+
+@Alpha(Gompertz, gompertz, ∇gompertz, ∇²gompertz,
+       gompertz_description,
+       η = ("shape", 1, (1e-6, 10)), b = ("scale", 1, (1e-6, 10)))
+
+## Maxwell-Boltzmann
+export AlphaMaxwellBoltzmann
+
+const mb = function(t, a)
+    p = t / a
+    erf(invsqrt2 * p) - inv(sqrthalfπ) * p * exp(-0.5 * p^2)
+end
+
+const ∇mb = (t, a) -> -inv(sqrthalfπ) * (t^3 / a^4) * exp(-0.5 * (t / a)^2)
+
+const ∇²mb = (t, a) ->
+    inv(sqrthalfπ) * (t^3 / a^7) * (2a - t) * (2a + t) * exp(-0.5 * (t / a)^2)
+
+const mb_description = "CDF of a Maxwell-Boltzmann distributed random variable."
+
+@Alpha(MaxwellBoltzmann, mb, ∇mb, ∇²mb,
+       mb_description,
+       a = ("scale", 1, (1e-6, 10)))
+
+## Fréchet
+export AlphaFrechet
+
+const frechet = (t, a, s) -> exp(-(s / t)^a)
+
+const ∇frechet = function (g, scale, t, a, s)
+    r = s / t
+    c = r^a * exp(-r^a)
+
+    g[1] -= log(r) * c * scale
+    g[2] -= (a / s) * c * scale
+
+    g
+end
+
+const ∇²frechet = function (H, scale, scale2, mult, t::T, a, s) where T
+    ∇α = zeros(T, 2)
+    ∇frechet(∇α, 1, t, a, s)
+
+    r = s / t
+    c = r^a * exp(-r^a)
+    r1 = r^a - 1
+    l = log(r)
+    q = r1 - t
+
+    H[1, 1] += (l^2 * r1 * c *
+        scale + ∇α[1]^2 * (scale2 - scale^2)) * mult
+    H[2, 2] += ((a / s^2) * (a * r1 + 1) * c *
+        scale + ∇α[2]^2 * (scale2 - scale^2)) * mult
+    H[2, 1] += ((a * r1 * l - 1) / s * c *
+        scale + ∇α[1] * ∇α[2] * (scale2 - scale^2)) * mult
+    H
+end
+
+const frechet_description = "CDF of a Frechet distributed random variable."
+
+@Alpha(Frechet, frechet, ∇frechet, ∇²frechet,
+       frechet_description,
+       a = ("shape", 1, (1e-6, 10)), s = ("scale", 1, (1e-6, 10)))
+
+## Lomax
+
+export AlphaLomax
+
+const lomax = (t, a, λ) -> 1 - inv(1 + t / λ)^a
+
+const ∇lomax = function (g, scale, t, a, λ)
+    q = 1 + t / λ
+    qa = inv(q)^a
+
+    g[1] += qa * log(q) * scale
+    g[2] -= a * t * qa / (λ * (λ + t)) * scale
+    g
+end
+
+const ∇²lomax = function(H, scale, scale2, mult, t::T, a, λ) where T
+    ∇α = zeros(T, 2)
+    ∇lomax(∇α, 1, t, a, λ)
+
+    q = 1 + t / λ
+    logq = log(q)
+    qa = inv(q)^a
+    λt = λ * (λ + t)
+
+    H[1, 1] += (-qa * logq^2 *
+        scale + ∇α[1]^2 * (scale2 - scale^2)) * mult
+    H[2, 2] += (qa * a * t * (2λ + (1 - a)t) / λt^2 *
+        scale + ∇α[2]^2 * (scale2 - scale^2)) * mult
+    H[2, 1] += (qa * t * (logq * a - 1) / λt *
+        scale + ∇α[1] * ∇α[2] * (scale2 - scale^2)) * mult
+    H
+end
+
+const lomax_description = "CDF of a Lomax distributed random variable."
+
+@Alpha(Lomax, lomax, ∇lomax, ∇²lomax,
+       lomax_description,
+       a = ("shape", 1, (1e-6, 1e6)), λ = ("scale", 1, (1e-6, 1e6)))

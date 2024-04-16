@@ -10,7 +10,7 @@ using JuMP, Ipopt
 
 using NLopt: NLopt
 
-using FunctionWrappers: FunctionWrapper
+using StrideArrays
 
 ###################
 # Packaged Alphas #
@@ -85,25 +85,96 @@ function pdf_marginal(copula::AbstractΦCopula{<:Bernoulli})
     φ -> φ ? p : 1 - p
 end
 
-## Gradient
+## Gradient & Hessian
+
+export ∇scale, ∇²scale
+"""
+    ∇scale
+    ∇²scale
+
+Functions evaluating to the scaling factors used for the application
+of the chain rule. Specifically:
+
+  - `∇scale`: f'(α) / f(α)
+  - `∇scale`: f''(α) / f(α)
+"""
+function ∇scale end,
+function ∇²scale end
 
 export ∇logpdf_joint
 export ∇²logpdf_joint
 """
     ∇logpdf_joint(copula)
+    ∇²logpdf_joint(copula)
 
-Logarithmic derivatives of the joint pdf.
+Logarithmic derivatives of the joint pdf. A generic implementation is
+provided for `AbstractΦCopula{<:Bernoulli}` that only requires
+implementations of [`∇scale`](@ref) and [`∇²scale`](@ref).
 
 # Implementation
+## One parameters
 
-If `∇logpdf_joint` or `∇²logpdf_joint` are not implemented, automatic
-differentiation will be used by [`fit!`](@ref) if needed.
+Both methods should return a that evaluate the proper logarithmic
+derivative at the given point.
+
+## Two parameters
+
+Both methods should return a function that mutate a vector/matrix by
+adding the value of the gradient/hessian evaluated at the specified
+point to it.
+
+# JuMP compatibility warning!
+
+`∇²logpdf_joint(copula)` must mutate **only the lower triangle of the matrix**.
+Mutating `H[i, j]` where j > i may cause undefined behaviour.
 """
 function ∇logpdf_joint end,
 function ∇²logpdf_joint end
 
-∇logpdf_joint(copula::AbstractΦCopula) = nothing
-∇²logpdf_joint(copula::AbstractΦCopula) = nothing
+function ∇logpdf_joint(copula::AbstractΦCopula)
+    α = alpha(copula)
+
+    if (length ∘ parameters)(α) > 1
+        function (g, φ, ψ, mult, t, αpars...)
+            ∇α! = grad!(α)
+            σ = ∇scale(copula)(φ, ψ, t, αpars...)
+            ∇α!(g, σ * mult, t, αpars...)
+        end
+    else
+        function (φ, ψ, t, αpars...)
+            ∇α = grad(α)
+            σ = ∇scale(copula)(φ, ψ, t, αpars...)
+            σ * ∇α(t, αpars...)
+        end
+    end
+end
+
+function ∇²logpdf_joint(copula::AbstractΦCopula)
+    α = alpha(copula)
+
+    if (length ∘ parameters)(α) > 1
+        function (H, φ, ψ, mult, t, αpars...)
+            ∇α = grad(α)
+            ∇²α! = hessian!(α)
+
+            σ = ∇scale(copula)(φ, ψ, t, αpars...)
+            σ2 = ∇²scale(copula)(φ, ψ, t, αpars...)
+
+            ∇²α!(H, σ, σ2, mult, t, αpars...)
+        end
+    else
+        function (φ, ψ, t, αpars...)
+            ∇α = grad(α)
+            ∇²α = hessian(α)
+
+            σ = ∇scale(copula)(φ, ψ, t, αpars...)
+            σ2 = ∇²scale(copula)(φ, ψ, t, αpars...)
+            μ = ∇α(t, αpars...)^2 * (σ2 - σ^2)
+
+            σ * ∇²α(t, αpars...) + μ
+        end
+    end
+end
 
 export alpha
 """
@@ -134,14 +205,17 @@ marginal(copula::AbstractΦCopula) = getfield(copula, :marginal_distribution)
 # Inference #
 #############
 
-function compute_distances(tree::Tree, Φ::AbstractVector{Bool})
+function compute_mults(tree::Tree, Φ::AbstractVector{Bool})
     n = nleaves(tree)
 
-    ## 0-1 matrix of ancestors for leaves. Entry i, j is 1 iff leaf j
+    ## 0-1 matrix of ancestors for leaves. Entry i, j is 1 iff leaf ij
     ## has vertex n + i in its ancestry. Since every leaf has vertex
     ## 2n - 1 (the root) as an ancestor, corresponding row is not
-    ## included in the matrix.
-    ancestry = falses(n - 2, n)
+    ## included in the matrix. First dimension is padded so that its
+    ## length is a multiple of 64.
+    nrow = n - 2 + 64 - (n - 2) % 64
+    nchunks_byrow = nrow ÷ 64
+    ancestry = falses(nrow, n)
 
     @inbounds for ivertex ∈ Iterators.drop(reverse(ivertices(tree)), 1)
         descendant_leaves = filter(<=(nleaves(tree)), descendants(tree, ivertex))
@@ -149,16 +223,30 @@ function compute_distances(tree::Tree, Φ::AbstractVector{Bool})
     end
 
     ## mults stores the multiplicity of a distance for a given phenotypes pair.
-    mults = zeros(Int, nivertices(tree), 3)
-    dists = 2 .* latitudes(tree)
+    mults = StrideArray{Int}(undef, nivertices(tree), StaticInt(3))
+    fill!(mults, 0)
 
-    @inbounds for (i, j) ∈ combinations(leaves(tree), 2)
-        @views line = something(findfirst(ancestry[:,i] .& ancestry[:,j]), n - 1)
-        col = Φ[i] + Φ[j] + 1
-        mults[line, col] += 1
+    @inbounds for i ∈ range(0, length = n - 2)
+        firsti = div(i * nrow + 1, 64, RoundUp)
+        for j ∈ range(i + 1, n - 1)
+            firstj = div(j * nrow + 1, 64, RoundUp)
+            line = n - 1
+            col = Φ[i + 1] + Φ[j + 1] + 1
+
+            for k ∈ range(0, length = nchunks_byrow)
+                p = trailing_zeros(
+                    ancestry.chunks[firsti + k] &
+                        ancestry.chunks[firstj + k]) + 1
+                if p < 64
+                    line = k * 64 + p
+                    break
+                end
+            end
+            mults[line, col] += 1
+        end
     end
 
-    mults, dists
+    mults
 end
 
 function decode_phenos(k)
@@ -168,10 +256,10 @@ end
 
 fun_bernoulli(mults, dists, f, ::Val{N}) where N =
     isone(N) ? fun_bernoulli(mults, dists, f) :
-    fun_bernoulli_vector(mults, dists, f, Val(N))
+    fun_bernoulli_multi(mults, dists, f, N)
 
 fun_bernoulli(mults, dists, f) = function (pars::T...) where T<:Real
-    z0 = zero(promote_type(T, Float64))
+    z0 = zero(T)
 
     sum((enumerate ∘ eachcol)(mults), init = z0) do (k, mults_col)
         ## Phenotypes are Gray-encoded in k - 1.
@@ -185,19 +273,19 @@ fun_bernoulli(mults, dists, f) = function (pars::T...) where T<:Real
     end
 end
 
-fun_bernoulli_vector(mults, dists, f, npars) = function (pars::T...) where T<:Real
-    z = fill(z0, npars)
+fun_bernoulli_multi(mults, dists, f!, npars) = function (M, pars...)
+    for j ∈ axes(mults, 2)
+        φ1, φ2 = decode_phenos(j)
 
-    sum((enumerate ∘ eachcol)(mults), init = z) do (k, mults_col)
-        ## Phenotypes are Gray-encoded in k - 1.
-        φ1, φ2 = decode_phenos(k)
+        for i ∈ axes(mults, 1)
+            mult = mults[i, j]
+            iszero(mult) && continue
 
-        sum(zip(mults_col, dists), init = z) do (mult, dist)
-            iszero(mult) && return z
-
-            mult .* f(φ1, φ2, dist, pars...)
+            f!(M, φ1, φ2, mult, dists[i], pars...)
         end
     end
+
+    M
 end
 
 export fit!
@@ -253,14 +341,16 @@ A complete list is available on
 """
 function fit! end
 
-function fit!(rng, copula::AbstractΦCopula, Φ, H, G;
+function fit!(rng, copula::AbstractΦCopula{<:Bernoulli}, Φ, H, G;
               n = 100,
               linsolver = "mumps",
               global_attrs = (), local_attrs = (),
               genpars...)
     α = alpha(copula)
+    npars = (length ∘ parameters)(α)
 
-    global_model, local_model = Model(NLopt.Optimizer), Model(Ipopt.Optimizer)
+    global_model = Model(NLopt.Optimizer, add_bridges = false)
+    local_model = Model(Ipopt.Optimizer, add_bridges = false)
 
     ## Add variables to the model.
     _bounds = bounds(α)
@@ -290,36 +380,39 @@ function fit!(rng, copula::AbstractΦCopula, Φ, H, G;
     ## operator is the log-likelihood of a randomly sampled genealogy.
     let logpdf = logpdf_joint(copula),
         ∇logpdf = ∇logpdf_joint(copula),
-        ∇²logpdf = ∇²logpdf_joint(copula),
-        npars = (length ∘ parameters)(α)
+        ∇²logpdf = ∇²logpdf_joint(copula)
 
         global_model[:logliks] = Vector{NonlinearOperator}(undef, n)
         local_model[:logliks] = Vector{NonlinearOperator}(undef, n)
+        legacy_fs = Vector{Function}(undef, n)
         legacy_∇fs = Vector{Function}(undef, n)
         legacy_∇²fs = Vector{Function}(undef, n)
 
         for k ∈ 1:n
             genealogy = G(H; genpars...)
             build!(rng, genealogy)
-            mults, dists = compute_distances(genealogy, Φ)
+
+            dists = 2 .* latitudes(genealogy)
+            mults = compute_mults(genealogy, Φ)
 
             opname = Symbol("l" * string(k))
             f = fun_bernoulli(mults, dists, logpdf)
+            legacy_fs[k] = f
             ∇f = fun_bernoulli(mults, dists, ∇logpdf, Val(npars))
             legacy_∇fs[k] = ∇f
             ∇²f = fun_bernoulli(mults, dists, ∇²logpdf, Val(npars))
             legacy_∇²fs[k] = ∇²f
 
-            global_model[:logliks][k] =
-                add_nonlinear_operator(local_model, npars, f, ∇f, ∇²f, name = opname)
+            # global_model[:logliks][k] =
+            #     add_nonlinear_operator(global_model, npars, f, ∇f, name = opname)
             local_model[:logliks][k] =
                 add_nonlinear_operator(local_model, npars, f, ∇f, ∇²f, name = opname)
         end
 
         ## Support for legacy interface :(
-        legacy_f = x -> sum(f -> f(x), global_model[:logliks])
-        legacy_∇f = x -> sum(f -> f(x), legacy_∇fs)
-        legacy_∇²f = x -> sum(f -> f(x), legacy_∇²fs)
+        legacy_f = (x...) -> sum(f -> f(x...), legacy_fs)
+        legacy_∇f = (x...) -> sum(f -> f(x...), legacy_∇fs)
+        legacy_∇²f = (x...) -> sum(f -> f(x...), legacy_∇²fs)
 
         register(global_model, :f, npars, legacy_f, legacy_∇f, legacy_∇²f)
     end
@@ -328,12 +421,12 @@ function fit!(rng, copula::AbstractΦCopula, Φ, H, G;
     @NLobjective(global_model, Max, f(global_vars...))
     @objective(local_model, Max, sum(f -> f(local_vars...), local_model[:logliks]))
 
-
     ## Global optimization.
-    ## TODO: Switch to STOGO
     set_attributes(global_model,
-                   "algorithm" => :GN_DIRECT,
-                   "maxtime" => 1,
+                   "algorithm" => :GD_MLSL_LDS,
+                   "local_optimizer" => :LD_SLSQP,
+                   "maxtime" => 10 * npars,
+                   "maxeval" => 100 * npars,
                    global_attrs...)
     optimize!(global_model)
 
