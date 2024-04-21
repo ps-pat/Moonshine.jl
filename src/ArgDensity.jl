@@ -189,7 +189,7 @@ function (D::PhenotypeDensity)(tree::Tree)
     ## of f(φ = g(i) | ψ = g(j), t) where φ and ψ are the source and
     ## destination of the message respectively and g is some functions
     ## that compute phenotype from an integer.
-    mstack = Stack{Matrix{Float64}}(min(n, 1024))
+    mstack = Stack{Matrix{BigFloat}}(min(n, 1024))
 
     ## Necessary to keep track of the order.
     idstack = Stack{eltype(vqueue)}(min(n, 1024))
