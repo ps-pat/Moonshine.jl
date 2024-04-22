@@ -26,16 +26,11 @@ include("Distributions.jl")
 
 include("ImportanceSampling.jl")
 
-## Precompilation.
-# @setup_workload begin
-#     using Random: Xoshiro
+##################
+# Precompilation #
+##################
 
-#     @compile_workload begin
-#         rng = Xoshiro(42)
-
-#         tree = Tree(rng, 10, 10, μ_loc = 5e-5)
-#         build!(rng, tree)
-#     end
-# end
+precompile(build!, (Xoshiro, Tree))
+precompile(fit!, (Xoshiro, CopulaFrechet{Bernoulli{Float64}}, Vector{Bool}, Vector{Sequence}, Type{Tree}))
 
 end # module Moosh

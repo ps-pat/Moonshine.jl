@@ -174,18 +174,6 @@ function mrca(genealogy, vs)
     μ
 end
 
-export distance
-"""
-    distance(genealogy, v1, v2)
-
-Distance between two vertices.
-
-# Implementation,
-
-Only mandatory if copulas are to be fitted on the genealogy.
-"""
-function distance end
-
 export prob
 """
     prob(genealogy; logscale = false)

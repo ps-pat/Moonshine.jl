@@ -344,6 +344,7 @@ function fit! end
 function fit!(rng, copula::AbstractΦCopula{<:Bernoulli}, Φ, H, G;
               n = 100,
               linsolver = "mumps",
+              libpardisopath = "",
               global_attrs = (), local_attrs = (),
               genpars...)
     α = alpha(copula)
@@ -437,6 +438,7 @@ function fit!(rng, copula::AbstractΦCopula{<:Bernoulli}, Φ, H, G;
 
     set_attributes(local_model,
                    "linear_solver" => linsolver,
+                   "pardisolib" => libpardisopath,
                    "check_derivatives_for_naninf" => "yes",
                    local_attrs...)
     optimize!(local_model)
@@ -476,4 +478,4 @@ macro copula_struct(copula)
 end
 
 include("Frechet.jl")
-include("CuadrasAuge.jl")
+#include("CuadrasAuge.jl")

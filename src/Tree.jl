@@ -145,10 +145,6 @@ function mrca(tree::Tree)
     argmax(latitudes(tree)) + nleaves(tree)
 end
 
-function distance(tree::Tree, v1, v2)
-    2tmrca(tree, (v1, v2)) - latitude(tree, v1) - latitude(tree, v2)
-end
-
 function prob(tree::Tree; logscale = false)
     ret = tree.logprob
 
