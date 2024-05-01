@@ -4,46 +4,45 @@
 # Binary Phenotype #
 ####################
 
-function logpdf_joint(copula::CopulaFrechet{<:Bernoulli})
+function pdf_joint(copula::CopulaFrechet{<:Bernoulli}, φ, ψ, t, αpars;
+                   logscale = false)
     α = alpha(copula)
     p = succprob(marginal(copula))
 
-    function (φ, ψ, t, αpars...)
-        αt = α(t, αpars...)
+    αt = α(t, αpars)
 
-        if isone(ψ)
-            t1 = log(p)
-            s2 = (1 - p) * αt
-        else
-            t1 = log(1 - p)
-            s2 = p * αt
-        end
-
-        t2 = log((φ ⊻ ψ) ? s2 : 1 - s2)
-
-        t1 + t2
+    if isone(φ)
+        t1 = log(p)
+        s2 = (1 - p) * αt
+    else
+        t1 = log(1 - p)
+        s2 = p * αt
     end
+
+    t2 = log((φ ⊻ ψ) ? s2 : 1 - s2)
+
+    logscale ? t1 + t2 : exp(t1) * exp(t2)
 end
 
-function pdf_conditional(copula::CopulaFrechet{<:Bernoulli})
+function pdf_conditional(copula::CopulaFrechet{<:Bernoulli}, φ, ψ, t;
+                         logscale = false)
     α = alpha(copula)
     p = succprob(marginal(copula))
 
-    function (φ, ψ, t, αpars...)
-        αt = α(t, αpars...)
+    αt = α(t)
 
-        if isone(ψ)
-            s2 = (1 - p) * αt
-        else
-            s2 = p * αt
-        end
-
-        φ ⊻ ψ ? s2 : 1 - s2
+    if isone(ψ)
+        s2 = (1 - p) * α(t)
+    else
+        s2 = p * α(t)
     end
+
+    t2 = φ ⊻ ψ ? s2 : 1 - s2
+    logscale ? log(t2) : t2
 end
 
-∇scale(copula::CopulaFrechet{<:Bernoulli}) = function (φ, ψ, t::T, αpars...) where T
-    α = alpha(copula)(t, αpars...)
+∇scale(copula::CopulaFrechet{<:Bernoulli}) = function (φ, ψ, t::T, αpars) where T
+    α = alpha(copula)(t, αpars)
 
     φ ⊻ ψ && return inv(α)
 

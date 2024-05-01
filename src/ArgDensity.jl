@@ -195,8 +195,8 @@ function (D::PhenotypeDensity)(tree::Tree)
     idstack = Stack{eltype(vqueue)}(min(n, 1024))
 
     copula = D.copula
-    marginal_pdf = pdf_marginal(copula)
-    conditional_pdf = pdf_conditional(copula)
+    marginal_pdf = φ -> pdf_marginal(D.copula, φ)
+    conditional_pdf = (φσ, φδ, Δlat) -> pdf_conditional(D.copula, φσ, φδ, Δlat)
     Φ = D.Φ
 
     for _ ∈ 1:ne(tree)
@@ -218,7 +218,7 @@ function (D::PhenotypeDensity)(tree::Tree)
 
     ## Final message, computed with the marginal pdf.
     v = dequeue!(vqueue)
-    (pop!(mstack) ⊙ pop!(mstack)) * cmatrix(tree, marginal_pdf, v, Φ)
+    (pop!(mstack) ⊙ pop!(mstack)) * cmatrix_root(marginal_pdf)
 end
 
 phenotypes(D::PhenotypeDensity) = D.Φ
@@ -226,14 +226,17 @@ phenotypes(D::PhenotypeDensity) = D.Φ
 """
     cmatrix(tree, pdf, σ, Φ)
     cmatrix(tree, pdf, σ, φsσ, δ, φsδ)
+    cmatrix_root(pdf)
 
 Matrix containing relevant points of the conditional distribution of a vector
 of phenotypes. Used by the belief propagation algorithm.
 """
-function cmatrix(tree::Tree, pdf, σ, Φ)
-    isroot(tree, σ) &&
-        return reshape([pdf(φ) for φ in (false, true)], 2, 1)
+function cmatrix end,
+function cmatrix_root end
 
+cmatrix_root(pdf) = reshape([pdf(φ) for φ in (false, true)], 2, 1)
+
+function cmatrix(tree::Tree, pdf, σ, Φ)
     δ = dad(tree, σ)
 
     ## Assume that the phenotype of δ is unknown since it is an
@@ -256,10 +259,10 @@ end
 function cmatrix(tree::Tree, pdf, σ, φsσ, δ, φsδ)
     ## Julia issue #46331.
     ret = Matrix{Float64}(undef, length(φsσ), length(φsδ))
+    Δlat = latitude(tree, δ) - latitude(tree, σ)
 
-    map!(ret, collect(Iterators.product(φsσ, φsδ))) do (φσ, φδ)
-        Δlat = latitude(tree, δ) - latitude(tree, σ)
-        pdf(φσ, φδ, Δlat)
+    @inbounds for (k, (φσ, φδ)) ∈ enumerate(Iterators.product(φsσ, φsδ))
+        ret[k] = pdf(φσ, φδ, Δlat)
     end
 
     ret

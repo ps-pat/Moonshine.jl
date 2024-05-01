@@ -1,12 +1,8 @@
-using Random: AbstractRNG, GLOBAL_RNG
-
-using SpecialFunctions: erf, erfc
-
-using Distributions: BetaPrime, Chi, Chisq, cdf
-
-using StatsFuns
-
 using LinearAlgebra: Symmetric
+
+using StaticArrays
+
+using NLPModels
 
 export AbstractAlpha
 """
@@ -48,7 +44,7 @@ export getparameter
 
 Get the value of a parameter.
 """
-function getparameter end
+getparameter(α::AbstractAlpha, parameter) = getfield(α, parameter)::Float64
 
 export setparameter!
 """
@@ -56,177 +52,294 @@ export setparameter!
 
 Set the value of a parameter.
 """
-function setparameter! end
+setparameter!(α::AbstractAlpha, parameter, value) =
+    setfield!(α, parameter, value)
 
-#################
-# Alpha Factory #
-#################
-
-export grad, grad!, hessian, hessian!
-
-export @Alpha
+export nlpmeta
 """
-    @Alpha(A, f, ∇f, ∇²f, description, parameters...)
+    nlpmeta(α)
 
-Generate types for simple alpha functions.
-
-# Arguments
-
-  - `A`: name of the function; "Alpha" will be prepended to the name of the type
-    automatically
-  - `f`: alpha function; its signature must be `(t, αpars...)`
-  - `∇f`, `∇²f`: gradient and Hessian of `f`; details below
-  - `description`: short description
-  - `parameters...`: optimizable parameters; details below
-
-# Gradient & Hessian
-## One parameter
-
-Signature of both functions must be the same as for `f`. Functions must return
-the first and second derivatives of `f`.
-
-## Multiple parameters
-### Gradient
-
-Signature must be `(g, scale, t, αpars...)`. `∇f` must mutate vector `g` by
-adding the gradient evaluated at point `(t, αpars...)` multiplied by scalar
-`scale` to it.
-
-### Hessian
-
-Signature must be `(g, scale, scale2, mult, t, αpars...)`. `∇²f` must mutate
-the lower triangle of matrix `H` by adding v_ij to `H[i, j]` where
-
-vij = `scale * f_ij(t, αpars...) + f_i(t, αpars...) * f_i(t, αpars...) * (scale2 - scale^2)`.
-
-`f_i`, `f_j` and `f_ij` are partial derivatives of `f`.
-
-#### JuMP compatibility warning!
-
-`∇²f` must mutate **only the lower triangle of the matrix**. Mutating
-`H[i, j]` where j > i may cause undefined behaviour.
-
-# Parameters
-Each of those arguments must have the structure
-
-`arg = ("type", default_value, (lower_bound, upper_bound))`.
-
-For instance, the rate parameter of the exponential alpha is provided by
-
-`λ = ("rate", 1, (1e-6, 10))`.
+NLPMeta object.
+[Parameters here](https://github.com/JuliaSmoothOptimizers/NLPModels.jl/blob/main/src/nlp_types.jl#L28)
 """
-macro Alpha(A, f, ∇f, ∇²f, description, parameters...)
-    ## Generate name
-    A_string = string(A)
-    if length(A_string) < 5 || A_string[1:5] != "Alpha"
-        A = Symbol("Alpha" * A_string)
-    end
+function nlpmeta end
 
-    ## Arguments
-    args = [:($(first(parameter.args))) for parameter ∈ parameters]
-    nargs = length(args)
-    default_bounds = [:($(last(parameter.args).args[3])) for parameter ∈ parameters]
-    complete_args = mapreduce(vcat, vcat, args, default_bounds)
+export nlppars
+"""
+    nlppars(α)
 
-    ## Docstring.
-    docstring_parameters = ""
-    for parameter ∈ parameters
-        arg = string(first(parameter.args))
-        type = string(last(parameter.args).args[1])
-        docstring_parameters *= "\n- `$(arg)::Float64`: $type"
-    end
+Parameters passed to ipopt.
+"""
+nlppars(::AbstractAlpha) = (; mu_strategy = "adaptive",
+                            adaptive_mu_globalization = "kkt-error")
 
-    ## Fields.
-    fields = [quote
-                  $(parameter.args[1])::Float64
-                  $(Symbol(string(parameter.args[1]) * "bounds"))::NTuple{2, Float64}
-              end
-              for parameter ∈ parameters]
+export ∇, ∇!, ∇², ∇²!
 
-    ## Constructors
-    constructors = [quote
-                        function $A()
-                            arguments = mapreduce(vcat, $parameters) do parameter
-                                values = last(parameter.args).args
-                                init = values[2]
-                                bounds = Tuple(values[3].args)
+###############
+# Exponential #
+###############
 
-                                init, bounds
-                            end
+export AlphaExponential
 
-                            mod = $nargs > 1 ? Iterators.flatten : identity
-                            $A(mod(arguments)...)
-                        end
-
-                        $A($(args...)) = $A($(complete_args...))
-                    end
-                    for parameter ∈ parameters]
-
-    esc(quote
-            @doc """
-    $(string($A))
-
-$(string($description))
-
-# Parameters
-""" * $docstring_parameters
-            mutable struct $A <: AbstractAlpha
-                $(fields...)
-            end
-
-            ## Constructors
-            $(constructors...)
-
-            ## Evaluation
-            (α::$A)(t, $(args...)) = $f(t, $(args...))
-
-            ## TODO: make such function for gradient and hessian too.
-            function (α::$A)(t)
-                parameter_values = map(par -> getfield(α, par), parameters(α))
-                α(t, parameter_values...)
-            end
-
-            ## Derivatives
-            ## TODO: do that more elegantly, probably outside of quote.
-            if $nargs > 1
-                grad!(α::$A) = (g, scale, t, $(args...)) ->
-                    $∇f(g, scale, t, $(args...))
-
-                grad(α::$A) = function (t::T, $(args...)) where T
-                    g = zeros(T, $nargs)
-                    grad!(α)(g, 1, t, $(args...))
-                    g
-                end
-
-                hessian!(α::$A) = (H, scale, scale2, mult, t, $(args...)) ->
-                    $∇²f(H, scale, scale2, mult, t, $(args...))
-
-                hessian(α::$A) = function (t::T, $(args...)) where T
-                    H = zeros(T, $nargs, $nargs)
-                    hessian!(α)(H, 1, 1, 1, t, $(args...))
-                    Symmetric(H, :L)
-                end
-            else
-                grad(α::$A) = (t, $(args...)) -> $∇f(t, $(args...))
-
-                hessian(α::$A) = (t, $(args...)) -> $∇²f(t, $(args...))
-            end
-
-            ## AbstractAlpha interface
-            function bounds(α::$A)
-                bs = map(p -> getfield(α, Symbol(string(p) * "bounds"))::NTuple{2, Float64},
-                         parameters(α))
-                NamedTuple{parameters(α)}(Tuple(bs))
-            end
-
-            @generated parameters(::$A) = Tuple($args)
-
-            getparameter(α::$A, parameter) = getfield(α, parameter)::Float64
-
-            function setparameter!(α::$A, parameter, value)
-                setfield!(α, parameter, convert(Float64, value))
-            end
-        end)
+mutable struct AlphaExponential <: AbstractAlpha
+    λ::Float64
+    λbounds::NTuple{2, Float64}
 end
 
-include("basic_alphas.jl")
+## Constructors.
+AlphaExponential(λ) = AlphaExponential(λ, (1e-6, 10))
+
+AlphaExponential() = AlphaExponential(1)
+
+## Evaluation
+function(::AlphaExponential)(t::T, λvec) where T
+    λ = first(λvec)
+    λ ≤ 0 && return zero(T)
+
+    -expm1(-first(λvec) * t)
+end
+
+(α::AlphaExponential)(t) = α(t, [α.λ])
+
+## Gradient
+function ∇!(::AlphaExponential, g, t, λvec, σ = 1.)
+    g[1] += t * exp(-first(λvec) * t) * σ
+    g
+end
+
+function ∇(α::AlphaExponential, t, λvec, σ = 1.)
+    g = zeros(MVector{1})
+    ∇!(α, g, t, λvec, σ)
+end
+
+## Hessian
+function ∇²!(α::AlphaExponential, vals, t, λvec, mult = 1., σ = 1., σ2 = 1.)
+    λ = first(λvec)
+
+    vals[1] += (-t^2 * exp(-λ * t) * σ + (σ2 - σ^2) * t^2 * exp(-2λ * t)) *
+        mult
+
+    vals
+end
+
+function ∇²(α::AlphaExponential, t, αpars, mult = 1., σ = 1., σ2 = 1.)
+    vals = zeros(MVector{1})
+    ∇²!(α, t, αpars, mult, σ, σ2)
+end
+
+@generated parameters(::AlphaExponential) = (:λ,)
+
+bounds(α::AlphaExponential) = (; λ = α.λbounds)
+
+nlpmeta(α::AlphaExponential) = NLPModelMeta(
+    1;
+    x0 = [α.λ],
+    lvar = [first(α.λbounds)], uvar = [last(α.λbounds)],
+    minimize = false
+)
+
+const AOExponential = AlphaOptimization{<:AbstractΦCopula{<:Any, <:AlphaExponential}}
+
+function NLPModels.hess_structure!(::AOExponential, rows, cols)
+    rows[1] = 1
+    cols[1] = 1
+
+    rows, cols
+end
+
+############
+# Gompertz #
+############
+
+export AlphaGompertz
+
+mutable struct AlphaGompertz <: AbstractAlpha
+    η::Float64
+    b::Float64
+    ηbounds::NTuple{2, Float64}
+    bbounds::NTuple{2, Float64}
+end
+
+## Constructors.
+AlphaGompertz(η, b) = AlphaGompertz(η, b, (1e-6, 10), (1e-6, 10))
+
+AlphaGompertz() = AlphaGompertz(1., 1.)
+
+## Evaluation
+function (::AlphaGompertz)(t::T, αpars) where T
+    η, b = αpars
+    η ≤ 0 || b ≤ 0 && return zero(T)
+
+    -expm1(-η * expm1(b * t))
+end
+
+(α::AlphaGompertz)(t) = α(t, (α.η, α.b))
+
+## Gradient
+function ∇!(::AlphaGompertz, g, t, αpars, σ = 1.)
+    η, b = αpars
+
+    p = b * t
+    q = expm1(p)
+    s = exp(-η * q)
+
+    g[1] += q * s * σ
+    g[2] += η * t * exp(p) * s * σ
+    g
+end
+
+function ∇(α::AlphaGompertz, t, αpars, σ = 1.)
+    g = zeros(MVector{2})
+    ∇!(α, g, t, αpars, σ)
+end
+
+## Hessian
+function ∇²!(α::AlphaGompertz, vals, t, αpars, mult = 1., σ = 1., σ2 = 1.)
+    η, b = αpars
+
+    ∇α = ∇(α, t, αpars)
+    p = b * t
+    q = expm1(p)
+    s = exp(-η * q)
+
+    vals[1] += (-q^2 * s *
+        σ + ∇α[1]^2 * (σ2 - σ^2)) * mult
+    vals[2] += (t * exp(p) * s * (1 - η * q) *
+        σ + ∇α[1] * ∇α[2] * (σ2 - σ^2)) * mult
+    vals[3] += (η * t^2 * exp(p) * s * (1 - η * exp(b * t)) *
+        σ + ∇α[2]^2 * (σ2 - σ^2)) * mult
+
+    vals
+end
+
+function ∇²(α::AlphaGompertz, t, αpars, mult = 1., σ = 1., σ2 = 1.)
+    vals = zeros(MVector{3})
+    ∇²!(α, t, αpars, mult, σ, σ2)
+end
+
+@generated parameters(::AlphaGompertz) = (:η, :b)
+
+bounds(α::AlphaGompertz) = (; η = α.ηbounds, b = α.bbounds)
+
+nlpmeta(α::AlphaGompertz) = NLPModelMeta(
+    2;
+    x0 = [α.η, α.b],
+    lvar = [first(α.ηbounds), first(α.bbounds)],
+    uvar = [last(α.ηbounds), last(α.bbounds)],
+    minimize = false
+)
+
+const AOGompertz = AlphaOptimization{<:AbstractΦCopula{<:Any, <:AlphaGompertz}}
+
+function NLPModels.hess_structure!(::AOGompertz, rows, cols)
+    rows .= (1, 2, 2)
+    cols .= (1, 1, 2)
+
+    rows, cols
+end
+
+################
+# Gumponential #
+################
+
+export AlphaGE
+
+mutable struct AlphaGE <: AbstractAlpha
+    p::Float64
+    const αE::AlphaExponential
+    const αG::AlphaGompertz
+end
+
+## Constructors.
+AlphaGE(p, λ, η, b) = AlphaGE(p, AlphaExponential(λ), AlphaGompertz(η, b))
+
+AlphaGE() = AlphaGE(0.5, AlphaExponential(), AlphaGompertz())
+
+## Evaluation
+function (α::AlphaGE)(t, αpars)
+    p, λ, η, b = αpars
+    p * α.αE(t, (λ,)) + (1 - p) * α.αG(t, (η, b))
+end
+
+function (α::AlphaGE)(t)
+    p = α.p
+    p * α.αE(t) + (1 - p) * α.αG(t)
+end
+
+## Gradient
+function ∇!(α::AlphaGE, g, t, αpars, σ = 1.)
+    αE = α.αE
+    αG = α.αG
+    p = α.p
+
+    g[1] = (αE(t, αpars) - αG(t, αpars)) * σ
+    ∇!(αE, view(g, 2), t, view(αpars, 2), σ * p)
+    ∇!(αG, view(g, 3:4), t, view(αpars, 3:4), σ * (1 - p))
+
+    g
+end
+
+function ∇(α::AlphaGE, t, αpars, σ = 1.)
+    g = zeros(MVector{4})
+    ∇!(α, g, t, αpars, σ)
+end
+
+## Hessian
+function ∇²!(α::AlphaGE, vals, t, αpars, mult = 1., σ = 1., σ2 = 1.)
+    αE = α.αE
+    αG = α.αG
+    p = α.p
+
+    ∇α = ∇(α, t, αpars)
+    ∇αE = ∇(αE, t, view(αpars, 2))
+    ∇αG = ∇(αG, t, view(αpars, 3:4))
+
+    vals[1] = (∇αE[1] * σ + ∇α[1] * ∇α[2] * (σ2 - σ^2)) * mult
+    vals[2] = (-∇αG[1] * σ + ∇α[1] * ∇α[3] * (σ2 - σ^2)) * mult
+    vals[3] = (-∇αG[2] * σ + ∇α[1] * ∇α[4] * (σ2 - σ^2)) * mult
+    ∇²!(αE, view(vals, 4), t, view(αpars, 2), mult, σ * p, σ2 * p^2)
+    ∇²!(αG, view(vals, 5:7), t, view(αpars, 3:4), mult, σ * p, σ2 * p^2)
+
+    vals
+end
+
+function ∇²(α::AlphaGE, t, αpars, mult = 1., σ = 1., σ2 = 1.)
+    vals = zeros(MVector{7})
+    ∇²!(α, vals, t, αpars, mult, σ, σ2)
+end
+
+@generated parameters(::AlphaGE) = (:p, :λ, :η, :b)
+
+bounds(α::AlphaGE) = (p = (1e-3, 1 - 1e-3), bounds(α.αE)..., bounds(α.αG)...)
+
+function nlpmeta(α::AlphaGE)
+    nlpE = nlpmeta(α.αE)
+    nlpG = nlpmeta(α.αG)
+
+    NLPModelMeta(4;
+                 x0 = [α.p; nlpE.x0; nlpG.x0],
+                 lvar = [first(bs) for bs ∈ bounds(α)],
+                 uvar = [last(bs) for bs ∈ bounds(α)],
+                 minimize = false,
+                 nnzh = 7)
+end
+
+nlppars(α::AlphaGE) = (
+    max_iter = 100,
+    mu_strategy = "adaptive",
+    #adaptive_mu_globalization = "kkt-error",
+    nlp_scaling_max_gradient = 1e-5,
+    nlp_scaling_min_value = 1e-6,
+    tol = 1e-5,
+    dual_inf_tol = 1e4
+    #compl_inf_tol = 1e1,
+)
+
+const AOGE = AlphaOptimization{<:AbstractΦCopula{<:Any, <:AlphaGE}}
+
+function NLPModels.hess_structure!(::AOGE, rows, cols)
+    rows .= (2, 3, 4, 2, 3, 4, 4)
+    cols .= (1, 1, 1, 2, 3, 3, 4)
+
+    rows, cols
+end

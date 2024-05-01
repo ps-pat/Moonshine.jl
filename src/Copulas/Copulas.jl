@@ -6,17 +6,19 @@ import Distributions
 
 using Random: AbstractRNG, GLOBAL_RNG
 
-using JuMP, Ipopt
+using Metaheuristics
 
-using NLopt: NLopt
+using NLPModels, NLPModelsIpopt
 
 using StrideArrays
 
-###################
-# Packaged Alphas #
-###################
+export AbstractAlpha
+"""
+    AbstractAlpha
 
-include("Alphas.jl")
+Abstract type for alpha functions.
+"""
+abstract type AbstractAlpha end
 
 export AbstractΦCopula
 """
@@ -36,53 +38,24 @@ abstract type AbstractΦCopula{P<:Distribution,A<:AbstractAlpha} end
 #############
 
 """
-    pdf_marginal(copula,)
-    logpdf_marginal(copula)
-    pdf_joint(copula)
-    logpdf_joint(copula)
-    pdf_conditional(copula)
-    logpdf_conditional(copula)
+    pdf_marginal(copula, φ; logpdf = false)
+    pdf_joint(copula, φ, ψ, t, αpars; logscale = false)
+    pdf_conditional(copula, φ, ψ, t, logscale = false)
 
-(Logarithm of) the marginal/joint/conditional probability density
+Marginal/joint/conditional probability density
 function of the copula.
-
-# Implementation
-
-- Only one of `logpdf_joint` or `pdf_joint` need to be implemented.
-- Only one of `logpdf_conditional` or `pdf_conditional` need to be implemented.
-- Implemented methods should return a function taking 3 positional arguments and
-  a vararg argument. The first 2 arguments are the phenotypes. The third
-  argument is the genetic distance between the individuals to which the
-  phenotypes are associated. The remaining arguments are to be passed to the
-  α function associated with the copula.
 """
 function pdf_marginal end,
-function logpdf_marginal end,
 function pdf_joint end,
-function logpdf_joint end,
-function pdf_conditional end,
-function logpdf_conditional end
-
-for pdftype ∈ ["marginal", "joint", "conditional"]
-    fun_str = "pdf_" * pdftype
-    fun = Symbol(fun_str)
-    logfun = Symbol("log" * fun_str)
-
-    @eval begin
-        export $fun, $logfun
-
-        $fun(copula::AbstractΦCopula) = exp ∘ $logfun(copula)
-
-        $logfun(copula::AbstractΦCopula) = log ∘ $fun(copula)
-    end
-end
+function pdf_conditional end
 
 ## Marginal pdfs
 
-function pdf_marginal(copula::AbstractΦCopula{<:Bernoulli})
+function pdf_marginal(copula::AbstractΦCopula{<:Bernoulli}, φ; logscale = false)
     p = succprob(marginal(copula))
+    ret = φ ? p : 1 - p
 
-    φ -> φ ? p : 1 - p
+    logscale ? log(ret) : ret
 end
 
 ## Gradient & Hessian
@@ -100,81 +73,6 @@ of the chain rule. Specifically:
 """
 function ∇scale end,
 function ∇²scale end
-
-export ∇logpdf_joint
-export ∇²logpdf_joint
-"""
-    ∇logpdf_joint(copula)
-    ∇²logpdf_joint(copula)
-
-Logarithmic derivatives of the joint pdf. A generic implementation is
-provided for `AbstractΦCopula{<:Bernoulli}` that only requires
-implementations of [`∇scale`](@ref) and [`∇²scale`](@ref).
-
-# Implementation
-## One parameters
-
-Both methods should return a that evaluate the proper logarithmic
-derivative at the given point.
-
-## Two parameters
-
-Both methods should return a function that mutate a vector/matrix by
-adding the value of the gradient/hessian evaluated at the specified
-point to it.
-
-# JuMP compatibility warning!
-
-`∇²logpdf_joint(copula)` must mutate **only the lower triangle of the matrix**.
-Mutating `H[i, j]` where j > i may cause undefined behaviour.
-"""
-function ∇logpdf_joint end,
-function ∇²logpdf_joint end
-
-function ∇logpdf_joint(copula::AbstractΦCopula)
-    α = alpha(copula)
-
-    if (length ∘ parameters)(α) > 1
-        function (g, φ, ψ, mult, t, αpars...)
-            ∇α! = grad!(α)
-            σ = ∇scale(copula)(φ, ψ, t, αpars...)
-            ∇α!(g, σ * mult, t, αpars...)
-        end
-    else
-        function (φ, ψ, t, αpars...)
-            ∇α = grad(α)
-            σ = ∇scale(copula)(φ, ψ, t, αpars...)
-            σ * ∇α(t, αpars...)
-        end
-    end
-end
-
-function ∇²logpdf_joint(copula::AbstractΦCopula)
-    α = alpha(copula)
-
-    if (length ∘ parameters)(α) > 1
-        function (H, φ, ψ, mult, t, αpars...)
-            ∇α = grad(α)
-            ∇²α! = hessian!(α)
-
-            σ = ∇scale(copula)(φ, ψ, t, αpars...)
-            σ2 = ∇²scale(copula)(φ, ψ, t, αpars...)
-
-            ∇²α!(H, σ, σ2, mult, t, αpars...)
-        end
-    else
-        function (φ, ψ, t, αpars...)
-            ∇α = grad(α)
-            ∇²α = hessian(α)
-
-            σ = ∇scale(copula)(φ, ψ, t, αpars...)
-            σ2 = ∇²scale(copula)(φ, ψ, t, αpars...)
-            μ = ∇α(t, αpars...)^2 * (σ2 - σ^2)
-
-            σ * ∇²α(t, αpars...) + μ
-        end
-    end
-end
 
 export alpha
 """
@@ -201,44 +99,42 @@ custom impementation is needed.
 """
 marginal(copula::AbstractΦCopula) = getfield(copula, :marginal_distribution)
 
-#############
-# Inference #
-#############
-
 function compute_mults(tree::Tree, Φ::AbstractVector{Bool})
     n = nleaves(tree)
 
-    ## 0-1 matrix of ancestors for leaves. Entry i, j is 1 iff leaf ij
+    ## 0-1 matrix of ancestors for leaves. Entry i, j is 1 iff leaf j
     ## has vertex n + i in its ancestry. Since every leaf has vertex
     ## 2n - 1 (the root) as an ancestor, corresponding row is not
     ## included in the matrix. First dimension is padded so that its
     ## length is a multiple of 64.
     nrow = n - 2 + 64 - (n - 2) % 64
-    nchunks_byrow = nrow ÷ 64
+    nchunks_bycol = nrow ÷ 64
     ancestry = falses(nrow, n)
 
     @inbounds for ivertex ∈ Iterators.drop(reverse(ivertices(tree)), 1)
-        descendant_leaves = filter(<=(nleaves(tree)), descendants(tree, ivertex))
-        ancestry[ivertex - n, descendant_leaves] .= true
+        for descendant ∈ descendants(tree, ivertex)
+            isleaf(tree, descendant) || continue
+            ancestry[ivertex - n, descendant] = true
+        end
     end
 
     ## mults stores the multiplicity of a distance for a given phenotypes pair.
     mults = StrideArray{Int}(undef, nivertices(tree), StaticInt(3))
     fill!(mults, 0)
 
-    @inbounds for i ∈ range(0, length = n - 2)
+    @inbounds for i ∈ range(0, length = n - 1)
         firsti = div(i * nrow + 1, 64, RoundUp)
         for j ∈ range(i + 1, n - 1)
             firstj = div(j * nrow + 1, 64, RoundUp)
             line = n - 1
             col = Φ[i + 1] + Φ[j + 1] + 1
 
-            for k ∈ range(0, length = nchunks_byrow)
+            for k ∈ range(0, length = nchunks_bycol)
                 p = trailing_zeros(
                     ancestry.chunks[firsti + k] &
                         ancestry.chunks[firstj + k]) + 1
                 if p < 64
-                    line = k * 64 + p
+                    line = 64k + p
                     break
                 end
             end
@@ -249,43 +145,112 @@ function compute_mults(tree::Tree, Φ::AbstractVector{Bool})
     mults
 end
 
+export AlphaOptimization
+mutable struct AlphaOptimization{C<:AbstractΦCopula{<:Bernoulli}} <: AbstractNLPModel{Float64, Vector{Float64}}
+    meta::NLPModelMeta{Float64, Vector{Float64}}
+    counters::Counters
+
+    const multiplicities::Vector{Matrix{Int}}
+    const distances::Vector{Vector{Float64}}
+    const copula::C
+end
+
+## Packaged Alphas
+include("Alphas.jl")
+
+function AlphaOptimization(rng, copula::AbstractΦCopula{<:Bernoulli},
+                           Φ, H, ::Type{Tree};
+                           n = 10, genpars...)
+    nrow = length(H) - 1
+    multiplicities = Vector{Matrix{Int}}(undef, n)
+    distances = Vector{Vector{Float64}}(undef, n)
+
+    for k ∈ 1:n
+        genealogy = Tree(H; genpars...)
+        build!(rng, genealogy)
+
+        distances[k] = 2 * latitudes(genealogy)
+        multiplicities[k] = compute_mults(genealogy, Φ)
+    end
+
+    AlphaOptimization(nlpmeta(alpha(copula)), Counters(),
+                      multiplicities, distances, copula)
+end
+
 function decode_phenos(k)
     k -= 1
     .!iszero.((k ⊻ (k >> 1)) .& (1, 2))
 end
 
-fun_bernoulli(mults, dists, f, ::Val{N}) where N =
-    isone(N) ? fun_bernoulli(mults, dists, f) :
-    fun_bernoulli_multi(mults, dists, f, N)
+function fun_bernoulli!(ret, multsvec, distsvec, f)
+    @inbounds for (mults, dists) ∈ zip(multsvec, distsvec)
+        for j ∈ axes(mults, 2)
+            φ, ψ = decode_phenos(j)
 
-fun_bernoulli(mults, dists, f) = function (pars::T...) where T<:Real
-    z0 = zero(T)
+            for (i, dist) ∈ enumerate(dists)
+                mult = mults[i, j]
 
-    sum((enumerate ∘ eachcol)(mults), init = z0) do (k, mults_col)
-        ## Phenotypes are Gray-encoded in k - 1.
-        φ1, φ2 = decode_phenos(k)
+                iszero(mult) && continue
+                ret += mult * f(φ, ψ, dist)
+            end
+        end
+    end
 
-        sum(zip(mults_col, dists), init = z0) do (mult, dist)
-            iszero(mult) && return z0
+    ret
+end
 
-            mult .* f(φ1, φ2, dist, pars...)
+function NLPModels.obj(nlp::AlphaOptimization{<:AbstractΦCopula{<:Bernoulli}},
+                       αpars::AbstractVector{T}) where T
+    ret = zero(T)
+    f = (φ, ψ, t) -> pdf_joint(nlp.copula, φ, ψ, t, αpars, logscale = true)
+    fun_bernoulli!(ret, nlp.multiplicities, nlp.distances, f)
+end
+
+function fun_bernoulli!!(multsvec, distsvec, f!)
+    @inbounds for (mults, dists) ∈ zip(multsvec, distsvec)
+        for j ∈ axes(mults, 2)
+            φ, ψ = decode_phenos(j)
+
+            for (i, dist) ∈ enumerate(dists)
+                mult = mults[i, j]
+
+                iszero(mult) && continue
+                f!(φ, ψ, dist, mult)
+            end
         end
     end
 end
 
-fun_bernoulli_multi(mults, dists, f!, npars) = function (M, pars...)
-    for j ∈ axes(mults, 2)
-        φ1, φ2 = decode_phenos(j)
+function NLPModels.grad!(nlp::AlphaOptimization{<:AbstractΦCopula{<:Bernoulli}},
+                         αpars, g)
+    fill!(g, 0)
+    α = alpha(nlp.copula)
 
-        for i ∈ axes(mults, 1)
-            mult = mults[i, j]
-            iszero(mult) && continue
-
-            f!(M, φ1, φ2, mult, dists[i], pars...)
-        end
+    f! = function (φ, ψ, t, mult)
+        σ = ∇scale(nlp.copula)(φ, ψ, t, αpars)
+        ∇!(α, g, t, αpars, mult * σ)
     end
 
-    M
+    fun_bernoulli!!(nlp.multiplicities, nlp.distances, f!)
+    g
+end
+
+function NLPModels.hess_coord!(nlp::AlphaOptimization{<:AbstractΦCopula{<:Bernoulli}},
+                               αpars::AbstractVector, vals::AbstractVector;
+                               obj_weight = 1)
+    fill!(vals, 0)
+    α = alpha(nlp.copula)
+
+    f! = function(φ, ψ, t, mult)
+        σ = ∇scale(nlp.copula)(φ, ψ, t, αpars)
+        σ2 = ∇²scale(nlp.copula)(φ, ψ, t, αpars)
+        ∇²!(α, vals, t, αpars, mult, σ, σ2)
+    end
+
+    fun_bernoulli!!(nlp.multiplicities, nlp.distances, f!)
+    vals .*= obj_weight
+
+    vals
 end
 
 export fit!
@@ -341,114 +306,55 @@ A complete list is available on
 """
 function fit! end
 
-function fit!(rng, copula::AbstractΦCopula{<:Bernoulli}, Φ, H, G;
-              n = 100,
+function fit!(rng, copula::AbstractΦCopula{<:Bernoulli},
+              Φ, H, ::Type{Tree};
+              n = 10,
               linsolver = "mumps",
               libpardisopath = "",
-              global_attrs = (), local_attrs = (),
+              global_attrs = (;), local_attrs = (;),
               genpars...)
     α = alpha(copula)
     npars = (length ∘ parameters)(α)
 
-    global_model = Model(NLopt.Optimizer, add_bridges = false)
-    local_model = Model(Ipopt.Optimizer, add_bridges = false)
+    model = AlphaOptimization(rng, copula, Φ, H, Tree; n = n, genpars...)
 
-    ## Add variables to the model.
-    _bounds = bounds(α)
+    #######################
+    # Global Optimization #
+    #######################
 
-    ## It is mandatory for variables to be added to the model in the order
-    ## they appear in the signature of the objective function.
-    for arg ∈ parameters(α)
-        if arg ∈ keys(_bounds)
-            @variable(global_model, base_name = string(arg),
-                      lower_bound = first(_bounds[arg]),
-                      upper_bound = last(_bounds[arg]))
-            @variable(local_model, base_name = string(arg),
-                      lower_bound = first(_bounds[arg]),
-                      upper_bound = last(_bounds[arg]))
-        else
-            @variable(global_model, base_name = string(arg))
-            @variable(local_model, base_name = string(arg))
-        end
+    global_algorithm = ECA(; global_attrs...,
+                           options = Options(rng = rng))
 
-        set_start_value(something(variable_by_name(global_model, string(arg))),
-                        getparameter(α, arg))
+    obj_global = function (αpars)
+        f = -obj(model, αpars)
+        cs = cons(model, αpars)
+        g = [cs - model.meta.ucon; model.meta.lcon - cs]
+
+        f, g, Float64[]
     end
 
-    ## Objective function.
+    global_bounds = hcat(model.meta.lvar, model.meta.uvar)'
+    res_global = optimize(obj_global, global_bounds, global_algorithm)
 
-    ## Create n JuMP operators and assign them to both models. Each
-    ## operator is the log-likelihood of a randomly sampled genealogy.
-    let logpdf = logpdf_joint(copula),
-        ∇logpdf = ∇logpdf_joint(copula),
-        ∇²logpdf = ∇²logpdf_joint(copula)
+    println(res_global)
 
-        global_model[:logliks] = Vector{NonlinearOperator}(undef, n)
-        local_model[:logliks] = Vector{NonlinearOperator}(undef, n)
-        legacy_fs = Vector{Function}(undef, n)
-        legacy_∇fs = Vector{Function}(undef, n)
-        legacy_∇²fs = Vector{Function}(undef, n)
+    ######################
+    # Local Optimization #
+    ######################
 
-        for k ∈ 1:n
-            genealogy = G(H; genpars...)
-            build!(rng, genealogy)
+    res_local = ipopt(model;
+                      x0 = minimizer(res_global),
+                      check_derivatives_for_naninf = "yes",
+                      honor_original_bounds = "yes",
+                      max_iter = 1000,
+                      nlppars(α)...,
+                      local_attrs...)
 
-            dists = 2 .* latitudes(genealogy)
-            mults = compute_mults(genealogy, Φ)
-
-            opname = Symbol("l" * string(k))
-            f = fun_bernoulli(mults, dists, logpdf)
-            legacy_fs[k] = f
-            ∇f = fun_bernoulli(mults, dists, ∇logpdf, Val(npars))
-            legacy_∇fs[k] = ∇f
-            ∇²f = fun_bernoulli(mults, dists, ∇²logpdf, Val(npars))
-            legacy_∇²fs[k] = ∇²f
-
-            # global_model[:logliks][k] =
-            #     add_nonlinear_operator(global_model, npars, f, ∇f, name = opname)
-            local_model[:logliks][k] =
-                add_nonlinear_operator(local_model, npars, f, ∇f, ∇²f, name = opname)
-        end
-
-        ## Support for legacy interface :(
-        legacy_f = (x...) -> sum(f -> f(x...), legacy_fs)
-        legacy_∇f = (x...) -> sum(f -> f(x...), legacy_∇fs)
-        legacy_∇²f = (x...) -> sum(f -> f(x...), legacy_∇²fs)
-
-        register(global_model, :f, npars, legacy_f, legacy_∇f, legacy_∇²f)
+    for (k, parameter) ∈ enumerate(parameters(α))
+        setparameter!(α, parameter, res_local.solution[k])
     end
 
-    global_vars, local_vars = all_variables(global_model), all_variables(local_model)
-    @NLobjective(global_model, Max, f(global_vars...))
-    @objective(local_model, Max, sum(f -> f(local_vars...), local_model[:logliks]))
-
-    ## Global optimization.
-    set_attributes(global_model,
-                   "algorithm" => :GD_MLSL_LDS,
-                   "local_optimizer" => :LD_SLSQP,
-                   "maxtime" => 10 * npars,
-                   "maxeval" => 100 * npars,
-                   global_attrs...)
-    optimize!(global_model)
-
-    ## Local optimization. Warm start from the global optimization step.
-    for (global_var, local_var) ∈ zip(global_vars, local_vars)
-        set_start_value(local_var, value(global_var))
-    end
-
-    set_attributes(local_model,
-                   "linear_solver" => linsolver,
-                   "pardisolib" => libpardisopath,
-                   "check_derivatives_for_naninf" => "yes",
-                   local_attrs...)
-    optimize!(local_model)
-
-    ## Store estimations.
-    for (var, val) ∈ zip(Symbol.(local_vars), value.(local_vars))
-        setparameter!(α, var, val)
-    end
-
-    (global_model = global_model, local_model = local_model)
+    (global_model = res_global, local_model = res_local)
 end
 
 function fit!(copula::AbstractΦCopula, Φ, H, G; kwargs...)
@@ -477,5 +383,6 @@ macro copula_struct(copula)
     end
 end
 
+## Packaged Copulas
 include("Frechet.jl")
 #include("CuadrasAuge.jl")
