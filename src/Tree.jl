@@ -49,7 +49,7 @@ function TreeCore(leaves::AbstractVector{Sequence};
         positions = validate_positions(positions, (length ∘ first)(leaves))
     end
 
-    TreeCore(SimpleDiGraph(n), zeros(Float64, n - 1), sequences,
+    TreeCore(SimpleDiGraph(2n - 1), zeros(Float64, n - 1), sequences,
                 positions, seq_length, Ne, μ_loc)
 end
 
@@ -277,13 +277,14 @@ struct MutationSampler{T, W<:AbstractWeights}
 
     n::Int
     event_number::Base.RefValue{Int}
-    logprob::Base.RefValue{BigFloat}
+    logprob::Base.RefValue{Float64}
 end
 
 function MutationSampler(data, Dist = Hamming{Float64}, args = (), kwargs = ())
     types = compute_types(data)
     ntypes = length(types)
 
+    ## TODO: this is the most expensive operation.
     idx = [findall(==(type), data) for type ∈ types]
 
     nlive = FrequencyWeights(length.(idx), length(data))
@@ -292,7 +293,7 @@ function MutationSampler(data, Dist = Hamming{Float64}, args = (), kwargs = ())
 
     MutationSampler(types, nlive,
                     transition_matrix, idx,
-                    length(data), Ref(0), Ref(big(0.0)))
+                    length(data), Ref(0), Ref(0.0))
 end
 
 function sample_pair!(rng, ms)
@@ -309,7 +310,7 @@ function sample_pair!(rng, ms)
     ## only one live item remaining which can only coalesce with
     ## sampled type. If any is found, switch type_idx for the greatest
     ## element with at least 1 live item.
-    for i ∈ range(type_idx + 1, length(ms.types))
+    @inbounds for i ∈ range(type_idx + 1, length(ms.types))
         ## Check if a coalescence is possible. For that to be the
         ## case, there has to be live items and the probability of a
         ## coalescence must be > 0.
@@ -386,30 +387,30 @@ end
 export build!
 """
     build!(rng, tree)
+    build!(rng, tree, ms)
 
-Build a coalescent tree consistent with a given marker.
+Build a coalescent tree
 
-`tree` must only contain leaves.
+`tree` must contain 2n-1 vertices (where n is the number of leaves) and no edge.
 """
 function build! end
 
-function build!(rng, tree::Tree)
+function build!(rng, tree::Tree, ms)
     n = nleaves(tree)
-    nv(tree) > nleaves(tree) && error("Tree contains non-leaf vertices")
-
-    ## Create internal vertices.
-    add_vertices!(graph(tree), n - 1)
+    nv(tree) ≠ 2n - 1 || !iszero(ne(tree)) && error("Invalid tree")
 
     ## Sample coalescence vertices latitudes.
-    Δlatitudes = randexp!(rng, latitudes(tree)) ./ range(n - 1, 1, step = -1)
-    cumsum!(latitudes(tree), Δlatitudes)
-    tree.logprob += sum((enumerate ∘ reverse)(big.(Δlatitudes)),
-                        init = zero(BigFloat)) do (λ, t)
-        log(-expm1(-λ * t))
+    randexp!(rng, latitudes(tree))
+    latitudes(tree)[1] /= n - 1
+    tree.logprob += log(-expm1(-(n - 1) * latitudes(tree, 1)))
+    for k ∈ 2:(n-1)
+        λ = n - k
+        latitudes(tree)[k] /= λ
+        tree.logprob += log(-expm1(-λ * latitudes(tree)[k]))
+        latitudes(tree)[k] += latitudes(tree)[k - 1]
     end
 
     ## Sample coalescence events
-    ms = MutationSampler((collect ∘ sequences)(tree, leaves(tree)))
     for parent ∈ range(n + 1, length = n - 1)
         child1, child2 = sample_pair!(rng, ms)
         add_edge!(tree, parent, child1)
@@ -424,7 +425,10 @@ function build!(rng, tree::Tree)
     tree
 end
 
-build!(tree::Tree) = build!(GLOBAL_RNG, tree)
+function build!(rng, tree)
+    ms = MutationSampler((collect ∘ sequences)(tree, leaves(tree)))
+    build!(rng, tree, ms)
+end
 
 function isvalid(tree::Tree)
     n = nleaves(tree)
