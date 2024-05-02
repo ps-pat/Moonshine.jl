@@ -4,77 +4,89 @@
 # Binary Phenotype #
 ####################
 
-function pdf_joint(copula::CopulaCuadrasAuge{<:Bernoulli})
-    α = alpha(copula)
+function pdf_joint(copula::CopulaCuadrasAuge{<:Bernoulli}, φ, ψ, t, αpars;
+                   logscale = false)
+    α = alpha(copula)(t, αpars)
     q = failprob(marginal(copula))
 
-    function (φ, ψ, t, αpars...)
-        αt = α(t, αpars...)
+    ret = q^α
 
-        ret = q^αt
+    s = φ + ψ
 
-        s = φ + ψ
-
-        if !iszero(s)
-            ret = s - ret
-        end
-
-        ret *= q
-
-        if s == 2
-            ret = 1 - ret
-        end
-
-        ret
-
+    if !iszero(s)
+        ret *= -1
+        ret += s
     end
+
+    ret *= q
+
+    if s > 1
+        ret *= -1
+        ret += 1
+    end
+
+    logscale ? log(ret) : ret
 end
 
-function pdf_conditional(copula::CopulaCuadrasAuge{<:Bernoulli})
-    α = alpha(copula)
-    p = succprob(marginal(copula))
-
-    function (φ, ψ, t, αpars...)
-        αt = α(t, αpars...)
-
-        ret = (1 - p)^αt
-
-        s = φ + ψ
-
-        if !iszero(s)
-            ret = s - ret
-        end
-
-        if isone(ψ)
-            ret *= (1 - p) / p
-        end
-
-        if s == 2
-            ret = 1 / p - ret
-
-        end
-
-        ret
-    end
-end
-
-function ∇logpdf_joint(copula::CopulaCuadrasAuge{<:Bernoulli})
-    α = alpha(copula)
-    ∇α = grad(α)
+function pdf_conditional(copula::CopulaCuadrasAuge{<:Bernoulli}, φ, ψ, t;
+                         logscale = false)
+    α = alpha(copula)(t)
     q = failprob(marginal(copula))
 
-    function (φ, ψ, t, αpars...)
-        f00 = log(q) .* ∇α(t, αpars...)
+    s = φ + ψ
 
-        !(φ || ψ) && return f00
+    ret = q^α - s
 
-        qα = inv(q^(α(t, αpars...)))
-        if φ ⊻ ψ
-            d = 1 - qα
+    if isone(s)
+        if φ
+            ret *= -1
         else
-            d = qα * (inv(q) - 2) + 1
+            ret /= 1 - inv(q)
         end
-
-        f00 ./ d
+    elseif s > 1
+        ret *= q
+        ret += 1
+        ret *= inv(1 - q)
     end
+
+    logscale ? log(ret) : ret
+end
+
+∇scale(copula::CopulaCuadrasAuge{<:Bernoulli}) = function (φ, ψ, t, αpars)
+    α = alpha(copula)(t, αpars)
+    q = failprob(marginal(copula))
+    qα = q^α
+
+    s = φ + ψ
+
+    div = q * (qα - s)
+
+    if s > 1
+        div += 1
+        div /= 3
+    end
+
+    α * qα / div
+end
+
+∇²scale(copula::CopulaCuadrasAuge{<:Bernoulli}) = function (φ, ψ, t, αpars)
+    α = alpha(copula)(t, αpars)
+    q = failprob(marginal(copula))
+    qα = q^α
+
+    s = φ + ψ
+
+    div = q
+
+    if !iszero(s)
+        div *= qα - s
+        div /= qα
+    end
+
+    if s > 1
+        div += inv(qα)
+        div /= 3
+    end
+
+    (1 + α^2 / q) / div
 end

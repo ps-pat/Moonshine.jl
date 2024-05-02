@@ -37,6 +37,7 @@ abstract type AbstractΦCopula{P<:Distribution,A<:AbstractAlpha} end
 # Interface #
 #############
 
+export pdf_marginal, pdf_joint, pdf_conditional
 """
     pdf_marginal(copula, φ; logpdf = false)
     pdf_joint(copula, φ, ψ, t, αpars; logscale = false)
@@ -385,4 +386,4 @@ end
 
 ## Packaged Copulas
 include("Frechet.jl")
-#include("CuadrasAuge.jl")
+include("CuadrasAuge.jl")
