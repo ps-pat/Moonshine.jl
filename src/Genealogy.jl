@@ -17,13 +17,14 @@ using GeometryBasics: Point
 
 using Bumper
 
+using DataStructures: Stack
+
 const VertexType = Int
 const EdgeType = SimpleEdge{VertexType}
 const ∞ = Inf
 
 export Ω
-const Ω = Interval{:closed,:open,Float64}
-Ω(x) = Ω(x, ∞)
+const Ω = Interval{:closed, :open, Float64}
 
 abstract type AbstractGenealogy <: AbstractSimpleGraph{VertexType} end
 
@@ -54,8 +55,14 @@ export latitudes
 Return the latitudes of (a subset of) the internal vertices of a genealogy.
 
 See also [`latitude`](@ref) to get the latitude of a single vertex.
+
+# Implementation
+A default implementation for `latitudes(::AbstractGenealogy, ::Any)` is
+available.
 """
 function latitudes end
+
+latitudes(genealogy, ivs) = getindex(latitudes(genealogy), ivs)
 
 export latitude
 """
@@ -77,9 +84,17 @@ An interable containing the leaves/internal vertices of a genealogy.
 
 See also [`nleaves`](@ref) and [`nivertices`](@ref) for the number of leaves
 and internal vertices.
+
+# Implementation
+
+Default implementations assume that the first `nleaves(genealogy)` vertices
+are the leaves of the genealogy.
 """
 function leaves end,
 function ivertices end
+
+leaves(genealogy) = Base.OneTo(nleaves(genealogy))
+ivertices(genealogy) = UnitRange(nleaves(genealogy) + 1, nv(genealogy))
 
 export sequences
 """
@@ -100,7 +115,8 @@ function sequences end
 
 sequences(genealogy, vs) = Iterators.map(v -> sequence(genealogy, v), vs)
 
-sequences(genealogy, e::EdgeType) = sequences(genealogy, (src(e), dst(e)))
+sequences(genealogy, e::EdgeType) = (sequence(genealogy, src(e)),
+                                     sequence(genealogy, dst(e)))
 
 export mrca
 """
@@ -110,39 +126,15 @@ Most recent common ancestor of a set of vertices. If omited, returns the mrca
 of the whole genealogy.
 
 See also [`tmrca`](@ref) for the time to the most recent common ancestor.
-
-# Implementation
-
-Custom type only need to implement `mrca(::T)`.
 """
 function mrca end
 
-# function mrca(genealogy, vs)
-#     μ = mrca(genealogy)
-
-#     possible_μ = CheapStack{VertexType}(nv(genealogy))
-
-#     ## Mandatory to avoid dynamic dispatch.
-#     for child ∈ children(genealogy, μ)
-#         push!(possible_μ, child)
-#     end
-
-#     while !isempty(possible_μ)
-#         v = pop!(possible_μ)
-#         vs ⊆ descendants(genealogy, v) || continue
-
-#         μ = v
-#         empty!(possible_μ)
-
-#         ## Mandatory to avoid dynamic dispatch.
-#         for child ∈ children(genealogy, μ)
-#             push!(possible_μ, child)
-#         end
-#     end
-
-#     ## Type inference needs a little bit of help here for some reason...
-#     something(μ)
-# end
+function mrca(genealogy)
+    (isempty(genealogy) || any(iszero, latitudes(genealogy))) &&
+        return zero(VertexType)
+    isone((length ∘ sequences)(genealogy)) && return one(VertexType)
+    argmax(latitudes(genealogy)) + nleaves(genealogy)
+end
 
 function mrca(genealogy, vs)
     μ = mrca(genealogy)
@@ -194,6 +186,15 @@ Positions of the markers.
 """
 function positions end
 
+export ancestral_interval
+"""
+    ancestral_intervals(genealogy, edge)
+
+Interval for which an edge is ancestral. Default implementation assumes that
+any edge is ancestral for [0, inf).
+"""
+ancestral_intervals(::Any, ::Any) = Ω(0, ∞)
+
 #############
 # Utilities #
 #############
@@ -238,18 +239,20 @@ given.
 """
 function postoidx(genealogy, pos)
     @inbounds for (k, p) ∈ enumerate(positions(genealogy))
-        p >= pos && return k - 1
+        p > pos && return k - 1
     end
 
     nmarkers(genealogy)
 end
 
 """
+    ancestral_mask!(η, genealogy, x; wipe = true)
     ancestral_mask(genealogy, x)
 
-Mask non ancestral positions to 0.
+Mask non ancestral positions to 0. If `wipe = true`, all markers in `η` wil be
+initialized at 0.
 """
-function ancestral_mask(genealogy, ω::Ω)
+function ancestral_mask!(η, genealogy, ω::Ω; wipe = true)
     lpos, rpos = endpoints(ω)
 
     lidx = 1
@@ -259,17 +262,29 @@ function ancestral_mask(genealogy, ω::Ω)
 
     ridx = postoidx(genealogy, rpos)
 
-    mask = falses(nmarkers(genealogy))
-    mask[range(lidx, ridx)] .= true
+    if wipe
+        η.data.chunks .⊻= η.data.chunks
+    end
+    η.data[range(lidx, ridx)] .= true
 
-    Sequence(mask)
+    η
 end
 
-ancestral_mask(genealogy, ωs::Set{Ω}) =
-    mapreduce(ω -> ancestral_mask(genealogy, ω), |, ωs)
+function ancestral_mask!(η, genealogy, ωs::Set{Ω}; wipe = true)
+    if wipe
+        η.data.chunks .⊻= η.data.chunks
+    end
 
-ancestral_mask(genealogy, x::EdgeType) =
-    ancestral_mask(genealogy, ancestral_intervals(genealogy, x))
+    for ω ∈ ωs
+        ancestral_mask!(η, genealogy, ω, wipe = false)
+    end
+
+    η
+end
+
+ancestral_mask(genealogy, ω) =
+    ancestral_mask!(Sequence(falses(nmarkers(genealogy))), genealogy, ω,
+                    wipe = false)
 
 ###################
 # Pretty printing #
@@ -367,11 +382,12 @@ GenLayout(leaveslayer, leaves) = function (genealogy_graph)
     Point.(zip(ys, -xs))
 end
 
-function graphplot(genealogy::AbstractGenealogy;
+function graphplot(genealogy::AbstractGenealogy, ω::Ω;
+                   wild_color = :blue,
+                   derived_color = :red,
                    arrow_show = false,
                    edge_color = :gray,
                    edge_width = 3,
-                   node_color = :black,
                    layout = nothing,
                    attributes...)
     if isnothing(layout)
@@ -379,16 +395,31 @@ function graphplot(genealogy::AbstractGenealogy;
         layout = GenLayout(lastlayer, leaves(genealogy))
     end
 
+    ## Color of the vertices.
+    mask = fill(ancestral_mask(genealogy, ω), nv(genealogy))
+    node_color = ifelse.(any.(sequences(genealogy) .& mask),
+                         derived_color, wild_color)
+
+    ## Hide non ancestral edges.
+    ewidth = DefaultDict{EdgeType, Int}(edge_width)
+    for e ∈ edges(genealogy)
+        isempty(ancestral_intervals(genealogy, e) ∩ ω) || continue
+        ewidth[e] = 0
+    end
+
     graphplot(graph(genealogy),
               layout = layout,
               ilabels = string.(range(1, nv(genealogy))),
               ilabels_color = :white,
               edge_color = edge_color,
-              edge_width = edge_width,
+              edge_width = ewidth,
               arrow_show = arrow_show,
               node_color = node_color,
               attributes...)
 end
+
+graphplot(genealogy::AbstractGenealogy; attributes...) =
+    graphplot(genealogy, Ω(0, ∞); attributes...)
 
 ##################
 # Common Methods #
@@ -489,8 +520,10 @@ for (fun, graph_method) ∈ Dict(:dads => :inneighbors,
     end
 end
 
-function siblings(genealogy, v)
-    res = mapreduce(v -> children(genealogy, v), vcat, dads(genealogy, v))
+function siblings(genealogy, v, args...)
+    res = mapreduce(v -> children(genealogy, v, args...),
+                    vcat,
+                    dads(genealogy, v, args...))
     filter(!=(v), res)
 end
 
@@ -531,7 +564,16 @@ number of mutations on that edge.
 """
 function nmutations end
 
-nmutations(genealogy, e) = count(xor(sequences(genealogy, e)...))
+function nmutations(genealogy, e)
+    ret = zero(Int8)
+    nchunks = (length(positions(genealogy)) - 1) ÷ blocksize(Sequence) + 1
+    η1, η2 = sequences(genealogy, e)
+    for k ∈ range(1, length = nchunks)
+        ret += count_ones(η1.data.chunks[k] ⊻ η2.data.chunks[k])
+    end
+
+    ret
+end
 
 function nmutations(genealogy)
     mapreduce(e -> nmutations(genealogy, e), +, edges(genealogy),

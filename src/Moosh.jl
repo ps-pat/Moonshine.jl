@@ -1,29 +1,19 @@
 module Moosh
 
-using Base: Fix1
-
 using PrecompileTools
 
 using StatsFuns: logtwo
 
 include("Sequence.jl")
-
 include("tools.jl")
-
 include("CheapStack.jl")
-
 include("Genealogy.jl")
-
-# include("Arg.jl")
-
 include("Tree.jl")
-
+include("Arg.jl")
+include("genealogy_common.jl")
 include("Copulas/Copulas.jl")
-
 include("ArgDensity.jl")
-
 include("Distributions.jl")
-
 include("ImportanceSampling.jl")
 
 ##################

@@ -1,6 +1,6 @@
 using Graphs
 
-import Graphs: add_vertex!, add_edge!, rem_edge!, ne
+import Graphs: add_edge!
 
 using Random
 
@@ -24,7 +24,7 @@ struct TreeCore
     positions::Vector{Float64}
     seq_length::Float64
     Ne::Float64
-    μ_loc::Float64
+    μloc::Float64
 end
 
 TreeCore() = TreeCore(SimpleDiGraph{VertexType}(), [], [], [],
@@ -34,7 +34,7 @@ function TreeCore(leaves::AbstractVector{Sequence};
                   positions = nothing,
                   seq_length = one(Float64),
                   Ne = one(Float64),
-                  μ_loc = zero(Float64))
+                  μloc = 1e-7)
     n = length(leaves)
 
     sequences = similar(leaves, 2n - 1)
@@ -50,23 +50,7 @@ function TreeCore(leaves::AbstractVector{Sequence};
     end
 
     TreeCore(SimpleDiGraph(2n - 1), zeros(Float64, n - 1), sequences,
-                positions, seq_length, Ne, μ_loc)
-end
-
-function TreeCore(rng::AbstractRNG,
-                  nmin::Integer, minlength::Integer,
-                  nmax::Integer = 0, maxlength::Integer = 0;
-                  genpars...)
-    n = iszero(nmax) ? nmin : rand(rng, nmin:nmax)
-    nmarkers = iszero(maxlength) ? minlength : rand(rng, minlength:maxlength)
-
-    TreeCore([Sequence(rng, nmarkers) for _ ∈ 1:n]; genpars...)
-end
-
-function TreeCore(nmin::Integer, minlength::Integer,
-                  nmax::Integer = 0, maxlength::Integer = 0;
-                  genpars...)
-    TreeCore(GLOBAL_RNG, nmin, minlength, nmax, maxlength; genpars...)
+             positions, seq_length, Ne, μloc)
 end
 
 ###################
@@ -80,111 +64,27 @@ mutable struct Tree <: AbstractGenealogy
     nextvertex::Int
 end
 
-Tree() = Tree(TreeCore(), typemin(BigFloat), typemin(Int))
+Tree() = Tree(TreeCore(), zero(BigFloat), typemin(Int))
+
+Tree(core::TreeCore, logprob) = Tree(core, logprob, one(Int))
 
 function Tree(leaves::AbstractVector{Sequence}; genpars...)
     Tree(TreeCore(leaves; genpars...), zero(BigFloat), one(Int))
 end
 
-function Tree(rng::AbstractRNG,
-              nmin::Integer, minlength::Integer,
-              nmax::Integer = 0, maxlength::Integer = 0;
-              genpars...)
-    Tree(TreeCore(rng, nmin, minlength, nmax, maxlength; genpars...),
-         zero(BigFloat), one(Int))
-end
-
-function Tree(nmin::Integer, minlength::Integer,
-              nmax::Integer = 0, maxlength::Integer = 0;
-              genpars...)
-    Tree(GLOBAL_RNG, nmin, minlength, nmax, maxlength; genpars...)
-end
-
-##################
-# Simple Methods #
-##################
-
-for field ∈ [:(:sequences), :(:latitudes), :(:graph),
-             :(:seq_length), :(:Ne), :(:positions)]
-    fun_name = eval(field)
-    @eval begin
-        export $fun_name
-
-        function $fun_name(tree::Tree)
-            getfield(tree.core, $field)
-        end
-    end
-end
-
-export nleaves
-nleaves(tree::Tree) = (length(sequences(tree)) + 1) ÷ 2
-
-isempty(treecore::TreeCore) = isempty(treecore.sequences)
-
-isempty(tree::Tree) = isempty(tree.core)
-
 ###############################
 # AbstractGenealogy Interface #
 ###############################
 
+nleaves(tree::Tree) = (length(sequences(tree)) + 1) ÷ 2
+
 describe(::Tree, long = true) = long ? "Coalescent Tree" : "Tree"
-
-latitudes(tree::Tree, ivs) = getindex(latitudes(tree), ivs)
-
-function latitude(tree::Tree, v)
-    isleaf(tree, v) ? zero(Float64) : latitudes(tree)[v - nleaves(tree)]
-end
-
-leaves(tree::Tree) = Base.OneTo(nleaves(tree))
-
-ivertices(tree::Tree) = range(nleaves(tree) + 1, nv(tree))
-
-function mrca(tree::Tree)
-    any(iszero, latitudes(tree)) && return zero(VertexType)
-    isone(nv(tree)) && return one(VertexType)
-    argmax(latitudes(tree)) + nleaves(tree)
-end
-
-function prob(tree::Tree; logscale = false)
-    ret = tree.logprob
-
-    logscale ? ret : exp(ret)
-end
 
 ###########################
 # AbstractGraph Interface #
 ###########################
 
-function add_vertex!(tree::Tree, seq, lat)
-    latitudes(tree)[tree.nextvertex] = lat
-    sequences(tree)[nleaves(tree) + tree.nextvertex] = seq
-
-    tree.nextvertex += 1
-
-    add_vertex!(graph(tree))
-end
-
 add_edge!(tree::Tree, e) = add_edge!(graph(tree), e)
-
-rem_edge!(tree::Tree, e) = rem_edge!(graph(tree), e)
-
-############
-# Plotting #
-############
-
-function graphplot(tree::Tree, int::Ω;
-                   wild_color = :blue,
-                   derived_color = :red,
-                   attributes...)
-    mask = fill(ancestral_mask(tree, int), nv(tree))
-    node_color = ifelse.(any.(sequences(tree) .& mask),
-                         derived_color, wild_color)
-
-    invoke(graphplot, Tuple{AbstractGenealogy}, tree;
-           node_color = node_color)
-end
-
-graphplot(tree::Tree; attributes...) = graphplot(tree, Ω(0); attributes...)
 
 ###########
 # Methods #
@@ -207,9 +107,6 @@ for fun ∈ [:dad, :sibling]
         (first ∘ $fun_gen)(tree, v)
     end
 end
-
-export mut_rate
-mut_rate(tree::Tree, scaled = true) = tree.core.μ_loc * (scaled ? 4 * Ne(tree) : 1)
 
 export depth
 """
@@ -425,7 +322,7 @@ function build!(rng, tree::Tree, ms)
     tree
 end
 
-function build!(rng, tree)
+function build!(rng, tree::Tree)
     ms = MutationSampler((collect ∘ sequences)(tree, leaves(tree)))
     build!(rng, tree, ms)
 end

@@ -1,8 +1,10 @@
 using IntervalSets: AbstractInterval, Interval
 
 import Base: union,
-             intersect,
-             join
+    intersect,
+    join
+
+using Base: Fix1
 
 ######################
 # Khatri-Rao Product #
@@ -35,8 +37,8 @@ end
 # Set of intervals #
 ####################
 
-function simplify!(xs)
-    tmp = Set{eltype(xs)}()
+function simplify!(xs::Set{T}) where T
+    tmp = Set{T}()
 
     while !isempty(xs)
         @label main
@@ -45,7 +47,8 @@ function simplify!(xs)
 
         for y ∈ xs
             isempty(x ∩ y) && continue
-            push!(xs, x ∪ pop!(xs, y))
+            yy = x ∪ pop!(xs, y)
+            push!(xs, yy)
             @goto main
         end
 
