@@ -155,52 +155,35 @@ ancestral_intervals(arg::Arg, v::VertexType) =
 # MMN #
 #######
 
-function mutationsidx!(res, arg, e, firstchunk, firstidx, lastchunk, lastidx)
+function mutationsidx!(res, mask, ωs, arg, e, firstchunk, firstidx, lastchunk, lastidx)
     η1, η2 = sequences(arg, e)
-    mask = one(UInt64) << (firstidx - 1)
+    ancestral_mask!(mask, ωs, arg, e)
+    marker_mask = one(UInt64) << (firstidx - 1)
     idx = one(Int)
 
     @inbounds for k ∈ range(firstchunk, lastchunk - 1)
-        xored_chunks = η1.data.chunks[k] ⊻ η2.data.chunks[k]
+        xored_chunks = (η1.data.chunks[k] ⊻ η2.data.chunks[k]) &
+            mask.data.chunks[k]
 
-        while !iszero(mask)
-            iszero(xored_chunks & mask) || push!(res[idx], e)
+        while !iszero(marker_mask)
+            iszero(xored_chunks & marker_mask) || push!(res[idx], e)
             idx += 1
-            mask <<= 1
+            marker_mask <<= 1
         end
 
-        mask = one(UInt64)
+        marker_mask = one(UInt64)
     end
 
     ## Process last chunk
-    xored_chunks = η1.data.chunks[lastchunk] ⊻ η2.data.chunks[lastchunk]
+    xored_chunks = (η1.data.chunks[lastchunk] ⊻ η2.data.chunks[lastchunk]) &
+        mask.data.chunks[lastchunk]
     for _ ∈ 1:lastidx
-        iszero(xored_chunks & mask) || push!(res[idx], e)
+        iszero(xored_chunks & marker_mask) || push!(res[idx], e)
         idx += 1
-        mask <<= 1
+        marker_mask <<= 1
     end
 
     res
-end
-
-export edges_interval
-function edges_interval(arg, ω)
-    ret = Set{EdgeType}()
-    vstack = Stack{VertexType}(ceil(Int, log(nv(arg))))
-    push!(vstack, mrca(arg))
-
-    while !isempty(vstack)
-        parent = pop!(vstack)
-        for child ∈ children(arg, parent, ω)
-            e = Edge(parent, child)
-            e ∈ ret && continue
-
-            push!(ret, e)
-            push!(vstack, child)
-        end
-    end
-
-    ret
 end
 
 export mutation_edges
@@ -216,8 +199,10 @@ function mutation_edges(arg, ω::Ω)
     m = ridx - lidx + 1
     mutations = [Vector{EdgeType}() for _ ∈ 1:m]
 
+    mask = Sequence(undef, nmarkers(arg))
+    ωs = Set{Ω}()
     for edge ∈ edges_interval(arg, ω)
-        mutationsidx!(mutations, arg, edge,
+        mutationsidx!(mutations, mask, ωs, arg, edge,
                       firstchunk, firstidx, lastchunk, lastidx)
     end
 

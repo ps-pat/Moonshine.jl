@@ -17,7 +17,9 @@ using GeometryBasics: Point
 
 using Bumper
 
-using DataStructures: Stack, DefaultDict
+using DataStructures: Stack, DefaultDict, RBTree
+
+import Base: IteratorSize, eltype
 
 const VertexType = Int
 const EdgeType = SimpleEdge{VertexType}
@@ -619,4 +621,61 @@ for fun ∈ [:branchlength, :nmutations]
     @eval function $fun(genealogy, σ, δ)
         $fun(genealogy, Edge(σ, δ))
     end
+end
+
+"""
+    mutable struct EdgeIntervalIter{G}
+
+Iterate over the edges of a genealogy that have ancestral material in a given
+interval.
+"""
+struct EdgeIntervalIter{G}
+    genealogy::G
+    ωs::Set{Ω}
+    pstack::Stack{VertexType}
+    cstack::Stack{VertexType}
+    visited::RBTree{EdgeType}
+end
+
+@generated IteratorSize(::EdgeIntervalIter) = Base.SizeUnknown()
+
+@generated eltype(::EdgeIntervalIter) = EdgeType
+
+function edges_interval(genealogy, ωs = Set((Ω(0, ∞),)))
+    root = argmax(latitudes(genealogy)) + nleaves(genealogy)
+    pstack = Stack{VertexType}(ceil(Int, log(nv(genealogy))))
+    push!(pstack, root)
+
+    cstack = Stack{VertexType}(2)
+    push!(cstack, children(genealogy, root)...)
+
+    EdgeIntervalIter(genealogy, ωs, pstack, cstack, RBTree{EdgeType}())
+end
+
+edges_interval(genealogy, ω::Ω) = edges_interval(genealogy, Set((ω,)))
+
+function iterate(eit::EdgeIntervalIter, state = 0)
+    pstack = eit.pstack
+    cstack = eit.cstack
+    genealogy = eit.genealogy
+    ωs = eit.ωs
+    isempty(pstack) && return nothing
+
+    parent = pop!(pstack)
+    child = pop!(cstack)
+    isleaf(genealogy, child) || push!(pstack, child)
+    if isempty(cstack)
+        isempty(pstack) || push!(cstack, children(genealogy, first(pstack))...)
+    else
+        push!(pstack, parent)
+    end
+
+    e = Edge(parent, child)
+    if e ∈ eit.visited || isempty(ancestral_intervals(genealogy, e) ∩ ωs)
+        return iterate(eit, state)
+    end
+
+    push!(eit.visited, e)
+
+    e, state + 1
 end

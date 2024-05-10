@@ -82,7 +82,7 @@ end
 intersect(x::T, xs::Set{T}) where T = (simplify! ∘ Set ∘ broadcast)(Fix1(intersect, x), xs)
 
 function intersect(xs::Set{T}, ys::Set{T}) where T
-    (simplify! ∘ mapreduce)(x -> intersect(x, ys), ∪, xs)
+    (simplify! ∘ mapreduce)(x -> intersect(x, ys), ∪, xs, init = Set{T}())
 end
 
 for fun ∈ [:union, :intersect]
