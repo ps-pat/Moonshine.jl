@@ -155,7 +155,8 @@ ancestral_intervals(arg::Arg, v::VertexType) =
 # MMN #
 #######
 
-function mutationsidx!(res, mask, ωs, arg, e, firstchunk, firstidx, lastchunk, lastidx)
+function mutationsidx!(res, ptrs, mask, ωs, arg, e,
+                       firstchunk, firstidx, lastchunk, lastidx)
     η1, η2 = sequences(arg, e)
     ancestral_mask!(mask, ωs, arg, e)
     marker_mask = one(UInt64) << (firstidx - 1)
@@ -166,7 +167,10 @@ function mutationsidx!(res, mask, ωs, arg, e, firstchunk, firstidx, lastchunk, 
             mask.data.chunks[k]
 
         while !iszero(marker_mask)
-            iszero(xored_chunks & marker_mask) || push!(res[idx], e)
+            if !iszero(xored_chunks & marker_mask)
+                res[idx][ptrs[idx]] = e
+                ptrs[idx] += 1
+            end
             idx += 1
             marker_mask <<= 1
         end
@@ -177,8 +181,11 @@ function mutationsidx!(res, mask, ωs, arg, e, firstchunk, firstidx, lastchunk, 
     ## Process last chunk
     xored_chunks = (η1.data.chunks[lastchunk] ⊻ η2.data.chunks[lastchunk]) &
         mask.data.chunks[lastchunk]
-    for _ ∈ 1:lastidx
-        iszero(xored_chunks & marker_mask) || push!(res[idx], e)
+    @inbounds for _ ∈ 1:lastidx
+        if !iszero(xored_chunks & marker_mask)
+            res[idx][ptrs[idx]] = e
+            ptrs[idx] += 1
+        end
         idx += 1
         marker_mask <<= 1
     end
@@ -197,13 +204,18 @@ function mutation_edges(arg, ω::Ω)
     lastidx = idxinchunk(Sequence, ridx)
 
     m = ridx - lidx + 1
-    mutations = [Vector{EdgeType}() for _ ∈ 1:m]
+    mutations = [Vector{EdgeType}(undef, nleaves(arg) ÷ 2) for _ ∈ 1:m]
+    ptrs = fill(one(Int), length(mutations))
 
     mask = Sequence(undef, nmarkers(arg))
     ωs = Set{Ω}()
     for edge ∈ edges_interval(arg, ω)
-        mutationsidx!(mutations, mask, ωs, arg, edge,
+        mutationsidx!(mutations, ptrs, mask, ωs, arg, edge,
                       firstchunk, firstidx, lastchunk, lastidx)
+    end
+
+    @inbounds for (k, ptr) ∈ enumerate(ptrs)
+        resize!(mutations[k], ptr - 1)
     end
 
     mutations
@@ -212,44 +224,6 @@ end
 ##################
 # Recombinations #
 ##################
-
-export recombine!
-function recombine!(arg, redge, cedge, breakpoint, rlat, clat)
-    ## Add recombination and recoalescence vertices to arg.
-    rvertex, cvertex = nv(arg) .+ (1, 2)
-    add_vertices!(arg,
-                  (Sequence(trues(nmarkers(arg))),
-                   Sequence(trues(nmarkers(arg)))),
-                  (rlat, clat))
-
-    ## Replace recombination edge.
-    ωr = ancestral_intervals(arg, redge)
-    add_edge!(arg, Edge(rvertex, dst(redge)), ωr)
-    add_edge!(arg, Edge(src(redge), rvertex), ωr ∩ Ω(0, breakpoint))
-    rem_edge!(arg, redge)
-
-    ## Replace recoalescence edge.
-    ωc = ancestral_intervals(arg, cedge)
-    add_edge!(arg, Edge(cvertex, rvertex), ωr ∩ Ω(breakpoint, ∞))
-    add_edge!(arg, Edge(cvertex, dst(cedge)), ωc)
-    rem_edge!(arg, cedge)
-    isroot(arg, dst(cedge)) ||
-        add_edge!(arg, Edge(src(cedge), cvertex), ωc ∪ (ωr ∩ Ω(breakpoint, ∞)))
-
-    ## Compute sequence of new vertices.
-    let mask = Sequence(undef, nmarkers(arg)),
-        ωs = Set{Ω}()
-
-        _compute_sequence!(arg, rvertex, mask, ωs)
-        _compute_sequence!(arg, cvertex, mask, ωs)
-    end
-
-    ## Update sequences and ancetral intervals.
-    update_upstream!(arg, src(redge))
-    isroot(arg, dst(cedge)) || update_upstream!(arg, cvertex)
-
-    arg
-end
 
 function _compute_sequence!(arg, v, mask, ωs)
     η = sequence(arg, v)
@@ -297,6 +271,44 @@ function update_upstream!(arg, v)
         sequence(arg, v) == oldη && continue
         push!(vstack, dads(arg, v)...)
     end
+
+    arg
+end
+
+export recombine!
+function recombine!(arg, redge, cedge, breakpoint, rlat, clat)
+    ## Add recombination and recoalescence vertices to arg.
+    rvertex, cvertex = nv(arg) .+ (1, 2)
+    add_vertices!(arg,
+                  (Sequence(trues(nmarkers(arg))),
+                   Sequence(trues(nmarkers(arg)))),
+                  (rlat, clat))
+
+    ## Replace recombination edge.
+    ωr = ancestral_intervals(arg, redge)
+    add_edge!(arg, Edge(rvertex, dst(redge)), ωr)
+    add_edge!(arg, Edge(src(redge), rvertex), ωr ∩ Ω(0, breakpoint))
+    rem_edge!(arg, redge)
+
+    ## Replace recoalescence edge.
+    ωc = ancestral_intervals(arg, cedge)
+    add_edge!(arg, Edge(cvertex, rvertex), ωr ∩ Ω(breakpoint, ∞))
+    add_edge!(arg, Edge(cvertex, dst(cedge)), ωc)
+    rem_edge!(arg, cedge)
+    isroot(arg, dst(cedge)) ||
+        add_edge!(arg, Edge(src(cedge), cvertex), ωc ∪ (ωr ∩ Ω(breakpoint, ∞)))
+
+    ## Compute sequence of new vertices.
+    let mask = Sequence(undef, nmarkers(arg)),
+        ωs = Set{Ω}()
+
+        _compute_sequence!(arg, rvertex, mask, ωs)
+        _compute_sequence!(arg, cvertex, mask, ωs)
+    end
+
+    ## Update sequences and ancetral intervals.
+    update_upstream!(arg, src(redge))
+    isroot(arg, dst(cedge)) || update_upstream!(arg, cvertex)
 
     arg
 end

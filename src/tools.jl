@@ -4,7 +4,8 @@ import Base: union,
     intersect,
     join,
     in,
-    issubset
+    issubset,
+    isdisjoint
 
 using Base: Fix1
 
@@ -101,3 +102,13 @@ end
 issubset(A::AbstractInterval, Bs::Set{<:AbstractInterval}) = any(B -> A ⊆ B, Bs)
 
 issubset(As::Set{<:AbstractInterval}, B::AbstractInterval) = all(A -> A ⊆ B, As)
+
+function isdisjoint(As::Set{<:AbstractInterval}, Bs::Set{<:AbstractInterval})
+    for A ∈ As
+        for B ∈ Bs
+            isdisjoint(A, B) || return false
+        end
+    end
+
+    true
+end

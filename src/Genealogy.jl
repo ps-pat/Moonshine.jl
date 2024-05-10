@@ -671,7 +671,7 @@ function iterate(eit::EdgeIntervalIter, state = 0)
     end
 
     e = Edge(parent, child)
-    if e ∈ eit.visited || isempty(ancestral_intervals(genealogy, e) ∩ ωs)
+    if e ∈ eit.visited || isdisjoint(ancestral_intervals(genealogy, e), ωs)
         return iterate(eit, state)
     end
 
