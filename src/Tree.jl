@@ -80,6 +80,12 @@ nleaves(tree::Tree) = (length(sequences(tree)) + 1) ÷ 2
 
 describe(::Tree, long = true) = long ? "Coalescent Tree" : "Tree"
 
+function mrca(tree::Tree)
+    any(iszero, latitudes(tree)) && return zero(VertexType)
+    isone(nv(tree)) && return one(VertexType)
+    argmax(latitudes(tree)) + nleaves(tree)
+end
+
 ###########################
 # AbstractGraph Interface #
 ###########################

@@ -17,7 +17,7 @@ using GeometryBasics: Point
 
 using Bumper
 
-using DataStructures: Stack
+using DataStructures: Stack, DefaultDict
 
 const VertexType = Int
 const EdgeType = SimpleEdge{VertexType}
@@ -129,38 +129,35 @@ See also [`tmrca`](@ref) for the time to the most recent common ancestor.
 """
 function mrca end
 
-function mrca(genealogy)
-    (isempty(genealogy) || any(iszero, latitudes(genealogy))) &&
-        return zero(VertexType)
-    isone((length ∘ sequences)(genealogy)) && return one(VertexType)
-    argmax(latitudes(genealogy)) + nleaves(genealogy)
+function mrca(genealogy, pos::Real, vs = leaves(genealogy))
+    length(vs) < 2 && return zero(VertexType)
+
+    μ = argmax(latitudes(genealogy)) + nleaves(genealogy)
+    vstack = Stack{VertexType}(ceil(Int, log(nv(genealogy))))
+    push!(vstack, children(genealogy, μ, pos)...)
+
+    ds = Set{VertexType}()
+    while !isempty(vstack)
+        μ2 = pop!(vstack)
+        isleaf(genealogy, μ2) && continue
+        vs ⊆ descendants!(ds, genealogy, μ2, pos) || continue
+
+        μ = μ2
+        push!(vstack, children(genealogy, μ, pos)...)
+    end
+
+    μ
 end
 
-function mrca(genealogy, vs)
-    μ = mrca(genealogy)
+function mrca(genealogy, vs::AbstractVector = leaves(genealogy))
+    length(vs) < 2 && return zero(VertexType)
 
-    @no_escape begin
-        possible_μ = @alloc(eltype(genealogy), nv(genealogy))
-        ptr = firstindex(possible_μ)
-
-        for child ∈ children(genealogy, μ)
-            possible_μ[ptr] = child
-            ptr += 1
-        end
-
-        while ptr > firstindex(possible_μ)
-            v = possible_μ[ptr - 1]
-            ptr -= 1
-            vs ⊆ descendants(genealogy, v) || continue
-
-            μ = v
-            ptr = firstindex(possible_μ)
-
-            for child ∈ children(genealogy, μ)
-                possible_μ[ptr] = child
-                ptr += 1
-            end
-        end
+    μ = argmax(latitudes(genealogy)) + nleaves(genealogy)
+    predicate = child ->
+        isempty(ancestral_intervals(genealogy, Edge(μ, child)) ∩ Ω(0, 1))
+    @inbounds while any(predicate, children(genealogy, μ))
+        k = findfirst(!predicate, children(genealogy, μ))
+        μ = children(genealogy, μ)[k]
     end
 
     μ
@@ -186,14 +183,23 @@ Positions of the markers.
 """
 function positions end
 
-export ancestral_interval
+export ancestral_intervals!, ancestral_intervals
 """
-    ancestral_intervals(genealogy, edge)
+    ancestral_intervals!(ωs, genealogy, x)
+    ancestral_intervals(genealogy, x)
 
-Interval for which an edge is ancestral. Default implementation assumes that
-any edge is ancestral for [0, inf).
+Interval for which x is ancestral. Default implementation assumes that anything
+is ancestral for [0, ∞).
 """
-ancestral_intervals(::Any, ::Any) = Ω(0, ∞)
+function ancestral_intervals end
+
+function ancestral_intervals!(ωs, ::Any, ::Any)
+    empty!(ωs)
+    push!(ωs, Ω(0, ∞))
+end
+
+@generated ancestral_intervals(genealogy::Any, x::Any) =
+    ancestral_intervals!(Set{Ω}(), genealogy, x)
 
 #############
 # Utilities #
@@ -285,6 +291,12 @@ end
 ancestral_mask(genealogy, ω) =
     ancestral_mask!(Sequence(falses(nmarkers(genealogy))), genealogy, ω,
                     wipe = false)
+
+ancestral_mask!(η, ωs, genealogy, x::Union{VertexType, EdgeType}; wipe = true) =
+    ancestral_mask!(η, genealogy, ancestral_intervals!(ωs, genealogy, x), wipe = wipe)
+
+ancestral_mask(genealogy, x::Union{VertexType, EdgeType}) =
+    ancestral_mask!(Sequence(undef, nmarkers(genealogy2)), Set{Ω}(), genealogy, x)
 
 ###################
 # Pretty printing #
@@ -502,12 +514,14 @@ end
 tmrca(genealogy, vs) = latitude(genealogy, mrca(genealogy, vs))
 
 export dads, children, siblings
+export descendants!, descendants
 """
-    dads(tree, v)
-    children(tree, v)
-    siblings(tree, v)
+    dads(genealogy, v[, pos])
+    children(genealogy, v[, pos])
+    descendants!(genealogy, v[, pos])
+    descendants(genealogy, v[, pos])
 
-Parents/children/siblings of a vertex.
+Parents/children/descendants of a vertex.
 """
 function dads end,
 function children end,
@@ -520,40 +534,56 @@ for (fun, graph_method) ∈ Dict(:dads => :inneighbors,
     end
 end
 
-function siblings(genealogy, v, args...)
-    res = mapreduce(v -> children(genealogy, v, args...),
-                    vcat,
-                    dads(genealogy, v, args...))
-    filter(!=(v), res)
-end
+let funorder = Dict(:dads => (x, y) -> (x, y), :children => (x, y) -> (y, x)),
+    args = Dict(:pos => (:Real, (As, x) -> x ∈ As),
+                :ω => (:Ω, issubset),
+                :ωs => (:(Set{Ω}), issubset))
+    for ((fun, order), (argname, (Argtype, testfun))) ∈ Iterators.product(funorder,
+                                                                        args)
+        @eval function $fun(genealogy, v::T, $argname::$Argtype) where T
+            ret = sizehint!(Vector{T}(undef, 2), 2)
+            ptr = firstindex(ret)
+            ωs_edge = Set{Ω}()
 
-export descendants
-"""
-    descendants(genealogy, v)
+            for u ∈ $fun(genealogy, v)
+                ancestral_intervals!(ωs_edge, genealogy, Edge($order(u, v)...))
+                $testfun(ωs_edge, $argname) || continue
 
-Transitive closure of the "children of" relation.
-"""
-function descendants(genealogy, v)
-    descendants = CheapStack{VertexType}(nv(genealogy) - 1)
-    _children = CheapStack{VertexType}(nv(genealogy) - 1)
+                ret[ptr] = u
+                ptr += 1
+            end
 
-    ## Mandatory to avoid dynamic dispatch.
-    for child ∈ children(genealogy, v)
-        push!(_children, child)
-    end
-
-    while !isempty(_children)
-        v = pop!(_children)
-
-        ## Mandatory to avoid dynamic dispatch.
-        for child ∈ children(genealogy, v)
-            push!(_children, child)
+            resize!(ret, ptr - 1)
         end
-        push!(descendants, v)
+    end
+end
+
+function descendants!(ds, genealogy, v::T, pos) where T
+    if isleaf(genealogy, v)
+        resize!(ds, 0)
+        return ds
     end
 
-    vec(descendants)
+    fill!(ds, 0)
+    ptr = firstindex(ds)
+    _children = Stack{T}(ceil(Int, log(nv(genealogy))))
+    push!(_children, children(genealogy, v, pos)...)
+
+    @inbounds while !isempty(_children)
+        v = pop!(_children)
+        v ∈ ds && continue
+        ds[ptr] = v
+        ptr += 1
+
+        isleaf(genealogy, v) && continue
+        push!(_children, children(genealogy, v, pos)...)
+    end
+
+    resize!(ds, ptr - 1)
 end
+
+descendants(genealogy, v, pos) =
+    descendants!(Set{VertexType}(), genealogy, v, pos)
 
 export nmutations
 """
@@ -564,19 +594,23 @@ number of mutations on that edge.
 """
 function nmutations end
 
-function nmutations(genealogy, e)
-    ret = zero(Int8)
+function nmutations!(mask, ωs, genealogy, e)
+    ret = zero(Int)
+    ancestral_mask!(mask, ωs, genealogy, e)
+
     nchunks = (length(positions(genealogy)) - 1) ÷ blocksize(Sequence) + 1
     η1, η2 = sequences(genealogy, e)
-    for k ∈ range(1, length = nchunks)
-        ret += count_ones(η1.data.chunks[k] ⊻ η2.data.chunks[k])
+    @inbounds for k ∈ range(1, length = nchunks)
+        ret += count_ones((η1.data.chunks[k] ⊻ η2.data.chunks[k]) & mask.data.chunks[k])
     end
 
     ret
 end
 
 function nmutations(genealogy)
-    mapreduce(e -> nmutations(genealogy, e), +, edges(genealogy),
+    mask = Sequence(undef, nmarkers(genealogy))
+    ωs = Set{Ω}()
+    mapreduce(e -> nmutations!(mask, ωs, genealogy, e), +, edges(genealogy),
               init = zero(Int))
 end
 
@@ -585,27 +619,4 @@ for fun ∈ [:branchlength, :nmutations]
     @eval function $fun(genealogy, σ, δ)
         $fun(genealogy, Edge(σ, δ))
     end
-end
-
-export coalesce!
-"""
-    coalesce!(genealogy, v1, v2, lat)
-
-Make two vertices coalesce at a specified latitude. Each marker in the
-sequence associated with the newly created parent vertex is the conjunction (&)
-of the corresponding marker in the children's sequences.
-"""
-function coalesce!(genealogy, v1, v2, lat)
-    newseq = sequence(genealogy, v1) & sequence(genealogy, v2)
-
-    add_vertex!(genealogy, newseq, lat) ||
-        @error "Could not add vertex to genealogy"
-    _dad = nv(genealogy)
-
-    for child ∈ (v1, v2)
-        e = Edge(_dad, child)
-        add_edge!(genealogy, e)
-    end
-
-    _dad
 end

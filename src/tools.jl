@@ -2,7 +2,9 @@ using IntervalSets: AbstractInterval, Interval
 
 import Base: union,
     intersect,
-    join
+    join,
+    in,
+    issubset
 
 using Base: Fix1
 
@@ -87,4 +89,15 @@ for fun ∈ [:union, :intersect]
     @eval $fun(xs::Set{T}, x::T) where T = $fun(x, xs)
 end
 
-in(x::T, s::Set{<:AbstractInterval{T}}) where T = any(int -> x ∈ int, s)
+in(x, As::Set{<:AbstractInterval}) = any(A -> x ∈ A, As)
+
+function issubset(As::Set{<:AbstractInterval}, Bs::Set{<:AbstractInterval})
+    for A ∈ As
+        A ⊆ Bs || return false
+    end
+    true
+end
+
+issubset(A::AbstractInterval, Bs::Set{<:AbstractInterval}) = any(B -> A ⊆ B, Bs)
+
+issubset(As::Set{<:AbstractInterval}, B::AbstractInterval) = all(A -> A ⊆ B, As)

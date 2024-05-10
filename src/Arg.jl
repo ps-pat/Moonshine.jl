@@ -76,6 +76,8 @@ function nleaves(arg::Arg)
     ret
 end
 
+describe(::Arg, long = true) = long ? "Ancestral Recombination Graph" : "ARG"
+
 ###########################
 # AbstractGraph Interface #
 ###########################
@@ -148,30 +150,6 @@ end
 
 ancestral_intervals(arg::Arg, v::VertexType) =
     ancestral_intervals!(Set{Ω}(), arg, v)
-
-ancestral_mask!(η, ωs, arg::Arg, x::Union{VertexType, EdgeType}) =
-    ancestral_mask!(η, arg, ancestral_intervals!(ωs, arg, x))
-
-ancestral_mask(arg::Arg, x::Union{VertexType, EdgeType}) =
-    ancestral_mask!(Sequence(undef, nmarkers(arg)), Set{Ω}(), arg, x)
-
-########################
-# Genealogical methods #
-########################
-
-for (fun, order) ∈ Dict(:dads => (x, y) -> (x, y), :children => (x, y) -> (y, x))
-    @eval function $fun(arg::Arg, v, ωs)
-        ret = sizehint!(Vector{VertexType}(undef, 0), 2)
-
-        for u ∈ $fun(arg, v)
-            for ωu ∈ ancestral_intervals(arg, Edge($order(u, v)...))
-                isempty(ωs ∩ ωu) || push!(ret, u)
-            end
-        end
-
-        ret
-    end
-end
 
 #######
 # MMN #
