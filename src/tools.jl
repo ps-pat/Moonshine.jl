@@ -65,29 +65,45 @@ function simplify!(xs::Set{T}) where T
     xs
 end
 
-union(x::T, xs::Set{T}) where T = simplify!(Set([x]) ∪ xs)
+function union(A::T, Bs::Set{<:T}) where T<:AbstractInterval
+    ret = Set{T}()
+    push!(ret, A)
+    push!(ret, Bs...)
+    simplify!(ret)
+end
 
-function union(x::Set{T}, y::Set{T}) where T<:Interval
-    ret = empty(x)
-    for el ∈ x
-        push!(ret, el)
+function union(As::Set{<:T}, Bs::Set{<:T}) where T<:AbstractInterval
+    ret = Set{T}()
+
+    for A ∈ As
+        push!(ret, A)
     end
 
-    for el ∈ y
-        push!(ret, el)
+    for B ∈ Bs
+        push!(ret, B)
     end
 
     simplify!(ret)
 end
 
-intersect(x::T, xs::Set{T}) where T = (simplify! ∘ Set ∘ broadcast)(Fix1(intersect, x), xs)
+function intersect(A::T, Bs::Set{<:T}) where T<:AbstractInterval
+    ret = Set{T}()
+    for B ∈ Bs
+        push!(ret, A ∩ B)
+    end
 
-function intersect(xs::Set{T}, ys::Set{T}) where T
-    (simplify! ∘ mapreduce)(x -> intersect(x, ys), ∪, xs, init = Set{T}())
+    simplify!(ret)
 end
 
-for fun ∈ [:union, :intersect]
-    @eval $fun(xs::Set{T}, x::T) where T = $fun(x, xs)
+function intersect(As::Set{T}, Bs::Set{T}) where T <:AbstractInterval
+    ret = Set{T}()
+    for A ∈ As
+        for B ∈ Bs
+            push!(ret, A ∩ B)
+        end
+    end
+
+    simplify!(ret)
 end
 
 in(x, As::Set{<:AbstractInterval}) = any(A -> x ∈ A, As)
@@ -103,12 +119,22 @@ issubset(A::AbstractInterval, Bs::Set{<:AbstractInterval}) = any(B -> A ⊆ B, B
 
 issubset(As::Set{<:AbstractInterval}, B::AbstractInterval) = all(A -> A ⊆ B, As)
 
-function isdisjoint(As::Set{<:AbstractInterval}, Bs::Set{<:AbstractInterval})
-    for A ∈ As
-        for B ∈ Bs
-            isdisjoint(A, B) || return false
-        end
+function isdisjoint(A::AbstractInterval, Bs::Set{<:AbstractInterval})
+    for B ∈ Bs
+        isdisjoint(A, B) || return false
     end
 
     true
+end
+
+function isdisjoint(As::Set{<:AbstractInterval}, Bs::Set{<:AbstractInterval})
+    for A ∈ As
+        isdisjoint(A, Bs) || return false
+    end
+
+    true
+end
+
+for fun ∈ [:union, :intersect, :isdisjoint]
+    @eval $fun(As::Set{T}, B::T) where T<:AbstractInterval = $fun(B, As)
 end
