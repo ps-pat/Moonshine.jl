@@ -2,6 +2,10 @@ using Graphs
 
 import Graphs: add_vertices!, add_edge!, rem_edge!
 
+using Random
+
+using StatsBase: samplepair
+
 ######################
 # ArgCore Definition #
 ######################
@@ -99,6 +103,7 @@ rem_edge!(arg::Arg, e) = rem_edge!(graph(arg), e)
 # Simple methods #
 ##################
 
+export rec_rate
 rec_rate(arg::Arg, scaled = true) = arg.core.ρloc * (scaled ? 4 * Ne(arg) : 1.)
 
 ########################
@@ -129,13 +134,13 @@ function ancestral_intervals!(ωs, arg::Arg, e::EdgeType; wipe = true)
 end
 
 ancestral_intervals(arg::Arg, e::EdgeType) =
-    ancestral_intervals!(Set{Ω}(), arg, e)
+    get(() -> Set{Ω}((Ω(0, ∞),)), arg.core.ancestral_intervals, e)
 
 ancestral_intervals!(ωs, arg::Arg, s::VertexType, d; wipe = true) =
     ancestral_intervals!(ωs, arg, Edge(s, d); wipe = wipe)
 
 ancestral_intervals(arg::Arg, s::VertexType, d) =
-    ancestral_intervals!(Set{Ω}(), arg, s, d)
+    ancestral_intervals(arg, Edge(s, d))
 
 function ancestral_intervals!(ωs, arg::Arg, v::VertexType; wipe = true)
     empty!(ωs)
@@ -168,7 +173,12 @@ function mutationsidx!(res, ptrs, mask, ωs, arg, e,
 
         while !iszero(marker_mask)
             if !iszero(xored_chunks & marker_mask)
-                res[idx][ptrs[idx]] = e
+                k = ptrs[idx]
+                if k ≤ length(res[idx])
+                    res[idx][k] = e
+                else
+                    push!(res[idx], e)
+                end
                 ptrs[idx] += 1
             end
             idx += 1
@@ -183,7 +193,12 @@ function mutationsidx!(res, ptrs, mask, ωs, arg, e,
         mask.data.chunks[lastchunk]
     @inbounds for _ ∈ 1:lastidx
         if !iszero(xored_chunks & marker_mask)
-            res[idx][ptrs[idx]] = e
+            k = ptrs[idx]
+            if k ≤ length(res[idx])
+                res[idx][k] = e
+            else
+                push!(res[idx], e)
+            end
             ptrs[idx] += 1
         end
         idx += 1
@@ -193,8 +208,8 @@ function mutationsidx!(res, ptrs, mask, ωs, arg, e,
     res
 end
 
-export mutation_edges
-function mutation_edges(arg, ω::Ω)
+export mutation_edges!, mutation_edges
+function mutation_edges!(mutations, arg, ω::Ω)
     ## Compute the chunks and indices.
     lidx = postoidx(arg, leftendpoint(ω))
     ridx = postoidx(arg, rightendpoint(ω))
@@ -203,8 +218,7 @@ function mutation_edges(arg, ω::Ω)
     lastchunk = chunkidx(Sequence, ridx)
     lastidx = idxinchunk(Sequence, ridx)
 
-    m = ridx - lidx + 1
-    mutations = [Vector{EdgeType}(undef, nleaves(arg) ÷ 2) for _ ∈ 1:m]
+    resize!(mutations, ridx - lidx + 1)
     ptrs = fill(one(Int), length(mutations))
 
     mask = Sequence(undef, nmarkers(arg))
@@ -219,6 +233,12 @@ function mutation_edges(arg, ω::Ω)
     end
 
     mutations
+end
+
+function mutation_edges(arg, ω::Ω)
+    m = postoidx(arg, rightendpoint(ω)) - postoidx(arg, leftendpoint(ω)) + 1
+    ret = [Vector{EdgeType}(undef, nleaves(arg) ÷ 2 + 1) for _ ∈ 1:m]
+    mutation_edges!(ret, arg, ω)
 end
 
 ##################
@@ -244,38 +264,38 @@ function update_upstream!(arg, v)
     push!(vstack, v)
 
     mask = Sequence(undef, nmarkers(arg))
-    ωs = Set{Ω}()
-    oldωs = Set{Ω}()
+    ωs_buf1 = Set{Ω}()
+    ωs_buf2 = Set{Ω}()
     oldη = Sequence(undef, nmarkers(arg))
 
     while !isempty(vstack)
         v = pop!(vstack)
+        _dads = dads(arg, v)
 
-        ## Update ancestry of the parents of v
-        for dad ∈ dads(arg, v)
-            empty!(oldωs)
-            ωdad = ancestral_intervals(arg, Edge(dad, v))
-            while !isempty(ωdad)
-                push!(oldωs, pop!(ωdad))
-            end
-
-            ancestral_intervals!(ωdad, arg, v)
-            ωdad == oldωs && continue
-            push!(vstack, dad)
+        ## Update ancestry of edges.
+        @inbounds for dad ∈ _dads
+            arg.core.ancestral_intervals[Edge(dad, v)] =
+                ancestral_intervals!(ωs_buf2, arg, Edge(dad, v)) ∩
+                ancestral_intervals!(ωs_buf1, arg, v)
         end
 
         ## Update sequence of v.
         oldη.data.chunks .= sequence(arg, v).data.chunks
-        _compute_sequence!(arg, v, mask, ωs)
+        _compute_sequence!(arg, v, mask, ωs_buf1)
 
-        sequence(arg, v) == oldη && continue
-        push!(vstack, dads(arg, v)...)
+        (sequence(arg, v) == oldη || isempty(_dads)) && continue
+        push!(vstack, _dads...)
     end
 
     arg
 end
 
 export recombine!
+"""
+    recombine!(arg, redge, cedge, breakpoint, rlat, clat)
+
+Add a recombination event to an ARG.
+"""
 function recombine!(arg, redge, cedge, breakpoint, rlat, clat)
     ## Add recombination and recoalescence vertices to arg.
     rvertex, cvertex = nv(arg) .+ (1, 2)
@@ -297,6 +317,7 @@ function recombine!(arg, redge, cedge, breakpoint, rlat, clat)
     rem_edge!(arg, cedge)
     isroot(arg, dst(cedge)) ||
         add_edge!(arg, Edge(src(cedge), cvertex), ωc ∪ (ωr ∩ Ω(breakpoint, ∞)))
+    ## TODO: Wrong. Should add more edges.
 
     ## Compute sequence of new vertices.
     let mask = Sequence(undef, nmarkers(arg)),
@@ -308,7 +329,84 @@ function recombine!(arg, redge, cedge, breakpoint, rlat, clat)
 
     ## Update sequences and ancetral intervals.
     update_upstream!(arg, src(redge))
-    isroot(arg, dst(cedge)) || update_upstream!(arg, cvertex)
+    isroot(arg, dst(cedge)) || update_upstream!(arg, src(cedge))
 
+    arg
+end
+
+function build!(rng, arg::Arg; winwidth = ∞)
+    # λc = rec_rate(arg, true) / 2 * seq_length(arg)
+
+    _mutation_edges = mutation_edges(arg, Ω(0, ∞))
+    nextidx = findfirst(>(1) ∘ length, _mutation_edges)
+    isnothing(nextidx) && return arg ## ARG is already consistent.
+    breakpoint_lbound = idxtopos(arg, max(nextidx - 1, one(nextidx)))
+
+    while !isnothing(nextidx)
+        live_edges = _mutation_edges[nextidx + length(_mutation_edges) - nmarkers(arg)]
+
+        ## Sample next breakpoint.
+        nextpos = idxtopos(arg, nextidx)
+        @debug "Recombination bounds" breakpoint_lbound nextpos
+        if nextpos > breakpoint_lbound + eps(Float64)
+            breakpoint_dist = LogUniform(breakpoint_lbound + eps(Float64),
+                                         nextpos)
+            breakpoint = rand(rng, breakpoint_dist)
+            arg.logprob += logpdf(breakpoint_dist, breakpoint)
+        else
+            breakpoint = breakpoint_lbound
+        end
+
+        ## Create ancestral window.
+        ω = Ω(breakpoint - winwidth / 2, breakpoint + winwidth / 2)
+
+        ## Sample recombination and recoalescence edges.
+        e1, e2 = samplepair(rng, length(live_edges))
+        redge = live_edges[e1]
+        cedge = live_edges[e2]
+        if latitude(arg, dst(redge)) > latitude(arg, dst(cedge))
+            redge, cedge = cedge, redge
+        end
+
+        ## Sample recombination latitude.
+        ## It would be more accurate to use a truncated exponential
+        ## distribution with rate proportional to the number of live
+        ## vertices at the latitude of dst(redge). However, this is a
+        ## substantial amount of trouble for very little gain...
+        rlat_bounds = (latitude(arg, dst(redge)) + eps(Float64),
+                       min(latitude(arg, src(redge)), latitude(arg, src(cedge))))
+        if first(rlat_bounds) < last(rlat_bounds)
+            rlat_dist = Uniform(rlat_bounds...)
+            rlat = rand(rng, rlat_dist)
+            arg.logprob += logpdf(rlat_dist, rlat)
+        else
+            rlat = first(rlat_bounds)
+        end
+
+        ## Sample recoalescence latitude.
+        clat_bounds = (max(rlat, latitude(arg, dst(cedge))),
+                       latitude(arg, src(cedge)))
+        if first(clat_bounds) < last(clat_bounds)
+            clat_dist = Uniform(clat_bounds...)
+            clat = rand(rng, clat_dist)
+            arg.logprob += logpdf(clat_dist, clat)
+        else
+            clat = first(clat_bounds)
+        end
+
+        ## Add recombination event to the graph.
+        @debug "Recombination event" redge, cedge, breakpoint, rlat, clat
+        recombine!(arg, redge, cedge, breakpoint, rlat, clat)
+
+        ## Update variables.
+        mutation_edges!(_mutation_edges, arg, Ω(breakpoint, ∞))
+        nextidx_new = findfirst(>(1) ∘ length, _mutation_edges)
+
+        isnothing(nextidx_new) && break
+        nextidx_new += nmarkers(arg) - length(_mutation_edges)
+        breakpoint_lbound = nextidx_new == nextidx ? breakpoint :
+            idxtopos(arg, max(nextidx_new - 1, one(nextidx_new)))
+        nextidx = nextidx_new
+    end
     arg
 end

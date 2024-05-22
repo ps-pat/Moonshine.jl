@@ -260,6 +260,9 @@ end
 Mask non ancestral positions to 0. If `wipe = true`, all markers in `η` wil be
 initialized at 0.
 """
+function ancestral_mask! end,
+function ancestral_mask end
+
 function ancestral_mask!(η, genealogy, ω::Ω; wipe = true)
     lpos, rpos = endpoints(ω)
 
@@ -270,18 +273,14 @@ function ancestral_mask!(η, genealogy, ω::Ω; wipe = true)
 
     ridx = postoidx(genealogy, rpos)
 
-    if wipe
-        η.data.chunks .⊻= η.data.chunks
-    end
+    wipe && wipe!(η)
     η.data[range(lidx, ridx)] .= true
 
     η
 end
 
 function ancestral_mask!(η, genealogy, ωs::Set{Ω}; wipe = true)
-    if wipe
-        η.data.chunks .⊻= η.data.chunks
-    end
+    wipe && wipe!(η)
 
     for ω ∈ ωs
         ancestral_mask!(η, genealogy, ω, wipe = false)
@@ -298,7 +297,15 @@ ancestral_mask!(η, ωs, genealogy, x::Union{VertexType, EdgeType}; wipe = true)
     ancestral_mask!(η, genealogy, ancestral_intervals!(ωs, genealogy, x), wipe = wipe)
 
 ancestral_mask(genealogy, x::Union{VertexType, EdgeType}) =
-    ancestral_mask!(Sequence(undef, nmarkers(genealogy2)), Set{Ω}(), genealogy, x)
+    ancestral_mask!(Sequence(undef, nmarkers(genealogy)), Set{Ω}(), genealogy, x)
+
+function ancestral_mask!(η, genealogy, x::AbstractFloat; wipe = true)
+    wipe && wipe!(η)
+    η[postoidx(genealogy, x)] = true
+    η
+end
+
+wipe!(η) = η.data.chunks .⊻= η.data.chunks
 
 ###################
 # Pretty printing #
@@ -396,7 +403,7 @@ GenLayout(leaveslayer, leaves) = function (genealogy_graph)
     Point.(zip(ys, -xs))
 end
 
-function graphplot(genealogy::AbstractGenealogy, ω::Ω;
+function graphplot(genealogy::AbstractGenealogy, ω;
                    wild_color = :blue,
                    derived_color = :red,
                    arrow_show = false,
@@ -417,7 +424,7 @@ function graphplot(genealogy::AbstractGenealogy, ω::Ω;
     ## Hide non ancestral edges.
     ewidth = DefaultDict{EdgeType, Int}(edge_width)
     for e ∈ edges(genealogy)
-        isempty(ancestral_intervals(genealogy, e) ∩ ω) || continue
+        isdisjoint(ancestral_intervals(genealogy, e), ω) || continue
         ewidth[e] = 0
     end
 
@@ -501,9 +508,13 @@ of that edge.
 """
 function branchlength end
 
-branchlength(genealogy, e) = latitude(genealogy, src(e)) - latitude(genealogy, dst(e))
+branchlength(genealogy, e::EdgeType) =
+    latitude(genealogy, src(e)) - latitude(genealogy, dst(e))
 
 branchlength(genealogy) = mapreduce(e -> branchlength(genealogy, e), +, edges(genealogy))
+
+branchlength(genealogy, ω) = mapreduce(e -> branchlength(genealogy, e), +,
+                                       edges_interval(genealogy, ω))
 
 export tmrca
 function tmrca(genealogy)
@@ -515,7 +526,7 @@ end
 
 tmrca(genealogy, vs) = latitude(genealogy, mrca(genealogy, vs))
 
-export dads, children, siblings
+export dads, dads!, children, children!
 export descendants!, descendants
 """
     dads(genealogy, v[, pos])
@@ -526,8 +537,7 @@ export descendants!, descendants
 Parents/children/descendants of a vertex.
 """
 function dads end,
-function children end,
-function siblings end
+function children end
 
 for (fun, graph_method) ∈ Dict(:dads => :inneighbors,
                                :children => :outneighbors)
@@ -537,26 +547,31 @@ for (fun, graph_method) ∈ Dict(:dads => :inneighbors,
 end
 
 let funorder = Dict(:dads => (x, y) -> (x, y), :children => (x, y) -> (y, x)),
-    args = Dict(:pos => (:Real, (As, x) -> x ∈ As),
-                :ω => (:Ω, issubset),
-                :ωs => (:(Set{Ω}), issubset))
+    args = Dict(:pos => (:Real, in),
+                :ω => (:Ω, !isdisjoint),
+                :ωs => (:(Set{Ω}), !isdisjoint))
     for ((fun, order), (argname, (Argtype, testfun))) ∈ Iterators.product(funorder,
-                                                                        args)
-        @eval function $fun(genealogy, v::T, $argname::$Argtype) where T
-            ret = sizehint!(Vector{T}(undef, 2), 2)
-            ptr = firstindex(ret)
-            ωs_edge = Set{Ω}()
+                                                                          args)
+        fun_inplace = Symbol(string(fun) * '!')
+
+        @eval function $fun_inplace(vs, genealogy, v, $argname::$Argtype)
+            resize!(vs, 2)
+            ptr = firstindex(vs)
 
             for u ∈ $fun(genealogy, v)
-                ancestral_intervals!(ωs_edge, genealogy, Edge($order(u, v)...))
-                $testfun(ωs_edge, $argname) || continue
+                ωs = ancestral_intervals(genealogy, Edge($order(u, v)))
+                $testfun($argname, ωs) || continue
 
-                ret[ptr] = u
+                vs[ptr] = u
                 ptr += 1
             end
 
-            resize!(ret, ptr - 1)
+            resize!(vs, ptr - 1)
         end
+
+        @eval $fun(genealogy, v::T, $argname::$Argtype) where T =
+            $fun_inplace(sizehint!(Vector{T}(undef, 2), 2), Set{Ω}(),
+                         genealogy, v, $argname)
     end
 end
 
@@ -629,53 +644,61 @@ end
 Iterate over the edges of a genealogy that have ancestral material in a given
 interval.
 """
-struct EdgeIntervalIter{G}
+struct EdgeIntervalIter{G, O}
     genealogy::G
-    ωs::Set{Ω}
-    pstack::Stack{VertexType}
-    cstack::Stack{VertexType}
-    visited::RBTree{EdgeType}
+    ω::O
+    vstack::Stack{VertexType}
+    otheredge::Base.RefValue{EdgeType}
+    stacked::RBTree{VertexType}
+    dads_buf::Vector{VertexType}
 end
 
 @generated IteratorSize(::EdgeIntervalIter) = Base.SizeUnknown()
 
 @generated eltype(::EdgeIntervalIter) = EdgeType
 
-function edges_interval(genealogy, ωs = Set((Ω(0, ∞),)))
+function edges_interval(genealogy, ωs = Ω(0, ∞))
+    vstack = Stack{VertexType}(ceil(Int, log(nv(genealogy))))
+    stacked = RBTree{VertexType}()
     root = argmax(latitudes(genealogy)) + nleaves(genealogy)
-    pstack = Stack{VertexType}(ceil(Int, log(nv(genealogy))))
-    push!(pstack, root)
+    _children = children(genealogy, root)
+    push!(vstack, _children...)
+    push!(stacked, _children...)
 
-    cstack = Stack{VertexType}(2)
-    push!(cstack, children(genealogy, root)...)
-
-    EdgeIntervalIter(genealogy, ωs, pstack, cstack, RBTree{EdgeType}())
+    EdgeIntervalIter(genealogy, ωs, vstack, Ref(Edge(0 => 0)), stacked,
+                     sizehint!(Vector{VertexType}(undef, 2), 2))
 end
 
-edges_interval(genealogy, ω::Ω) = edges_interval(genealogy, Set((ω,)))
-
 function iterate(eit::EdgeIntervalIter, state = 0)
-    pstack = eit.pstack
-    cstack = eit.cstack
+    otheredge = eit.otheredge
+    if otheredge[] != Edge(0 => 0)
+        ret = otheredge[]
+        otheredge[] = Edge(0 => 0)
+        return ret, state + 1
+    end
+
+    vstack = eit.vstack
+    isempty(vstack) && return nothing
+
     genealogy = eit.genealogy
-    ωs = eit.ωs
-    isempty(pstack) && return nothing
+    ω = eit.ω
+    stacked = eit.stacked
 
-    parent = pop!(pstack)
-    child = pop!(cstack)
-    isleaf(genealogy, child) || push!(pstack, child)
-    if isempty(cstack)
-        isempty(pstack) || push!(cstack, children(genealogy, first(pstack))...)
+    v = pop!(vstack)
+    for child ∈ children(genealogy, v)
+        if child ∉ stacked
+            push!(vstack, child)
+            indegree(genealogy, child) > 1 && push!(stacked, child)
+        end
+    end
+
+    _dads = eit.dads_buf
+    dads!(_dads, genealogy, v, ω)
+    e = Edge(first(_dads), v)
+    if length(_dads) > 1
+        otheredge[] = e
+        return Edge(last(_dads), v), state + 1
     else
-        push!(pstack, parent)
+        return e, state + 1
     end
-
-    e = Edge(parent, child)
-    if e ∈ eit.visited || isdisjoint(ancestral_intervals(genealogy, e), ωs)
-        return iterate(eit, state)
-    end
-
-    push!(eit.visited, e)
-
-    e, state + 1
 end
