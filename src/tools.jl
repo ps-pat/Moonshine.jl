@@ -7,7 +7,7 @@ import Base: union,
     issubset,
     isdisjoint
 
-using Base: Fix1
+import IntervalSets: leftendpoint, rightendpoint, endpoints
 
 ######################
 # Khatri-Rao Product #
@@ -138,3 +138,19 @@ end
 for fun ∈ [:union, :intersect, :isdisjoint]
     @eval $fun(As::Set{T}, B::T) where T<:AbstractInterval = $fun(B, As)
 end
+
+for (fun, op) ∈ Dict(:leftendpoint => :<, :rightendpoint => :>)
+    @eval function $fun(As::Set{<:AbstractInterval})
+        ret, As_rest = Iterators.peel(As)
+        ret = $fun(ret)
+        for A ∈ As_rest
+            endpoint = $fun(A)
+            if $op(endpoint, ret)
+                ret = endpoint
+            end
+        end
+        ret
+    end
+end
+
+endpoints(As::Set{<:AbstractInterval}) = leftendpoint(As), rightendpoint(As)

@@ -6,6 +6,12 @@ using Random
 
 using StatsBase: samplepair
 
+using DataStructures: Stack, Queue
+
+using SparseArrays
+
+using Combinatorics: combinations
+
 ######################
 # ArgCore Definition #
 ######################
@@ -82,6 +88,42 @@ end
 
 describe(::Arg, long = true) = long ? "Ancestral Recombination Graph" : "ARG"
 
+function isrecombination(::Arg, v, n)
+    v < 2n && return false
+    isodd(v) && return false
+    true
+end
+
+isrecombination(arg::Arg, v) = isrecombination(arg, v, nleaves(arg))
+
+function recombinations(arg::Arg; dummy = false)
+    start = 2nleaves(arg)
+    step = 2
+    stop = nv(arg)
+
+    if !dummy
+        while isinf(recbreakpoint(arg, start))
+            start += step
+        end
+    end
+
+    StepRange{Int, Int}(start, step, stop)
+end
+
+function nrecombinations(arg::Arg; dummy = false)
+    ret = ne(arg) - nv(arg) + 1
+
+    if !dummy
+        v = 2nleaves(arg)
+        while isinf(recbreakpoint(arg, v))
+            ret -= 1
+            v += 2
+        end
+    end
+
+    ret
+end
+
 ###########################
 # AbstractGraph Interface #
 ###########################
@@ -155,6 +197,29 @@ end
 
 ancestral_intervals(arg::Arg, v::VertexType) =
     ancestral_intervals!(Set{Ω}(), arg, v)
+
+export recbreakpoint
+"""
+    recbreakpoint(arg, v)
+
+Returns the breakpoint associated with vertex `v`. If `v` is not a
+recombination vertex, returns ∞. If `v` is not a "true" recombination vertex
+i.e. one of its outgoing edge is non ancestral, returns ∞.
+"""
+function recbreakpoint(arg::Arg, v)
+    ret = ∞
+    isrecombination(arg, v) || return ret
+
+    _dads = dads(arg, v)
+    ωs1 = ancestral_intervals(arg, Edge(first(_dads) => v))
+    ωs2 = ancestral_intervals(arg, Edge(last(_dads) => v))
+
+    (isempty(ωs1) || isempty(ωs2)) && return ∞
+
+    for (p1, p2) ∈ Iterators.product(endpoints.((ωs1, ωs2))...)
+        p1 == p2 && return p1
+    end
+end
 
 #######
 # MMN #
@@ -410,3 +475,170 @@ function build!(rng, arg::Arg; winwidth = ∞)
     end
     arg
 end
+
+###########
+# Algebra #
+###########
+
+function _path_bfs_forward!(estack, arg::Arg, σ, δ;
+                            vqueue = Queue{VertexType}(ceil(Int, log(nv(arg)))))
+    n = nleaves(arg)
+    visited = RBTree{VertexType}()
+    empty!(estack)
+    empty!(vqueue)
+
+    any(v -> isleaf(arg, v), (σ, δ)) ||
+        push!(visited, first(children(arg, σ) ∩ children(arg, δ)))
+    push!(visited, σ)
+    push!(vqueue.store, σ) # Dafuq??
+
+    while !isempty(vqueue)
+        σ = popfirst!(vqueue.store) # DAfuq?
+
+        for v ∈ children(arg, σ)
+            v ∈ visited && continue
+
+            ## Make sure that the edge is in the spanning tree.
+            if isrecombination(arg, v, n)
+                any(>(σ), dads(arg, v)) && continue
+            end
+
+            push!(visited, v)
+            push!(estack, Edge(σ, v))
+            v == δ && @goto done
+            push!(vqueue.store, v) # Dafuq?
+        end
+
+        _dads = dads(arg, σ)
+        isempty(_dads) && continue
+        v = maximum(dads(arg, σ))
+        v ∈ visited && continue
+        push!(visited, v)
+        push!(estack, Edge(σ, v))
+        push!(vqueue.store, v) # Dafuq?
+    end
+
+    @label done
+    estack
+end
+
+function _edgeidx(edgesid, e)
+    idx = get(edgesid, e, zero(Int))
+    iszero(idx) && return edgesid[reverse(e)]
+    idx
+end
+
+function _bfs_backtrack!(vec, edgesid, estack, lk)
+    e_prev = pop!(estack)
+    Threads.lock(lk) do
+        vec[_edgeidx(edgesid, e_prev)] = 1
+    end
+    @inbounds while !isempty(estack)
+        e = pop!(estack)
+        dst(e) == src(e_prev) || continue
+        Threads.lock(lk) do
+            vec[_edgeidx(edgesid, e)] = 1
+        end
+        e_prev = e
+    end
+
+    vec
+end
+
+export cbasis!, cbasis
+
+function cbasis!(vec, arg::Arg, v, lk = Threads.ReentrantLock();
+                 estack = Stack{EdgeType}(ceil(Int, log(nv(arg)))),
+                 edgesid = Dict(reverse.(enumerate(edges(arg)))),
+                 vqueue = Queue{VertexType}(ceil(Int, log(nv(arg)))))
+    empty!(estack)
+    empty!(vqueue)
+
+    σ, δ = dads(arg, v)
+    if σ < δ
+        σ, δ = δ, σ
+    end
+
+    Threads.lock(lk) do
+        vec[edgesid[Edge(σ => v)]] = 1
+        vec[edgesid[Edge(δ => v)]] = 1
+    end
+
+    _path_bfs_forward!(estack, arg, σ, δ, vqueue = vqueue)
+    _bfs_backtrack!(vec, edgesid, estack, lk)
+
+    vec
+end
+
+cbasis(arg::Arg, v;
+       estack = Stack{EdgeType}(ceil(Int, log(nv(arg)))),
+       edgesid = Dict(reverse.(enumerate(edges(arg)))),
+       vqueue = Queue{VertexType}(ceil(Int, log(nv(arg))))) =
+           cbasis!(Vector{Float64}(undef, ne(arg)), arg, v,
+                   estack = estack,
+                   edgesid = edgesid,
+                   vqueue = vqueue)
+
+function cbasis!(mat, arg::Arg;
+                 edgesid = Dict(reverse.(enumerate(edges(arg)))))
+    fill!(mat, 0)
+
+    r = nrecombinations(arg, dummy = true)
+    n = nleaves(arg)
+
+    lk = Threads.ReentrantLock()
+    rec_offset = ne(arg) - nv(arg) + 1 - nrecombinations(arg)
+    tasks = map(chunks(range(1, length = r - rec_offset),
+                       n = Threads.nthreads(),
+                       split = :scatter)) do ks
+        Threads.@spawn begin
+            local estack = Stack{EdgeType}(ceil(Int, log(nv(arg))))
+            local vqueue = Queue{VertexType}(ceil(Int, log(nv(arg))))
+            for k ∈ ks
+                v = 2(n + k + rec_offset - 1)
+                cbasis!(view(mat, :, k), arg, v, lk,
+                        edgesid = edgesid, vqueue = vqueue, estack = estack)
+            end
+        end
+    end
+
+    fetch.(tasks)
+    mat
+end
+
+cbasis(arg::Arg; edgesid = Dict(reverse.(enumerate(edges(arg))))) =
+    cbasis!(spzeros(ne(arg), nrecombinations(arg)), arg)
+
+export thevenin
+function thevenin(arg::Arg, σ, δ)
+    r = nrecombinations(arg)
+    edgesid = Dict(reverse.(enumerate(edges(arg))))
+
+    ## Impedances
+    R_sqrt = Diagonal(Vector{Float64}(undef, ne(arg)))
+    for (e, id) ∈ edgesid
+        R_sqrt[id, id] = sqrt(latitude(arg, src(e)) - latitude(arg, dst(e)))
+    end
+
+    ## Generator
+    g = zeros(ne(arg))
+    σedge_id = edgesid[Edge(dad(arg, σ), σ)]
+    g[σedge_id] = 1
+
+    ## Compute fundamental basis
+    C = spzeros(ne(arg), nrecombinations(arg) + 1)
+    cbasis!(C, arg, edgesid = edgesid)
+
+    estack = Stack{EdgeType}(ceil(Int, log(nv(arg))))
+    _path_bfs_forward!(estack, arg, σ, δ)
+    _bfs_backtrack!(view(C, :, r + 1), edgesid, estack,
+                    Threads.ReentrantLock())
+
+    ## Extract impedance.
+    current = view(C, σedge_id, :)' * ((R_sqrt * C) \ (inv(R_sqrt) * g))
+    inv(current)
+end
+
+thevenin(arg::Arg) =
+    Iterators.map(vs -> thevenin(arg, vs...),
+                  combinations(1:nleaves(arg), 2))

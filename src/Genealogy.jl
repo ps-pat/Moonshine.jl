@@ -203,6 +203,44 @@ end
 @generated ancestral_intervals(genealogy::Any, x::Any) =
     ancestral_intervals!(Set{Ω}(), genealogy, x)
 
+## Recombinations ##
+
+export nrecombinations
+"""
+    nrecombinations(genealogy)
+
+Number of recombinations in a genealogy.
+
+Default implementation returns 0.
+"""
+function nrecombinations end
+
+@generated nrecombinations(::Any) = zero(Int)
+
+export recombinations
+"""
+    recombinations(genealogy)
+
+Iterator over the recombination vertices of a genealogy.
+
+Default implementation returns an empty iterator.
+"""
+function recombinations end
+
+@generated recombinations(::Any) = StepRange{Int, Int}(0, 1, 0)
+
+export isrecombination
+"""
+    isrecombination(genealogy, v)
+
+Returns true if `v` is a recombination for `genealogy`.
+
+Default implementation always returns `false`.
+"""
+function isrecombination end
+
+@generated isrecombination(::Any, ::Any) = false
+
 #############
 # Utilities #
 #############
@@ -570,7 +608,7 @@ let funorder = Dict(:dads => (x, y) -> (x, y), :children => (x, y) -> (y, x)),
         end
 
         @eval $fun(genealogy, v::T, $argname::$Argtype) where T =
-            $fun_inplace(sizehint!(Vector{T}(undef, 2), 2), Set{Ω}(),
+            $fun_inplace(sizehint!(Vector{T}(undef, 2), 2),
                          genealogy, v, $argname)
     end
 end
@@ -649,7 +687,7 @@ struct EdgeIntervalIter{G, O}
     ω::O
     vstack::Stack{VertexType}
     otheredge::Base.RefValue{EdgeType}
-    stacked::RBTree{VertexType}
+    visited::RBTree{VertexType}
     dads_buf::Vector{VertexType}
 end
 
@@ -659,13 +697,11 @@ end
 
 function edges_interval(genealogy, ωs = Ω(0, ∞))
     vstack = Stack{VertexType}(ceil(Int, log(nv(genealogy))))
-    stacked = RBTree{VertexType}()
     root = argmax(latitudes(genealogy)) + nleaves(genealogy)
-    _children = children(genealogy, root)
-    push!(vstack, _children...)
-    push!(stacked, _children...)
+    push!(vstack, children(genealogy, root)...)
 
-    EdgeIntervalIter(genealogy, ωs, vstack, Ref(Edge(0 => 0)), stacked,
+    EdgeIntervalIter(genealogy, ωs, vstack, Ref(Edge(0 => 0)),
+                     RBTree{VertexType}(),
                      sizehint!(Vector{VertexType}(undef, 2), 2))
 end
 
@@ -682,13 +718,13 @@ function iterate(eit::EdgeIntervalIter, state = 0)
 
     genealogy = eit.genealogy
     ω = eit.ω
-    stacked = eit.stacked
+    visited = eit.visited
 
     v = pop!(vstack)
     for child ∈ children(genealogy, v)
-        if child ∉ stacked
+        if child ∉ visited
             push!(vstack, child)
-            indegree(genealogy, child) > 1 && push!(stacked, child)
+            indegree(genealogy, child) > 1 && push!(visited, child)
         end
     end
 
