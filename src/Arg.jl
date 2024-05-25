@@ -480,12 +480,11 @@ end
 # Algebra #
 ###########
 
-function _path_bfs_forward!(estack, arg::Arg, σ, δ;
-                            vqueue = Queue{VertexType}(ceil(Int, log(nv(arg)))))
+function _path_bfs_forward!(estack, arg::Arg, σ, δ, vqueue, visited)
     n = nleaves(arg)
-    visited = RBTree{VertexType}()
     empty!(estack)
     empty!(vqueue)
+    empty!(visited)
 
     any(v -> isleaf(arg, v), (σ, δ)) ||
         push!(visited, first(children(arg, σ) ∩ children(arg, δ)))
@@ -550,7 +549,8 @@ export cbasis!, cbasis
 function cbasis!(vec, arg::Arg, v, lk = Threads.ReentrantLock();
                  estack = Stack{EdgeType}(ceil(Int, log(nv(arg)))),
                  edgesid = Dict(reverse.(enumerate(edges(arg)))),
-                 vqueue = Queue{VertexType}(ceil(Int, log(nv(arg)))))
+                 vqueue = Queue{VertexType}(ceil(Int, log(nv(arg)))),
+                 visited = Set{VertexType}())
     empty!(estack)
     empty!(vqueue)
 
@@ -564,7 +564,7 @@ function cbasis!(vec, arg::Arg, v, lk = Threads.ReentrantLock();
         vec[edgesid[Edge(δ => v)]] = 1
     end
 
-    _path_bfs_forward!(estack, arg, σ, δ, vqueue = vqueue)
+    _path_bfs_forward!(estack, arg, σ, δ, vqueue, visited)
     _bfs_backtrack!(vec, edgesid, estack, lk)
 
     vec
@@ -573,11 +573,13 @@ end
 cbasis(arg::Arg, v;
        estack = Stack{EdgeType}(ceil(Int, log(nv(arg)))),
        edgesid = Dict(reverse.(enumerate(edges(arg)))),
-       vqueue = Queue{VertexType}(ceil(Int, log(nv(arg))))) =
+       vqueue = Queue{VertexType}(ceil(Int, log(nv(arg)))),
+       visited = Set{VertexType}()) =
            cbasis!(Vector{Float64}(undef, ne(arg)), arg, v,
                    estack = estack,
                    edgesid = edgesid,
-                   vqueue = vqueue)
+                   vqueue = vqueue,
+                   visited = visited)
 
 function cbasis!(mat, arg::Arg;
                  edgesid = Dict(reverse.(enumerate(edges(arg)))))
@@ -594,10 +596,12 @@ function cbasis!(mat, arg::Arg;
         Threads.@spawn begin
             local estack = Stack{EdgeType}(ceil(Int, log(nv(arg))))
             local vqueue = Queue{VertexType}(ceil(Int, log(nv(arg))))
+            local visited = Set{VertexType}()
             for k ∈ ks
                 v = 2(n + k + rec_offset - 1)
                 cbasis!(view(mat, :, k), arg, v, lk,
-                        edgesid = edgesid, vqueue = vqueue, estack = estack)
+                        edgesid = edgesid,
+                        vqueue = vqueue, estack = estack, visited = visited)
             end
         end
     end
@@ -609,36 +613,109 @@ end
 cbasis(arg::Arg; edgesid = Dict(reverse.(enumerate(edges(arg))))) =
     cbasis!(spzeros(ne(arg), nrecombinations(arg)), arg)
 
-export thevenin
-function thevenin(arg::Arg, σ, δ)
-    r = nrecombinations(arg)
-    edgesid = Dict(reverse.(enumerate(edges(arg))))
-
-    ## Impedances
-    R_sqrt = Diagonal(Vector{Float64}(undef, ne(arg)))
-    for (e, id) ∈ edgesid
-        R_sqrt[id, id] = sqrt(latitude(arg, src(e)) - latitude(arg, dst(e)))
+function _thevenin_R(arg::Arg, edgesmap, take_sqrt = true)
+ R = Diagonal(Vector{Float64}(undef, ne(arg)))
+    for (e, idx) ∈ edgesmap
+        R[idx, idx] = latitude(arg, src(e)) - latitude(arg, dst(e))
     end
 
-    ## Generator
-    g = zeros(ne(arg))
-    σedge_id = edgesid[Edge(dad(arg, σ), σ)]
-    g[σedge_id] = 1
+    take_sqrt || return R
 
-    ## Compute fundamental basis
-    C = spzeros(ne(arg), nrecombinations(arg) + 1)
-    cbasis!(C, arg, edgesid = edgesid)
+    for k ∈ eachindex(R.diag)
+        R.diag[k] = sqrt(R.diag[k])
+    end
 
-    estack = Stack{EdgeType}(ceil(Int, log(nv(arg))))
-    _path_bfs_forward!(estack, arg, σ, δ)
-    _bfs_backtrack!(view(C, :, r + 1), edgesid, estack,
-                    Threads.ReentrantLock())
+    R
+end
 
-    ## Extract impedance.
-    current = view(C, σedge_id, :)' * ((R_sqrt * C) \ (inv(R_sqrt) * g))
+function _thevenin_g!(g, arg::Arg, v, edgesmap)
+    fill!(g, 0)
+    g[edgesmap[Edge(dad(arg, v), v)]] = 1
+    g
+end
+
+function _thevenin_C(arg, r, edgesmap)
+    C = spzeros(ne(arg), r + 1)
+    cbasis!(C, arg, edgesid = edgesmap)
+    C
+end
+
+function _thevenin_update_C!(C, arg, σ, δ, r, edgesmap, estack, vqueue, visited)
+    empty!(estack)
+    vec = view(C, :, r + 1)
+    fill!(vec, 0)
+
+    _path_bfs_forward!(estack, arg, σ, δ, vqueue, visited)
+    _bfs_backtrack!(vec, edgesmap, estack, Threads.ReentrantLock())
+end
+
+export thevenin!, thevenin
+function thevenin!(arg::Arg, σ, δ, C, R2, g;
+                   edgesmap = Dict(reverse.(enumerate(edges(arg)))),
+                   estack = Stack{EdgeType}(ceil(Int, log(nv(arg)))),
+                   vqueue = Queue{VertexType}(ceil(Int, log(nv(arg)))),
+                   visited = Set{VertexType}())
+    empty!(estack)
+    r = nrecombinations(arg)
+
+    _thevenin_g!(g, arg, σ, edgesmap)
+    _thevenin_update_C!(C, arg, σ, δ, r, edgesmap, estack, vqueue, visited)
+
+    Cvec = view(C, edgesmap[Edge(dad(arg, σ), σ)], :)
+    current = Cvec' * ((R2 * C) \ (inv(R2) * g))
     inv(current)
 end
 
-thevenin(arg::Arg) =
-    Iterators.map(vs -> thevenin(arg, vs...),
-                  combinations(1:nleaves(arg), 2))
+function thevenin(arg::Arg, σ, δ;
+                  estack = Stack{EdgeType}(ceil(Int, log(nv(arg)))),
+                  edgesmap = Dict(reverse.(enumerate(edges(arg)))))
+    r = nrecombinations(arg)
+    ## Square root of impedances.
+    R2 = _thevenin_R(arg, edgesmap, true)
+
+    ## Generator
+    g = zeros(Float64, ne(arg))
+    _thevenin_g!(g, arg, σ, edgesmap)
+
+    ## Compute fundamental basis
+    C = _thevenin_C(arg, r, edgesmap)
+    _thevenin_update_C!(C, arg, σ, δ, r, edgesmap, estack)
+
+    thevenin!(arg, σ, δ, C, R2, g,
+              edgesmap = edgesmap, estack = estack)
+end
+
+function thevenin(arg::Arg;
+                  estack = Stack{EdgeType}(ceil(Int, log(nv(arg)))),
+                  edgesmap = Dict(reverse.(enumerate(edges(arg)))))
+    r = nrecombinations(arg)
+
+    C = _thevenin_C(arg, r, edgesmap)
+    R2 = _thevenin_R(arg, edgesmap, true)
+    g = zeros(Float64, ne(arg))
+
+    Iterators.map(combinations(1:nleaves(arg), 2)) do (σ, δ)
+        thevenin!(arg, σ, δ, C, R2, g, estack = estack, edgesmap = edgesmap)
+    end
+end
+
+export thevenin_matrix
+function thevenin_matrix(arg::Arg,
+                         estack = Stack{EdgeType}(ceil(Int, log(nv(arg)))),
+                         edgesmap = Dict(reverse.(enumerate(edges(arg)))))
+    n = nleaves(arg)
+    r = nrecombinations(arg)
+
+    C = _thevenin_C(arg, r, edgesmap)
+    R2 = _thevenin_R(arg, edgesmap, true)
+    g = zeros(Float64, ne(arg))
+
+    mat = Matrix{Float64}(undef, n, n)
+    mat[diagind(mat)] .= 0
+    for (j, i) ∈ combinations(1:n, 2)
+        mat[i, j] = thevenin!(arg, i, j, C, R2, g,
+                              estack = estack, edgesmap = edgesmap)
+    end
+
+    Symmetric(mat, :L)
+end
