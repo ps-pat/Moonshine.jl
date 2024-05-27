@@ -640,6 +640,33 @@ end
 descendants(genealogy, v, pos) =
     descendants!(Set{VertexType}(), genealogy, v, pos)
 
+function descendants!(ds, genealogy, v::T) where T
+    if isleaf(genealogy, v)
+        resize!(ds, 0)
+        return ds
+    end
+
+    fill!(ds, 0)
+    ptr = firstindex(ds)
+    _children = Stack{T}(ceil(Int, log(nv(genealogy))))
+    push!(_children, children(genealogy, v)...)
+
+    @inbounds while !isempty(_children)
+        v = pop!(_children)
+        v ∈ ds && continue
+        ds[ptr] = v
+        ptr += 1
+
+        isleaf(genealogy, v) && continue
+        push!(_children, children(genealogy, v)...)
+    end
+
+    resize!(ds, ptr - 1)
+end
+
+descendants(genealogy, v) =
+    descendants!(Vector{VertexType}(undef, nv(genealogy)), genealogy, v)
+
 export nmutations
 """
     nmutations(genealogy[, e])

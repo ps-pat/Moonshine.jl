@@ -103,7 +103,7 @@ struct CoalMutDensity
 end
 
 genpars(D::CoalMutDensity) = (Ne = D.Ne,
-                              μloc = D.μ_loc,
+                              μloc = D.μloc,
                               seq_length = D.seq_length,
                               positions = D.fC.positions)
 
