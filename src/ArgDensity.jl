@@ -17,8 +17,8 @@ named tuple.
 Names of the parameters are standardized as follow:
 - `seq_length`: length of the haplotypes
 - `Ne`: effective population size
-- `μ_loc`: per locus mutation rate
-- `ρ_loc`: per locus recombination rate
+- `μloc`: per locus mutation rate
+- `ρloc`: per locus recombination rate
 - `positions`: positions of the markers normalized in [0, 1]
 """
 function genpars end
@@ -65,7 +65,7 @@ function (D::CoalDensity)(tree::Tree; logscale = false)
 end
 
 genpars(D::CoalDensity) = (Ne = zero(Float64),
-                           μ_loc = zero(Float64),
+                           μloc = zero(Float64),
                            seq_length = zero(Float64),
                            positions = positions)
 
@@ -94,7 +94,7 @@ struct CoalMutDensity
 
     Ne::BigFloat
 
-    μ_loc::BigFloat
+    μloc::BigFloat
 
     seq_length::BigFloat
 
@@ -103,13 +103,13 @@ struct CoalMutDensity
 end
 
 genpars(D::CoalMutDensity) = (Ne = D.Ne,
-                              μ_loc = D.μ_loc,
+                              μloc = D.μ_loc,
                               seq_length = D.seq_length,
                               positions = D.fC.positions)
 
 function (D::CoalMutDensity)(tree::Tree; logscale = false)
     fC = D.fC
-    μ = D.μ_loc * D.Ne
+    μ = D.μloc * D.Ne
     l = D.seq_length
 
     m = nmutations(tree)
