@@ -565,107 +565,124 @@ end
 tmrca(genealogy, vs) = latitude(genealogy, mrca(genealogy, vs))
 
 export dads, dads!, children, children!
-export descendants!, descendants
+export descendants!, descendants, ancestors!, ancestors
 """
-    dads(genealogy, v[, pos])
-    children(genealogy, v[, pos])
-    descendants!(genealogy, v[, pos])
-    descendants(genealogy, v[, pos])
+    dads!(buf, genealogy, v, ω)
+    dads(genealogy, v[, ω])
+    ancestors!(buf, genealogy, v[, ω])
+    ancestors(genealogy, v[, ω])
+    children!(buf, genealogy, v, ω)
+    children(genealogy, v[, ω])
+    descendants!(buf, genealogy, v[, ω])
+    descendants(genealogy, v[, ω])
 
-Parents/children/descendants of a vertex.
+Parents/children/descendants of a vertex. ω can be either
+- a number in [0, 1] representing a position;
+- an Ω representing an interval of positions;
+- a set of Ωs representing multiple interval of positions.
+
+The following rules are used to decide if an edge `e` is ancestral:
+- If ω is a number, the ancestral interval of `e` must cover ω.
+- If ω is an Ω or a set of Ωs, the intersection of the ancestral
+  interval of `e` with ω must be non-empty.
 """
-function dads end,
-function children end
+function dads end, function dads! end,
+function ancestors end, function ancestors! end,
+function children end, function children! end,
+function descendants end, function descendants! end
 
-for (fun, graph_method) ∈ Dict(:dads => :inneighbors,
-                               :children => :outneighbors)
-    @eval function $fun(genealogy, v)
-        $graph_method(genealogy, v)
-    end
+for (fun, graph_method) ∈ Dict(:dads => :inneighbors, :children => :outneighbors)
+    @eval $fun(genealogy, v) = $graph_method(genealogy, v)
 end
 
-let funorder = Dict(:dads => (x, y) -> (x, y), :children => (x, y) -> (y, x)),
-    args = Dict(:pos => (:Real, in),
-                :ω => (:Ω, !isdisjoint),
-                :ωs => (:(Set{Ω}), !isdisjoint))
-    for ((fun, order), (argname, (Argtype, testfun))) ∈ Iterators.product(funorder,
-                                                                          args)
-        fun_inplace = Symbol(string(fun) * '!')
+let funtransorder = Dict(:dads => (:ancestors, (x, y) -> (x, y)),
+                         :children => (:descendants, (x, y) -> (y, x))),
 
-        @eval function $fun_inplace(vs, genealogy, v, $argname::$Argtype)
-            resize!(vs, 2)
-            ptr = firstindex(vs)
+    typesandfun = ((:Real, in), (:Ω, !isdisjoint), (:(Set{Ω}), !isdisjoint))
+    for ((fun, (transfun, order)), (Argtype, testfun)) ∈
+        Iterators.product(funtransorder, typesandfun)
 
-            for u ∈ $fun(genealogy, v)
+        ## Parents & children
+        fun! = Symbol(string(fun) * '!')
+
+        @eval function $fun!(buf, genealogy, v, ω::$Argtype)
+            resize!(buf, 2)
+            ptr = firstindex(buf)
+
+            @inbounds for u ∈ $fun(genealogy, v)
                 ωs = ancestral_intervals(genealogy, Edge($order(u, v)))
-                $testfun($argname, ωs) || continue
+                $testfun(ω, ωs) || continue
 
-                vs[ptr] = u
+                buf[ptr] = u
                 ptr += 1
             end
 
-            resize!(vs, ptr - 1)
+            resize!(buf, ptr - 1)
         end
 
-        @eval $fun(genealogy, v::T, $argname::$Argtype) where T =
-            $fun_inplace(sizehint!(Vector{T}(undef, 2), 2),
-                         genealogy, v, $argname)
+        @eval $fun(genealogy, v::T, ω::$Argtype) where T =
+            $fun!(sizehint!(Vector{T}(undef, 2), 2), genealogy, v, ω)
+
+        ## Ancestors & descendants
+        transfun! = Symbol(string(transfun) * '!')
+
+        @eval function $transfun!(buf, genealogy, v, ω::$Argtype)
+            funbuf = sizehint!(Vector{VertexType}(undef, 2), 2)
+            writeptr = readptr = firstindex(buf)
+            @inbounds for u ∈ $fun!(funbuf, genealogy, v, ω)
+                buf[writeptr] = u
+                writeptr += 1
+            end
+
+            @inbounds while readptr < writeptr
+                v = buf[readptr]
+                readptr += 1
+                (isleaf(genealogy, v) || isroot(genealogy, v)) && continue
+
+                resize!(funbuf, 2)
+                for u ∈ $fun!(funbuf, genealogy, v, ω)
+                    u ∈ view(buf, 1:(writeptr-1)) && continue
+                    buf[writeptr] = u
+                    writeptr += 1
     end
 end
 
-function descendants!(ds, genealogy, v::T, pos) where T
-    if isleaf(genealogy, v)
-        resize!(ds, 0)
-        return ds
-    end
+            resize!(buf, writeptr - 1)
+        end
 
-    fill!(ds, 0)
-    ptr = firstindex(ds)
-    _children = Stack{T}(ceil(Int, log(nv(genealogy))))
-    push!(_children, children(genealogy, v, pos)...)
+        @eval function $transfun(genealogy, v, ω::$Argtype)
+            $transfun!(Vector{VertexType}(undef, nv(genealogy) - 1),
+                       genealogy, v, ω)
+        end
 
-    @inbounds while !isempty(_children)
-        v = pop!(_children)
-        v ∈ ds && continue
-        ds[ptr] = v
-        ptr += 1
+        @eval function $transfun!(buf, genealogy, v)
+            writeptr = readptr = firstindex(buf)
+            @inbounds for u ∈ $fun(genealogy, v)
+                buf[writeptr] = u
+                writeptr += 1
+            end
 
-        isleaf(genealogy, v) && continue
-        push!(_children, children(genealogy, v, pos)...)
-    end
+            @inbounds while readptr < writeptr
+                v = buf[readptr]
+                readptr += 1
+                (isleaf(genealogy, v) || isroot(genealogy, v)) && continue
 
-    resize!(ds, ptr - 1)
+                for u ∈ $fun(genealogy, v)
+                    u ∈ view(buf, 1:(writeptr-1)) && continue
+                    buf[writeptr] = u
+                    writeptr += 1
+                end
+            end
+
+            resize!(buf, writeptr - 1)
 end
 
-descendants(genealogy, v, pos) =
-    descendants!(Set{VertexType}(), genealogy, v, pos)
-
-function descendants!(ds, genealogy, v::T) where T
-    if isleaf(genealogy, v)
-        resize!(ds, 0)
-        return ds
+        @eval function $transfun(genealogy, v)
+            $transfun!(Vector{VertexType}(undef, nv(genealogy) - 1),
+                       genealogy, v)
+        end
     end
-
-    fill!(ds, 0)
-    ptr = firstindex(ds)
-    _children = Stack{T}(ceil(Int, log(nv(genealogy))))
-    push!(_children, children(genealogy, v)...)
-
-    @inbounds while !isempty(_children)
-        v = pop!(_children)
-        v ∈ ds && continue
-        ds[ptr] = v
-        ptr += 1
-
-        isleaf(genealogy, v) && continue
-        push!(_children, children(genealogy, v)...)
-    end
-
-    resize!(ds, ptr - 1)
 end
-
-descendants(genealogy, v) =
-    descendants!(Vector{VertexType}(undef, nv(genealogy)), genealogy, v)
 
 export nmutations
 """
