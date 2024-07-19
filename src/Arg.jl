@@ -379,10 +379,9 @@ function recombine!(arg, redge, cedge, breakpoint, rlat, clat)
     ωc = ancestral_intervals(arg, cedge)
     add_edge!(arg, Edge(cvertex, rvertex), ωr ∩ Ω(breakpoint, ∞))
     add_edge!(arg, Edge(cvertex, dst(cedge)), ωc)
-    rem_edge!(arg, cedge)
-    isroot(arg, dst(cedge)) ||
+    root_recombination = !rem_edge!(arg, cedge)
+    root_recombination ||
         add_edge!(arg, Edge(src(cedge), cvertex), ωc ∪ (ωr ∩ Ω(breakpoint, ∞)))
-    ## TODO: Wrong. Should add more edges.
 
     ## Compute sequence of new vertices.
     let mask = Sequence(undef, nmarkers(arg)),
@@ -394,7 +393,7 @@ function recombine!(arg, redge, cedge, breakpoint, rlat, clat)
 
     ## Update sequences and ancetral intervals.
     update_upstream!(arg, src(redge))
-    isroot(arg, dst(cedge)) || update_upstream!(arg, src(cedge))
+    root_recombination || update_upstream!(arg, src(cedge))
 
     arg
 end

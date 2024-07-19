@@ -122,7 +122,7 @@ sequences(genealogy, e::EdgeType) = (sequence(genealogy, src(e)),
 
 export mrca
 """
-    mrca(genealogy[, vs])
+    mrca(genealogy, idx[, vs = leaves(genealogy)])
 
 Most recent common ancestor of a set of vertices. If omited, returns the mrca
 of the whole genealogy.
@@ -131,7 +131,7 @@ See also [`tmrca`](@ref) for the time to the most recent common ancestor.
 """
 function mrca end
 
-function mrca(genealogy, pos::Real, vs = leaves(genealogy))
+function mrca(genealogy, idx::Integer, vs::AbstractVector = leaves(genealogy))
     length(vs) < 2 && return zero(VertexType)
 
     μ = argmax(latitudes(genealogy)) + nleaves(genealogy)
@@ -644,8 +644,8 @@ let funtransorder = Dict(:dads => (:ancestors, (x, y) -> (x, y)),
                     u ∈ view(buf, 1:(writeptr-1)) && continue
                     buf[writeptr] = u
                     writeptr += 1
-    end
-end
+                end
+            end
 
             resize!(buf, writeptr - 1)
         end
@@ -675,7 +675,7 @@ end
             end
 
             resize!(buf, writeptr - 1)
-end
+        end
 
         @eval function $transfun(genealogy, v)
             $transfun!(Vector{VertexType}(undef, nv(genealogy) - 1),
