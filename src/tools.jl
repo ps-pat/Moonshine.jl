@@ -1,5 +1,3 @@
-using IntervalSets: AbstractInterval, Interval
-
 import Base: union,
     intersect,
     join,

@@ -1,7 +1,6 @@
-using Graphs: SimpleEdge,
-              AbstractSimpleGraph,
-              diameter,
-              indegree, outdegree
+using Graphs
+
+using Graphs: AbstractSimpleGraph
 
 import Graphs: edges, vertices, ne, nv,
                eltype, edgetype, is_directed,
@@ -11,8 +10,6 @@ import GraphMakie: graphplot
 
 using LayeredLayouts
 
-using IntervalSets
-
 using GeometryBasics: Point
 
 using Bumper
@@ -20,13 +17,6 @@ using Bumper
 using DataStructures: Stack, DefaultDict, RBTree
 
 import Base: IteratorSize, eltype
-
-const VertexType = Int
-const EdgeType = SimpleEdge{VertexType}
-const ∞ = Inf
-
-export Ω
-const Ω = Interval{:closed, :open, Float64}
 
 abstract type AbstractGenealogy <: AbstractSimpleGraph{VertexType} end
 
@@ -117,7 +107,7 @@ function sequences end
 
 sequences(genealogy, vs) = Iterators.map(v -> sequence(genealogy, v), vs)
 
-sequences(genealogy, e::EdgeType) = (sequence(genealogy, src(e)),
+sequences(genealogy, e::Edge) = (sequence(genealogy, src(e)),
                                      sequence(genealogy, dst(e)))
 
 export mrca
@@ -331,10 +321,10 @@ ancestral_mask(genealogy, ω) =
     ancestral_mask!(Sequence(falses(nmarkers(genealogy))), genealogy, ω,
                     wipe = false)
 
-ancestral_mask!(η, ωs, genealogy, x::Union{VertexType, EdgeType}; wipe = true) =
+ancestral_mask!(η, ωs, genealogy, x::Union{VertexType, Edge}; wipe = true) =
     ancestral_mask!(η, genealogy, ancestral_intervals!(ωs, genealogy, x), wipe = wipe)
 
-ancestral_mask(genealogy, x::Union{VertexType, EdgeType}) =
+ancestral_mask(genealogy, x::Union{VertexType, Edge}) =
     ancestral_mask!(Sequence(undef, nmarkers(genealogy)), Set{Ω}(), genealogy, x)
 
 function ancestral_mask!(η, genealogy, x::AbstractFloat; wipe = true)
@@ -387,7 +377,7 @@ for fun ∈ [:edges, :vertices, :ne, :nv]
 end
 
 for (fun, ret) ∈ Dict(:eltype => VertexType,
-                      :edgetype => EdgeType,
+                      :edgetype => Edge,
                       :is_directed => :true)
     @eval begin
         @generated $fun(::Type{<:AbstractGenealogy}) = $ret
@@ -395,7 +385,7 @@ for (fun, ret) ∈ Dict(:eltype => VertexType,
     end
 end
 
-let genealogy_edge = Expr(:(::), :e, EdgeType),
+let genealogy_edge = Expr(:(::), :e, Edge),
     genealogy_vertex = Expr(:(::), :v, VertexType)
 
     for (fun, a) ∈ Dict(:has_edge => genealogy_edge,
@@ -460,7 +450,7 @@ function graphplot(genealogy::AbstractGenealogy, ω;
                          derived_color, wild_color)
 
     ## Hide non ancestral edges.
-    ewidth = DefaultDict{EdgeType, Int}(edge_width)
+    ewidth = DefaultDict{Edge, Int}(edge_width)
     for e ∈ edges(genealogy)
         isdisjoint(ancestral_intervals(genealogy, e), ω) || continue
         ewidth[e] = 0
@@ -546,7 +536,7 @@ of that edge.
 """
 function branchlength end
 
-branchlength(genealogy, e::EdgeType) =
+branchlength(genealogy, e::Edge) =
     latitude(genealogy, src(e)) - latitude(genealogy, dst(e))
 
 branchlength(genealogy) = mapreduce(e -> branchlength(genealogy, e), +, edges(genealogy))
@@ -730,14 +720,14 @@ struct EdgeIntervalIter{G, O}
     genealogy::G
     ω::O
     vstack::Stack{VertexType}
-    otheredge::Base.RefValue{EdgeType}
+    otheredge::Base.RefValue{Edge}
     visited::RBTree{VertexType}
     dads_buf::Vector{VertexType}
 end
 
 @generated IteratorSize(::EdgeIntervalIter) = Base.SizeUnknown()
 
-@generated eltype(::EdgeIntervalIter) = EdgeType
+@generated eltype(::EdgeIntervalIter) = Edge
 
 function edges_interval(genealogy, ωs = Ω(0, ∞))
     vstack = Stack{VertexType}(ceil(Int, log(nv(genealogy))))

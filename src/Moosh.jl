@@ -4,6 +4,15 @@ using PrecompileTools
 
 using StatsFuns: logtwo
 
+using IntervalSets
+
+## Some constants.
+const VertexType = Int
+const ∞ = Inf
+
+export Ω
+const Ω = Interval{:closed, :open, Float64}
+
 include("Sequence.jl")
 include("tools.jl")
 include("CheapStack.jl")

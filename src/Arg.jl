@@ -20,7 +20,7 @@ struct ArgCore
     graph::SimpleDiGraph{VertexType}
     latitudes::Vector{Float64}
     sequences::Vector{Sequence}
-    ancestral_intervals::Dict{EdgeType, Set{Ω}}
+    ancestral_intervals::Dict{Edge, Set{Ω}}
 
     positions::Vector{Float64}
     seq_length::Float64
@@ -30,13 +30,13 @@ struct ArgCore
 end
 
 ArgCore() = ArgCore(SimpleDiGraph{VertexType}(),
-                    Float64[], Sequence[], Dict{EdgeType, Set{Ω}}(),
+                    Float64[], Sequence[], Dict{Edge, Set{Ω}}(),
                     Float64[], typemin(Float64),
                     typemin(Float64), typemin(Float64), typemin(Float64))
 
 ArgCore(treecore::TreeCore, ρloc = 1e-5) =
     ArgCore(treecore.graph, treecore.latitudes,
-            treecore.sequences, Dict{EdgeType, Set{Ω}}(),
+            treecore.sequences, Dict{Edge, Set{Ω}}(),
             treecore.positions, treecore.seq_length,
             treecore.Ne, treecore.μloc, ρloc)
 
@@ -163,7 +163,7 @@ for non-existent element.
 function ancestral_intervals end
 export ancestral_intervals
 
-function ancestral_intervals!(ωs, arg::Arg, e::EdgeType; wipe = true)
+function ancestral_intervals!(ωs, arg::Arg, e::Edge; wipe = true)
     wipe && empty!(ωs)
 
     haskey(arg.core.ancestral_intervals, e) || return push!(ωs, Ω(0, ∞))
@@ -175,7 +175,7 @@ function ancestral_intervals!(ωs, arg::Arg, e::EdgeType; wipe = true)
     ωs
 end
 
-ancestral_intervals(arg::Arg, e::EdgeType) =
+ancestral_intervals(arg::Arg, e::Edge) =
     get(() -> Set{Ω}((Ω(0, ∞),)), arg.core.ancestral_intervals, e)
 
 ancestral_intervals!(ωs, arg::Arg, s::VertexType, d; wipe = true) =
@@ -302,7 +302,7 @@ end
 
 function mutation_edges(arg, ω::Ω)
     m = postoidx(arg, rightendpoint(ω)) - postoidx(arg, leftendpoint(ω)) + 1
-    ret = [Vector{EdgeType}(undef, nleaves(arg) ÷ 2 + 1) for _ ∈ 1:m]
+    ret = [Vector{Edge}(undef, nleaves(arg) ÷ 2 + 1) for _ ∈ 1:m]
     mutation_edges!(ret, arg, ω)
 end
 
@@ -546,7 +546,7 @@ end
 export cbasis!, cbasis
 
 function cbasis!(vec, arg::Arg, v, lk = Threads.ReentrantLock();
-                 estack = Stack{EdgeType}(ceil(Int, log(nv(arg)))),
+                 estack = Stack{Edge}(ceil(Int, log(nv(arg)))),
                  edgesid = Dict(reverse.(enumerate(edges(arg)))),
                  vqueue = Queue{VertexType}(ceil(Int, log(nv(arg)))),
                  visited = Set{VertexType}())
@@ -570,7 +570,7 @@ function cbasis!(vec, arg::Arg, v, lk = Threads.ReentrantLock();
 end
 
 cbasis(arg::Arg, v;
-       estack = Stack{EdgeType}(ceil(Int, log(nv(arg)))),
+       estack = Stack{Edge}(ceil(Int, log(nv(arg)))),
        edgesid = Dict(reverse.(enumerate(edges(arg)))),
        vqueue = Queue{VertexType}(ceil(Int, log(nv(arg)))),
        visited = Set{VertexType}()) =
@@ -593,7 +593,7 @@ function cbasis!(mat, arg::Arg;
                        n = Threads.nthreads(),
                        split = :scatter)) do ks
         Threads.@spawn begin
-            local estack = Stack{EdgeType}(ceil(Int, log(nv(arg))))
+            local estack = Stack{Edge}(ceil(Int, log(nv(arg))))
             local vqueue = Queue{VertexType}(ceil(Int, log(nv(arg))))
             local visited = Set{VertexType}()
             for k ∈ ks
@@ -651,7 +651,7 @@ end
 export thevenin!, thevenin
 function thevenin!(arg::Arg, σ, δ, C, R2, g;
                    edgesmap = Dict(reverse.(enumerate(edges(arg)))),
-                   estack = Stack{EdgeType}(ceil(Int, log(nv(arg)))),
+                   estack = Stack{Edge}(ceil(Int, log(nv(arg)))),
                    vqueue = Queue{VertexType}(ceil(Int, log(nv(arg)))),
                    visited = Set{VertexType}())
     empty!(estack)
@@ -666,7 +666,7 @@ function thevenin!(arg::Arg, σ, δ, C, R2, g;
 end
 
 function thevenin(arg::Arg, σ, δ;
-                  estack = Stack{EdgeType}(ceil(Int, log(nv(arg)))),
+                  estack = Stack{Edge}(ceil(Int, log(nv(arg)))),
                   edgesmap = Dict(reverse.(enumerate(edges(arg)))))
     r = nrecombinations(arg)
     ## Square root of impedances.
@@ -685,7 +685,7 @@ function thevenin(arg::Arg, σ, δ;
 end
 
 function thevenin(arg::Arg;
-                  estack = Stack{EdgeType}(ceil(Int, log(nv(arg)))),
+                  estack = Stack{Edge}(ceil(Int, log(nv(arg)))),
                   edgesmap = Dict(reverse.(enumerate(edges(arg)))))
     r = nrecombinations(arg)
 
@@ -700,7 +700,7 @@ end
 
 export thevenin_matrix
 function thevenin_matrix(arg::Arg,
-                         estack = Stack{EdgeType}(ceil(Int, log(nv(arg)))),
+                         estack = Stack{Edge}(ceil(Int, log(nv(arg)))),
                          edgesmap = Dict(reverse.(enumerate(edges(arg)))))
     n = nleaves(arg)
     r = nrecombinations(arg)
