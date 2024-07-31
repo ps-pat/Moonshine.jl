@@ -71,6 +71,8 @@ for G ∈ (:Tree, :Arg)
     end
 
     export mut_rate
-    @eval mut_rate($Gargname::$G, scaled = true) =
-        $Gargname.core.μloc * (scaled ? 4 * Ne($Gargname) : 1.)
+    @eval function mut_rate($Gargname::$G, scaled = true)
+        scaled || $Gargname.core.μloc
+        $Gargname.core.μloc * 4 * Ne($Gargname)
+    end
 end

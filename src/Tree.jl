@@ -6,16 +6,15 @@ using Random
 
 using Distributions
 
-using StatsBase: AbstractWeights, FrequencyWeights, ProbabilityWeights, sample
+using StatsBase: sample, FrequencyWeights
 
 import Base: iterate, length, size, isempty
 
-using RandomNumbers.PCG: PCGStateOneseq
+using SpecialFunctions: loggamma
 
 #######################
 # TreeCore Definition #
 #######################
-
 struct TreeCore
     graph::SimpleDiGraph{VertexType}
     latitudes::Vector{Float64}
@@ -91,6 +90,7 @@ end
 ###########################
 
 add_edge!(tree::Tree, e) = add_edge!(graph(tree), e)
+add_edge!(tree::Tree, v1, v2) = add_edge!(graph(tree), v1, v2)
 
 ###########
 # Methods #
@@ -171,126 +171,9 @@ leaves_permutation(tree) = leaves_permutation(tree, leaves(tree))
 # Tree Building #
 #################
 
-struct MutationSampler{T, W<:AbstractWeights}
-    types::Vector{T}
-    nlive::W
-    transition_matrix::Matrix{Float64}
-
-    idx::Vector{Vector{Int}}
-
-    n::Int
-    event_number::Base.RefValue{Int}
-    logprob::Base.RefValue{Float64}
-end
-
-function MutationSampler(data, Dist = Hamming{Float64}, args = (), kwargs = ())
-    types = compute_types(data)
-    ntypes = length(types)
-
-    ## TODO: this is the most expensive operation.
-    idx = [findall(==(type), data) for type ∈ types]
-
-    nlive = FrequencyWeights(length.(idx), length(data))
-
-    transition_matrix = coalescence_matrix(Dist, types, args...; kwargs...)
-
-    MutationSampler(types, nlive,
-                    transition_matrix, idx,
-                    length(data), Ref(0), Ref(0.0))
-end
-
-function sample_pair!(rng, ms)
-    ms.event_number[] += 1
-
-    nlive = ms.nlive
-    P = ms.transition_matrix
-
-    ## Sample a type of item.
-    type_idx = something(sample(rng, eachindex(ms.types), nlive))
-    ms.logprob[] += log(nlive[type_idx]) - log(nlive.sum)
-
-    ## Check if there is any type greater than the one sampled with
-    ## only one live item remaining which can only coalesce with
-    ## sampled type. If any is found, switch type_idx for the greatest
-    ## element with at least 1 live item.
-    @inbounds for i ∈ range(type_idx + 1, length(ms.types))
-        ## Check if a coalescence is possible. For that to be the
-        ## case, there has to be live items and the probability of a
-        ## coalescence must be > 0.
-        iszero(nlive[i]) || iszero(P[type_idx, i]) && continue
-
-        ## Check if the coalescence with type_idx is the only
-        ## possibility. For that to be the case, there has to be live
-        ## items other than type_idx with coalescence probability > 0.
-        for j ∈ eachindex(nlive)
-            j == type_idx && continue
-            !iszero(nlive[j]) && !iszero(P[j, i]) && @goto bypass
-        end
-
-        ## If we reached that point (and didn't jump straight to the
-        ## bypass), there is such an item.
-        type_idx = something(findlast(!iszero, nlive))
-        break
-
-        @label bypass
-    end
-
-    ## Conditionally sample a pair of indices.
-    if isone(nlive[type_idx])
-        ## If there is only one item of the sampled type with a positive
-        ## weight, we mutate it.
-
-        ## Get first item.
-        η1 = first(ms.idx[type_idx])
-        nlive[type_idx] -= 1
-
-        ## Sample mutation.
-        type_probs = ProbabilityWeights(P[:,type_idx] .* nlive.values)
-        newtype_idx = sample(rng, eachindex(ms.types), type_probs)
-        ms.logprob[] += log(ms.transition_matrix[newtype_idx, type_idx])
-
-        ## Sample second item.
-        j = rand(rng, 1:nlive[newtype_idx])
-        η2 = ms.idx[newtype_idx][j]
-
-        ## Update indices.
-        ms.idx[newtype_idx][j] = ms.n + ms.event_number[]
-
-        ## Update probability.
-        ms.logprob[] -= log(nlive[newtype_idx])
-    else
-        idx = ms.idx[type_idx]
-        n = nlive[type_idx]
-
-        ## Sample items. i and j are the indices of the first and
-        ## second sampled items respectively. η1 and η2 are the actual
-        ## items. After this iteration:
-        ##   1. nlive[type_idx] will be decreased by 1;
-        ##   2. idx[i] will contain the item that was previously at index
-        ##      nlive[type_idx];
-        ##   3. idx[j] will contain the item created by the coalescence of
-        ##      η1 with η2.
-
-        i = rand(rng, 1:n)
-        η1 = idx[i]
-        idx[i] = idx[n]
-        nlive[type_idx] -= 1
-
-        j = rand(rng, 1:(n - 1))
-        η2 = idx[j]
-        idx[j] = ms.n + ms.event_number[]
-
-        ## Update probability.
-        ms.logprob[] += logtwo - log(n) - log(n - 1)
-    end
-
-    η1, η2
-end
-
 export build!
 """
-    build!(rng, tree)
-    build!(rng, tree, ms)
+    build!(rng, tree, distance; bias0 = ∞, toilet_prop = 1)
 
 Build a coalescent tree
 
@@ -298,39 +181,108 @@ Build a coalescent tree
 """
 function build! end
 
-function build!(rng, tree::Tree, ms)
-    n = nleaves(tree)
-    nv(tree) ≠ 2n - 1 || !iszero(ne(tree)) && error("Invalid tree")
+function _sample_toilet(rng, xs, potential, threshold_prop)
+    threshold = floor(Int, length(xs) * threshold_prop)
+    first_x, iter = Iterators.peel(xs)
+    z = potential(first_x)
+    μ = isinf(z) ? zero(z) : z
+    sum_z = μ
+    z -= log(randexp(rng))
 
-    ## Sample coalescence vertices latitudes.
-    randexp!(rng, latitudes(tree))
-    latitudes(tree)[1] /= n - 1
-    tree.logprob += log(-expm1(-(n - 1) * latitudes(tree, 1)))
-    for k ∈ 2:(n-1)
-        λ = n - k
-        latitudes(tree)[k] /= λ
-        tree.logprob += log(-expm1(-λ * latitudes(tree)[k]))
-        latitudes(tree)[k] += latitudes(tree)[k - 1]
+    ret = 1
+    for (k, x) ∈ enumerate(iter)
+        newz = potential(x)
+        isinf(newz) && continue
+        μ += (log1p ∘ exp)(newz - sum_z)
+        sum_z += newz
+
+        newz -= log(randexp(rng))
+        newz <= z && continue
+
+        z = newz
+        ret = k + 1
+
+        k < threshold || break
     end
 
-    ## Sample coalescence events
-    for parent ∈ range(n + 1, length = n - 1)
-        child1, child2 = sample_pair!(rng, ms)
-        add_edge!(tree, parent, child1)
-        add_edge!(tree, parent, child2)
-
-        tree.core.sequences[parent] =
-            tree.core.sequences[child1] & tree.core.sequences[child2]
-    end
-
-    tree.logprob += ms.logprob[]
-
-    tree
+    ret, (z, μ)
 end
 
-function build!(rng, tree::Tree)
-    ms = MutationSampler((collect ∘ sequences)(tree, leaves(tree)))
-    build!(rng, tree, ms)
+function build!(rng, tree::Tree;
+                Dist::Distance = Hamming{Int}(), bias0 = ∞, toilet_prop = 1)
+    n = nleaves(tree)
+    nv(tree) ≠ 2n - 1 || !iszero(ne(tree)) && error("Invalid tree")
+    μ = mut_rate(tree, true)
+    η0 = zeros(Sequence, nmarkers(tree))
+
+    ## Compute the norm of the sequences. They are stored as
+    ## FrequencyWeights since they will be used for sampling sequences.
+    norms = FrequencyWeights([distance(Dist, η0, η) + 1 for η ∈ sequences(tree, 1:n)])
+    norms_sumlive = norms.sum
+
+    live = collect(leaves(tree))
+    for nlive ∈ range(length(live), 2, step = -1)
+        ## Sample first sequence
+        v1_idx = sample(rng, 1:nlive, norms[1:nlive])
+        tree.logprob += log(norms[v1_idx]) - log(norms_sumlive)
+        v1 = live[v1_idx]
+        live[v1_idx] = live[nlive]
+        norms_sumlive -= norms[v1_idx]
+        norms[v1_idx] = norms[nlive]
+        nlive -= 1
+
+        ## Sample second sequence
+        potential2 =
+            let η1 = sequence(tree, v1),
+                η1_d0 = distance(Dist, η0, η1)
+                function(η)
+                    d = distance(Dist, η1, η)
+                    if distance(Dist, η0, η) > η1_d0
+                        ## ∞ - loggamma(∞) incorrectly returns NaN
+                        isinf(bias0) && return -∞
+                        d += bias0
+                    end
+                    d * log(μ) - loggamma(d + 1)
+                end
+            end
+
+        v2_idx, (gumbel_x, gumbel_μ) =
+            _sample_toilet(rng,
+                           sequences(tree, live[1:nlive]),
+                           potential2,
+                           toilet_prop)
+        v2 = live[v2_idx]
+        v = 2n - nlive
+        live[v2_idx] = v
+        if !isinf(gumbel_x)
+            tree.logprob += logpdf(Gumbel(gumbel_μ), gumbel_x)
+        end
+
+        ## Sample coalescence lattitude
+        Δcoal_dist = Exponential(inv(nlive))
+        Δ = rand(rng, Δcoal_dist)
+        tree.logprob += logpdf(Δcoal_dist, Δ)
+
+        d12 = distance(Dist, sequence(tree, v1), sequence(tree, v2))
+        if !iszero(d12)
+            Δmut_dist = Gamma(d12, inv(μ))
+            Δmut = rand(rng, Δmut_dist)
+            tree.logprob += logpdf(Δmut_dist, Δmut)
+            Δ += Δmut
+        end
+
+        ## Add coalescence event to tree
+        add_edge!(tree, v, v1)
+        add_edge!(tree, v, v2)
+
+        sequences(tree)[v] = sequence(tree, v1) & sequence(tree, v2)
+        norms[v2_idx] = distance(Dist, η0, sequence(tree, v)) + 1
+        norms_sumlive += norms[v2_idx]
+
+        latitudes(tree)[n - nlive] = latitude(tree, v - 1) + Δ
+    end
+
+    tree
 end
 
 function isvalid(tree::Tree)

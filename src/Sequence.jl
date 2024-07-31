@@ -6,13 +6,16 @@ import Base: empty,
              isempty,
              string,
              convert,
-             hash
+             hash,
+             zeros
 
 using Random
 
 import Base: bitcount
 
 using LinearAlgebra
+
+using SpecialFunctions: loggamma
 
 export Sequence
 ## "Efficient storage of marker data."
@@ -132,11 +135,31 @@ function convert(::Type{Sequence}, str::AbstractString)
     Sequence(data)
 end
 
+zeros(::Type{Sequence}, n::Integer) = (Sequence ∘ falses)(n)
+
 #############
 # Distances #
 #############
 
 export Distance
+
+"""
+    abstract type Distance{T}
+
+Distance between two `Sequence`s.
+
+# Implementation
+The only required method for a distance `D<:Distance` to be usable for tree
+contruction is
+```
+    distance(::D{T}, ::Sequence, ::Sequence) where T
+```
+It is also useful to implement a default constructor. For example, if
+`D` is a discrete distance,
+```
+    D() = D{Int}()
+```
+"""
 abstract type Distance{T} end
 
 """
@@ -147,7 +170,7 @@ Compute distance between sequences.
 """
 function distance end
 
-function distance(Dist::Type{<:Distance{T}}, H::AbstractVector) where T
+function distance(Dist::Distance{T}, H::AbstractVector) where {T}
     n = length(H)
     mat = Matrix{T}(undef, n, n)
 
@@ -161,119 +184,13 @@ function distance(Dist::Type{<:Distance{T}}, H::AbstractVector) where T
     mat
 end
 
-distance(Dist::Type{<:Distance}, H::AbstractVector) = distance(Dist{Float64}, H)
-
-function compute_types(H::AbstractVector{Sequence})
-    types = unique(H)
-    sort!(types, by = bitcount)
-end
-
-export coalescence_matrix
-"""
-    coalescence_matrix(Dist, H; μ = 1e-5, maximum_distance = ∞, bias0 = ∞)
-
-Compute the transition matrix for the coalescence of sequences types. H is
-expected to have been processed by [`compute_types`][@ref] or equivalent.
-
-# Arguments
-
-  - `Dist`: discrete distance
-  - `H`: vector of sequences
-  - `μ`: per locus mutation rate
-  - `maximum_distance`: distance beyond which a type is considered
-    inaccessible
-  - `bias0`: biasing factor for 0->1 mutations
-
-# Notes
-  - Assuming more than one type, μ must be strictly greater than 0 for the
-    chain to be recurrent.
-  - Each entry of the lower triangle of the distance matrix is multiplied
-    by bias0. In other words, the matrix used to compute transition
-    probabilities is the Hadamard product of the distance matrix with a lower
-    triangular matrix in which each entry is equal to bias0. Using bias0 = b is
-    thus equivalent to stretching every 0->1 distances by a factor of b.
-  - Relationship to maximum_distance is assessed *after* biasing.
-  - For a given source type, if every destination type is beyond
-    maximum_distance, the maximum distance for that source-destination pair is
-    used instead.
-
-See also [`compute_types`][@ref], [`Distance`][@ref], [`Sequence`][@ref].
-"""
-function coalescence_matrix end
-
-function coalescence_matrix(Dist::Type{<:Distance{Float64}}, H::AbstractVector;
-                            μ = 1e-5, maximum_distance = 1, bias0 = ∞)
-    ## TODO: paralellize.
-    ## Compute the distance matrix and apply bias.
-    distance_matrix = distance(Dist, H)
-
-    for σ ∈ axes(distance_matrix, 2)[2:end]
-        for δ ∈ (σ + 1):size(distance_matrix, 1)
-            distance_matrix[δ, σ] *= bias0
-        end
-    end
-
-    transition_matrix = similar(distance_matrix, Float64)
-    n = (first ∘ size)(transition_matrix)
-
-    for (σ, distances) ∈ (enumerate ∘ eachcol)(distance_matrix)
-        ## If every other types is at a distance greater than the
-        ## maximum distance, the type of the mrca of the sample is not
-        ## well defined.
-        maximum_distance_σ = max(maximum_distance,
-                                 minimum(d -> iszero(d) ? typemax(d) : d,
-                                         distance_matrix[:,σ]))
-
-        for (δ, distance) ∈ enumerate(distances)
-            ## 1:      No self-loop;
-            ## (2, 3): A state at a distance greater than the maximum
-            ##         allowed distance is not accessible.
-            if σ == δ || distance == typemax(Int) || distance > maximum_distance_σ
-                ## For now, we store the log-probability of the
-                ## transition. This helps avoid numerical errors.
-                transition_matrix[δ, σ] = -∞
-                continue
-            end
-
-            d = distances[δ]
-            ## Again, log-probability.
-            transition_matrix[δ, σ] =
-                d * log(μ) - sum(log, 2:d, init = zero(Float64))
-        end
-
-        ## Here we go back to the probability scale.
-        let curvec_view = view(transition_matrix, :, σ)
-            if all(isinf, curvec_view)
-                ## If every transition from σ has probability 0
-                ## (log-probability -∞), make σ an absorbing state.
-                transition_matrix[σ, σ] = 1
-            else
-                ## First we try to mitigate small values by substracting
-                ## the maximum element.
-                transition_matrix[:, σ] .-= maximum(curvec_view)
-
-                ## Linear scale.
-                vec_norm = 0
-                for δ ∈ 1:n
-                    x = exp(transition_matrix[δ, σ])
-                    transition_matrix[δ, σ] = x
-                    vec_norm += x
-                end
-
-                ## Probability scale.
-                transition_matrix[:, σ] ./= vec_norm
-            end
-        end
-    end
-
-    transition_matrix
-end
-
 ## Hamming distance
 export Hamming
 struct Hamming{T} <: Distance{T} end
 
-function distance(::Type{Hamming{T}}, η1::Sequence, η2::Sequence) where T
+Hamming() = Hamming{Int64}()
+
+function distance(::Hamming{T}, η1::Sequence, η2::Sequence) where T
     ## Works since unused bits of a BitArray are always set to 0.
     d = zero(T)
     nblocks = (length(η1) - 1) ÷ blocksize(η1) + 1
@@ -285,11 +202,14 @@ function distance(::Type{Hamming{T}}, η1::Sequence, η2::Sequence) where T
     d
 end
 
-function distance(::Type{Hamming}, η1::Sequence, η2::Sequence)
-    distance(Hamming{Int}, η1, η2)
-end
+## Leftmost marker distance
+export Left
+struct Left{T} <: Distance{T} end
 
-distance(::Type{Hamming}, H::AbstractVector) = distance(Hamming{Int}, H)
+Left() = Left{Int64}()
+
+distance(::Left{T}, η1::Sequence, η2::Sequence) where {T} =
+    convert(T, first(η1) ⊻ first(η2))
 
 #############
 # Iteration #
