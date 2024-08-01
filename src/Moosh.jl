@@ -29,7 +29,15 @@ include("ImportanceSampling.jl")
 # Precompilation #
 ##################
 
-precompile(build!, (Xoshiro, Tree))
-precompile(fit!, (Xoshiro, CopulaFrechet{Bernoulli{Float64}}, Vector{Bool}, Vector{Sequence}, Type{Tree}))
+@setup_workload begin
+    rng = Xoshiro(42)
+    n = 2
+    m = 1
+    @compile_workload begin
+        H = [Sequence(rng, m) for _ ∈ 1:n]
+        tree = Tree(H, positions = [0.], seq_length = 1., Ne = 1000, μloc = 1e-5)
+        build!(rng, tree)
+    end
+end
 
 end # module Moosh
