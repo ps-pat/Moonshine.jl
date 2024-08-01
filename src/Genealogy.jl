@@ -589,61 +589,8 @@ let funtransorder = Dict(:dads => (:ancestors, (x, y) -> (x, y)),
                          :children => (:descendants, (x, y) -> (y, x))),
 
     typesandfun = ((:Real, in), (:Ω, !isdisjoint), (:(Set{Ω}), !isdisjoint))
-    for ((fun, (transfun, order)), (Argtype, testfun)) ∈
-        Iterators.product(funtransorder, typesandfun)
-
-        ## Parents & children
-        fun! = Symbol(string(fun) * '!')
-
-        @eval function $fun!(buf, genealogy, v, ω::$Argtype)
-            resize!(buf, 2)
-            ptr = firstindex(buf)
-
-            @inbounds for u ∈ $fun(genealogy, v)
-                ωs = ancestral_intervals(genealogy, Edge($order(u, v)))
-                $testfun(ω, ωs) || continue
-
-                buf[ptr] = u
-                ptr += 1
-            end
-
-            resize!(buf, ptr - 1)
-        end
-
-        @eval $fun(genealogy, v::T, ω::$Argtype) where T =
-            $fun!(sizehint!(Vector{T}(undef, 2), 2), genealogy, v, ω)
-
-        ## Ancestors & descendants
+    for (fun, (transfun, order)) ∈ funtransorder
         transfun! = Symbol(string(transfun) * '!')
-
-        @eval function $transfun!(buf, genealogy, v, ω::$Argtype)
-            funbuf = sizehint!(Vector{VertexType}(undef, 2), 2)
-            writeptr = readptr = firstindex(buf)
-            @inbounds for u ∈ $fun!(funbuf, genealogy, v, ω)
-                buf[writeptr] = u
-                writeptr += 1
-            end
-
-            @inbounds while readptr < writeptr
-                v = buf[readptr]
-                readptr += 1
-                (isleaf(genealogy, v) || isroot(genealogy, v)) && continue
-
-                resize!(funbuf, 2)
-                for u ∈ $fun!(funbuf, genealogy, v, ω)
-                    u ∈ view(buf, 1:(writeptr-1)) && continue
-                    buf[writeptr] = u
-                    writeptr += 1
-                end
-            end
-
-            resize!(buf, writeptr - 1)
-        end
-
-        @eval function $transfun(genealogy, v, ω::$Argtype)
-            $transfun!(Vector{VertexType}(undef, nv(genealogy) - 1),
-                       genealogy, v, ω)
-        end
 
         @eval function $transfun!(buf, genealogy, v)
             writeptr = readptr = firstindex(buf)
@@ -670,6 +617,59 @@ let funtransorder = Dict(:dads => (:ancestors, (x, y) -> (x, y)),
         @eval function $transfun(genealogy, v)
             $transfun!(Vector{VertexType}(undef, nv(genealogy) - 1),
                        genealogy, v)
+        end
+
+        for (Argtype, testfun) ∈ typesandfun
+            ## Parents & children
+            fun! = Symbol(string(fun) * '!')
+
+            @eval function $fun!(buf, genealogy, v, ω::$Argtype)
+                resize!(buf, 2)
+                ptr = firstindex(buf)
+
+                @inbounds for u ∈ $fun(genealogy, v)
+                    ωs = ancestral_intervals(genealogy, Edge($order(u, v)))
+                    $testfun(ω, ωs) || continue
+
+                    buf[ptr] = u
+                    ptr += 1
+                end
+
+                resize!(buf, ptr - 1)
+            end
+
+            @eval $fun(genealogy, v::T, ω::$Argtype) where T =
+                $fun!(sizehint!(Vector{T}(undef, 2), 2), genealogy, v, ω)
+
+            ## Ancestors & descendants
+            @eval function $transfun!(buf, genealogy, v, ω::$Argtype)
+                funbuf = sizehint!(Vector{VertexType}(undef, 2), 2)
+                writeptr = readptr = firstindex(buf)
+                @inbounds for u ∈ $fun!(funbuf, genealogy, v, ω)
+                    buf[writeptr] = u
+                    writeptr += 1
+                end
+
+                @inbounds while readptr < writeptr
+                    v = buf[readptr]
+                    readptr += 1
+                    (isleaf(genealogy, v) || isroot(genealogy, v)) && continue
+
+                    resize!(funbuf, 2)
+                    for u ∈ $fun!(funbuf, genealogy, v, ω)
+                        u ∈ view(buf, 1:(writeptr-1)) && continue
+                        buf[writeptr] = u
+                        writeptr += 1
+                    end
+                end
+
+                resize!(buf, writeptr - 1)
+            end
+
+            @eval function $transfun(genealogy, v, ω::$Argtype)
+                $transfun!(Vector{VertexType}(undef, nv(genealogy) - 1),
+                        genealogy, v, ω)
+            end
         end
     end
 end

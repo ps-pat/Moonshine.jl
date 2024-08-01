@@ -152,17 +152,6 @@ rec_rate(arg::Arg, scaled = true) = arg.core.ρloc * (scaled ? 4 * Ne(arg) : 1.)
 # Ancestrality Methods #
 ########################
 
-"""
-    ancestral_intervals(arg, e)
-    ancestral_intervals(arg, σ, δ)
-    ancestral_intervals(arg, v)
-
-Compute the interval for which an element is ancestral. Behavior is undefined
-for non-existent element.
-"""
-function ancestral_intervals end
-export ancestral_intervals
-
 function ancestral_intervals!(ωs, arg::Arg, e::Edge; wipe = true)
     wipe && empty!(ωs)
 
