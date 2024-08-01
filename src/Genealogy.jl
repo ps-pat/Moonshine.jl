@@ -1,7 +1,6 @@
-using Graphs: SimpleEdge,
-              AbstractSimpleGraph,
-              diameter,
-              indegree, outdegree
+using Graphs
+
+using Graphs: AbstractSimpleGraph
 
 import Graphs: edges, vertices, ne, nv,
                eltype, edgetype, is_directed,
@@ -11,19 +10,13 @@ import GraphMakie: graphplot
 
 using LayeredLayouts
 
-using IntervalSets
-
 using GeometryBasics: Point
 
 using Bumper
 
-const VertexType = Int
-const EdgeType = SimpleEdge{VertexType}
-const ∞ = Inf
+using DataStructures: Stack, DefaultDict, RBTree
 
-export Ω
-const Ω = Interval{:closed,:open,Float64}
-Ω(x) = Ω(x, ∞)
+import Base: IteratorSize, eltype
 
 abstract type AbstractGenealogy <: AbstractSimpleGraph{VertexType} end
 
@@ -54,8 +47,14 @@ export latitudes
 Return the latitudes of (a subset of) the internal vertices of a genealogy.
 
 See also [`latitude`](@ref) to get the latitude of a single vertex.
+
+# Implementation
+A default implementation for `latitudes(::AbstractGenealogy, ::Any)` is
+available.
 """
 function latitudes end
+
+latitudes(genealogy, ivs) = getindex(latitudes(genealogy), ivs)
 
 export latitude
 """
@@ -77,9 +76,17 @@ An interable containing the leaves/internal vertices of a genealogy.
 
 See also [`nleaves`](@ref) and [`nivertices`](@ref) for the number of leaves
 and internal vertices.
+
+# Implementation
+
+Default implementations assume that the first `nleaves(genealogy)` vertices
+are the leaves of the genealogy.
 """
 function leaves end,
 function ivertices end
+
+leaves(genealogy) = Base.OneTo(nleaves(genealogy))
+ivertices(genealogy) = UnitRange(nleaves(genealogy) + 1, nv(genealogy))
 
 export sequences
 """
@@ -100,75 +107,49 @@ function sequences end
 
 sequences(genealogy, vs) = Iterators.map(v -> sequence(genealogy, v), vs)
 
-sequences(genealogy, e::EdgeType) = sequences(genealogy, (src(e), dst(e)))
+sequences(genealogy, e::Edge) = (sequence(genealogy, src(e)),
+                                     sequence(genealogy, dst(e)))
 
 export mrca
 """
-    mrca(genealogy[, vs])
+    mrca(genealogy, idx[, vs = leaves(genealogy)])
 
 Most recent common ancestor of a set of vertices. If omited, returns the mrca
 of the whole genealogy.
 
 See also [`tmrca`](@ref) for the time to the most recent common ancestor.
-
-# Implementation
-
-Custom type only need to implement `mrca(::T)`.
 """
 function mrca end
 
-# function mrca(genealogy, vs)
-#     μ = mrca(genealogy)
+function mrca(genealogy, idx::Integer, vs::AbstractVector = leaves(genealogy))
+    length(vs) < 2 && return zero(VertexType)
 
-#     possible_μ = CheapStack{VertexType}(nv(genealogy))
+    μ = argmax(latitudes(genealogy)) + nleaves(genealogy)
+    vstack = Stack{VertexType}(ceil(Int, log(nv(genealogy))))
+    push!(vstack, children(genealogy, μ, pos)...)
 
-#     ## Mandatory to avoid dynamic dispatch.
-#     for child ∈ children(genealogy, μ)
-#         push!(possible_μ, child)
-#     end
+    ds = Set{VertexType}()
+    while !isempty(vstack)
+        μ2 = pop!(vstack)
+        isleaf(genealogy, μ2) && continue
+        vs ⊆ descendants!(ds, genealogy, μ2, pos) || continue
 
-#     while !isempty(possible_μ)
-#         v = pop!(possible_μ)
-#         vs ⊆ descendants(genealogy, v) || continue
+        μ = μ2
+        push!(vstack, children(genealogy, μ, pos)...)
+    end
 
-#         μ = v
-#         empty!(possible_μ)
+    μ
+end
 
-#         ## Mandatory to avoid dynamic dispatch.
-#         for child ∈ children(genealogy, μ)
-#             push!(possible_μ, child)
-#         end
-#     end
+function mrca(genealogy, vs::AbstractVector = leaves(genealogy))
+    length(vs) < 2 && return zero(VertexType)
 
-#     ## Type inference needs a little bit of help here for some reason...
-#     something(μ)
-# end
-
-function mrca(genealogy, vs)
-    μ = mrca(genealogy)
-
-    @no_escape begin
-        possible_μ = @alloc(eltype(genealogy), nv(genealogy))
-        ptr = firstindex(possible_μ)
-
-        for child ∈ children(genealogy, μ)
-            possible_μ[ptr] = child
-            ptr += 1
-        end
-
-        while ptr > firstindex(possible_μ)
-            v = possible_μ[ptr - 1]
-            ptr -= 1
-            vs ⊆ descendants(genealogy, v) || continue
-
-            μ = v
-            ptr = firstindex(possible_μ)
-
-            for child ∈ children(genealogy, μ)
-                possible_μ[ptr] = child
-                ptr += 1
-            end
-        end
+    μ = argmax(latitudes(genealogy)) + nleaves(genealogy)
+    predicate = child ->
+        isempty(ancestral_intervals(genealogy, Edge(μ, child)) ∩ Ω(0, 1))
+    @inbounds while any(predicate, children(genealogy, μ))
+        k = findfirst(!predicate, children(genealogy, μ))
+        μ = children(genealogy, μ)[k]
     end
 
     μ
@@ -193,6 +174,62 @@ export positions
 Positions of the markers.
 """
 function positions end
+
+export ancestral_intervals!, ancestral_intervals
+"""
+    ancestral_intervals!(ωs, genealogy, x)
+    ancestral_intervals(genealogy, x)
+
+Interval for which x is ancestral. Default implementation assumes that anything
+is ancestral for [0, ∞).
+"""
+function ancestral_intervals end
+
+function ancestral_intervals!(ωs, ::Any, ::Any)
+    empty!(ωs)
+    push!(ωs, Ω(0, ∞))
+end
+
+@generated ancestral_intervals(genealogy::Any, x::Any) =
+    ancestral_intervals!(Set{Ω}(), genealogy, x)
+
+## Recombinations ##
+
+export nrecombinations
+"""
+    nrecombinations(genealogy)
+
+Number of recombinations in a genealogy.
+
+Default implementation returns 0.
+"""
+function nrecombinations end
+
+@generated nrecombinations(::Any) = zero(Int)
+
+export recombinations
+"""
+    recombinations(genealogy)
+
+Iterator over the recombination vertices of a genealogy.
+
+Default implementation returns an empty iterator.
+"""
+function recombinations end
+
+@generated recombinations(::Any) = StepRange{Int, Int}(0, 1, 0)
+
+export isrecombination
+"""
+    isrecombination(genealogy, v)
+
+Returns true if `v` is a recombination for `genealogy`.
+
+Default implementation always returns `false`.
+"""
+function isrecombination end
+
+@generated isrecombination(::Any, ::Any) = false
 
 #############
 # Utilities #
@@ -238,18 +275,23 @@ given.
 """
 function postoidx(genealogy, pos)
     @inbounds for (k, p) ∈ enumerate(positions(genealogy))
-        p >= pos && return k - 1
+        p > pos && return k - 1
     end
 
     nmarkers(genealogy)
 end
 
 """
+    ancestral_mask!(η, genealogy, x; wipe = true)
     ancestral_mask(genealogy, x)
 
-Mask non ancestral positions to 0.
+Mask non ancestral positions to 0. If `wipe = true`, all markers in `η` wil be
+initialized at 0.
 """
-function ancestral_mask(genealogy, ω::Ω)
+function ancestral_mask! end,
+function ancestral_mask end
+
+function ancestral_mask!(η, genealogy, ω::Ω; wipe = true)
     lpos, rpos = endpoints(ω)
 
     lidx = 1
@@ -259,17 +301,39 @@ function ancestral_mask(genealogy, ω::Ω)
 
     ridx = postoidx(genealogy, rpos)
 
-    mask = falses(nmarkers(genealogy))
-    mask[range(lidx, ridx)] .= true
+    wipe && wipe!(η)
+    η.data[range(lidx, ridx)] .= true
 
-    Sequence(mask)
+    η
 end
 
-ancestral_mask(genealogy, ωs::Set{Ω}) =
-    mapreduce(ω -> ancestral_mask(genealogy, ω), |, ωs)
+function ancestral_mask!(η, genealogy, ωs::Set{Ω}; wipe = true)
+    wipe && wipe!(η)
 
-ancestral_mask(genealogy, x::EdgeType) =
-    ancestral_mask(genealogy, ancestral_intervals(genealogy, x))
+    for ω ∈ ωs
+        ancestral_mask!(η, genealogy, ω, wipe = false)
+    end
+
+    η
+end
+
+ancestral_mask(genealogy, ω) =
+    ancestral_mask!(Sequence(falses(nmarkers(genealogy))), genealogy, ω,
+                    wipe = false)
+
+ancestral_mask!(η, ωs, genealogy, x::Union{VertexType, Edge}; wipe = true) =
+    ancestral_mask!(η, genealogy, ancestral_intervals!(ωs, genealogy, x), wipe = wipe)
+
+ancestral_mask(genealogy, x::Union{VertexType, Edge}) =
+    ancestral_mask!(Sequence(undef, nmarkers(genealogy)), Set{Ω}(), genealogy, x)
+
+function ancestral_mask!(η, genealogy, x::AbstractFloat; wipe = true)
+    wipe && wipe!(η)
+    η[postoidx(genealogy, x)] = true
+    η
+end
+
+wipe!(η) = η.data.chunks .⊻= η.data.chunks
 
 ###################
 # Pretty printing #
@@ -313,7 +377,7 @@ for fun ∈ [:edges, :vertices, :ne, :nv]
 end
 
 for (fun, ret) ∈ Dict(:eltype => VertexType,
-                      :edgetype => EdgeType,
+                      :edgetype => Edge,
                       :is_directed => :true)
     @eval begin
         @generated $fun(::Type{<:AbstractGenealogy}) = $ret
@@ -321,7 +385,7 @@ for (fun, ret) ∈ Dict(:eltype => VertexType,
     end
 end
 
-let genealogy_edge = Expr(:(::), :e, EdgeType),
+let genealogy_edge = Expr(:(::), :e, Edge),
     genealogy_vertex = Expr(:(::), :v, VertexType)
 
     for (fun, a) ∈ Dict(:has_edge => genealogy_edge,
@@ -367,11 +431,12 @@ GenLayout(leaveslayer, leaves) = function (genealogy_graph)
     Point.(zip(ys, -xs))
 end
 
-function graphplot(genealogy::AbstractGenealogy;
+function graphplot(genealogy::AbstractGenealogy, ω;
+                   wild_color = :blue,
+                   derived_color = :red,
                    arrow_show = false,
                    edge_color = :gray,
                    edge_width = 3,
-                   node_color = :black,
                    layout = nothing,
                    attributes...)
     if isnothing(layout)
@@ -379,16 +444,31 @@ function graphplot(genealogy::AbstractGenealogy;
         layout = GenLayout(lastlayer, leaves(genealogy))
     end
 
+    ## Color of the vertices.
+    mask = fill(ancestral_mask(genealogy, ω), nv(genealogy))
+    node_color = ifelse.(any.(sequences(genealogy) .& mask),
+                         derived_color, wild_color)
+
+    ## Hide non ancestral edges.
+    ewidth = DefaultDict{Edge, Int}(edge_width)
+    for e ∈ edges(genealogy)
+        isdisjoint(ancestral_intervals(genealogy, e), ω) || continue
+        ewidth[e] = 0
+    end
+
     graphplot(graph(genealogy),
               layout = layout,
               ilabels = string.(range(1, nv(genealogy))),
               ilabels_color = :white,
               edge_color = edge_color,
-              edge_width = edge_width,
+              edge_width = ewidth,
               arrow_show = arrow_show,
               node_color = node_color,
               attributes...)
 end
+
+graphplot(genealogy::AbstractGenealogy; attributes...) =
+    graphplot(genealogy, Ω(0, ∞); attributes...)
 
 ##################
 # Common Methods #
@@ -456,9 +536,13 @@ of that edge.
 """
 function branchlength end
 
-branchlength(genealogy, e) = latitude(genealogy, src(e)) - latitude(genealogy, dst(e))
+branchlength(genealogy, e::Edge) =
+    latitude(genealogy, src(e)) - latitude(genealogy, dst(e))
 
 branchlength(genealogy) = mapreduce(e -> branchlength(genealogy, e), +, edges(genealogy))
+
+branchlength(genealogy, ω) = mapreduce(e -> branchlength(genealogy, e), +,
+                                       edges_interval(genealogy, ω))
 
 export tmrca
 function tmrca(genealogy)
@@ -470,56 +554,124 @@ end
 
 tmrca(genealogy, vs) = latitude(genealogy, mrca(genealogy, vs))
 
-export dads, children, siblings
+export dads, dads!, children, children!
+export descendants!, descendants, ancestors!, ancestors
 """
-    dads(tree, v)
-    children(tree, v)
-    siblings(tree, v)
+    dads!(buf, genealogy, v, ω)
+    dads(genealogy, v[, ω])
+    ancestors!(buf, genealogy, v[, ω])
+    ancestors(genealogy, v[, ω])
+    children!(buf, genealogy, v, ω)
+    children(genealogy, v[, ω])
+    descendants!(buf, genealogy, v[, ω])
+    descendants(genealogy, v[, ω])
 
-Parents/children/siblings of a vertex.
+Parents/children/descendants of a vertex. ω can be either
+- a number in [0, 1] representing a position;
+- an Ω representing an interval of positions;
+- a set of Ωs representing multiple interval of positions.
+
+The following rules are used to decide if an edge `e` is ancestral:
+- If ω is a number, the ancestral interval of `e` must cover ω.
+- If ω is an Ω or a set of Ωs, the intersection of the ancestral
+  interval of `e` with ω must be non-empty.
 """
-function dads end,
-function children end,
-function siblings end
+function dads end, function dads! end,
+function ancestors end, function ancestors! end,
+function children end, function children! end,
+function descendants end, function descendants! end
 
-for (fun, graph_method) ∈ Dict(:dads => :inneighbors,
-                               :children => :outneighbors)
-    @eval function $fun(genealogy, v)
-        $graph_method(genealogy, v)
-    end
+for (fun, graph_method) ∈ Dict(:dads => :inneighbors, :children => :outneighbors)
+    @eval $fun(genealogy, v) = $graph_method(genealogy, v)
 end
 
-function siblings(genealogy, v)
-    res = mapreduce(v -> children(genealogy, v), vcat, dads(genealogy, v))
-    filter(!=(v), res)
-end
+let funtransorder = Dict(:dads => (:ancestors, (x, y) -> (x, y)),
+                         :children => (:descendants, (x, y) -> (y, x))),
 
-export descendants
-"""
-    descendants(genealogy, v)
+    typesandfun = ((:Real, in), (:Ω, !isdisjoint), (:(Set{Ω}), !isdisjoint))
+    for (fun, (transfun, order)) ∈ funtransorder
+        transfun! = Symbol(string(transfun) * '!')
 
-Transitive closure of the "children of" relation.
-"""
-function descendants(genealogy, v)
-    descendants = CheapStack{VertexType}(nv(genealogy) - 1)
-    _children = CheapStack{VertexType}(nv(genealogy) - 1)
+        @eval function $transfun!(buf, genealogy, v)
+            writeptr = readptr = firstindex(buf)
+            @inbounds for u ∈ $fun(genealogy, v)
+                buf[writeptr] = u
+                writeptr += 1
+            end
 
-    ## Mandatory to avoid dynamic dispatch.
-    for child ∈ children(genealogy, v)
-        push!(_children, child)
-    end
+            @inbounds while readptr < writeptr
+                v = buf[readptr]
+                readptr += 1
+                (isleaf(genealogy, v) || isroot(genealogy, v)) && continue
 
-    while !isempty(_children)
-        v = pop!(_children)
+                for u ∈ $fun(genealogy, v)
+                    u ∈ view(buf, 1:(writeptr-1)) && continue
+                    buf[writeptr] = u
+                    writeptr += 1
+                end
+            end
 
-        ## Mandatory to avoid dynamic dispatch.
-        for child ∈ children(genealogy, v)
-            push!(_children, child)
+            resize!(buf, writeptr - 1)
         end
-        push!(descendants, v)
-    end
 
-    vec(descendants)
+        @eval function $transfun(genealogy, v)
+            $transfun!(Vector{VertexType}(undef, nv(genealogy) - 1),
+                       genealogy, v)
+        end
+
+        for (Argtype, testfun) ∈ typesandfun
+            ## Parents & children
+            fun! = Symbol(string(fun) * '!')
+
+            @eval function $fun!(buf, genealogy, v, ω::$Argtype)
+                resize!(buf, 2)
+                ptr = firstindex(buf)
+
+                @inbounds for u ∈ $fun(genealogy, v)
+                    ωs = ancestral_intervals(genealogy, Edge($order(u, v)))
+                    $testfun(ω, ωs) || continue
+
+                    buf[ptr] = u
+                    ptr += 1
+                end
+
+                resize!(buf, ptr - 1)
+            end
+
+            @eval $fun(genealogy, v::T, ω::$Argtype) where T =
+                $fun!(sizehint!(Vector{T}(undef, 2), 2), genealogy, v, ω)
+
+            ## Ancestors & descendants
+            @eval function $transfun!(buf, genealogy, v, ω::$Argtype)
+                funbuf = sizehint!(Vector{VertexType}(undef, 2), 2)
+                writeptr = readptr = firstindex(buf)
+                @inbounds for u ∈ $fun!(funbuf, genealogy, v, ω)
+                    buf[writeptr] = u
+                    writeptr += 1
+                end
+
+                @inbounds while readptr < writeptr
+                    v = buf[readptr]
+                    readptr += 1
+                    (isleaf(genealogy, v) || isroot(genealogy, v)) && continue
+
+                    resize!(funbuf, 2)
+                    for u ∈ $fun!(funbuf, genealogy, v, ω)
+                        u ∈ view(buf, 1:(writeptr-1)) && continue
+                        buf[writeptr] = u
+                        writeptr += 1
+                    end
+                end
+
+                resize!(buf, writeptr - 1)
+            end
+
+            @eval function $transfun(genealogy, v, ω::$Argtype)
+                $transfun!(Vector{VertexType}(undef, nv(genealogy) - 1),
+                        genealogy, v, ω)
+            end
+        end
+    end
 end
 
 export nmutations
@@ -531,10 +683,23 @@ number of mutations on that edge.
 """
 function nmutations end
 
-nmutations(genealogy, e) = count(xor(sequences(genealogy, e)...))
+function nmutations!(mask, ωs, genealogy, e)
+    ret = zero(Int)
+    ancestral_mask!(mask, ωs, genealogy, e)
+
+    nchunks = (length(positions(genealogy)) - 1) ÷ blocksize(Sequence) + 1
+    η1, η2 = sequences(genealogy, e)
+    @inbounds for k ∈ range(1, length = nchunks)
+        ret += count_ones((η1.data.chunks[k] ⊻ η2.data.chunks[k]) & mask.data.chunks[k])
+    end
+
+    ret
+end
 
 function nmutations(genealogy)
-    mapreduce(e -> nmutations(genealogy, e), +, edges(genealogy),
+    mask = Sequence(undef, nmarkers(genealogy))
+    ωs = Set{Ω}()
+    mapreduce(e -> nmutations!(mask, ωs, genealogy, e), +, edges(genealogy),
               init = zero(Int))
 end
 
@@ -545,25 +710,65 @@ for fun ∈ [:branchlength, :nmutations]
     end
 end
 
-export coalesce!
 """
-    coalesce!(genealogy, v1, v2, lat)
+    mutable struct EdgeIntervalIter{G}
 
-Make two vertices coalesce at a specified latitude. Each marker in the
-sequence associated with the newly created parent vertex is the conjunction (&)
-of the corresponding marker in the children's sequences.
+Iterate over the edges of a genealogy that have ancestral material in a given
+interval.
 """
-function coalesce!(genealogy, v1, v2, lat)
-    newseq = sequence(genealogy, v1) & sequence(genealogy, v2)
+struct EdgeIntervalIter{G, O}
+    genealogy::G
+    ω::O
+    vstack::Stack{VertexType}
+    otheredge::Base.RefValue{Edge}
+    visited::RBTree{VertexType}
+    dads_buf::Vector{VertexType}
+end
 
-    add_vertex!(genealogy, newseq, lat) ||
-        @error "Could not add vertex to genealogy"
-    _dad = nv(genealogy)
+@generated IteratorSize(::EdgeIntervalIter) = Base.SizeUnknown()
 
-    for child ∈ (v1, v2)
-        e = Edge(_dad, child)
-        add_edge!(genealogy, e)
+@generated eltype(::EdgeIntervalIter) = Edge
+
+function edges_interval(genealogy, ωs = Ω(0, ∞))
+    vstack = Stack{VertexType}(ceil(Int, log(nv(genealogy))))
+    root = argmax(latitudes(genealogy)) + nleaves(genealogy)
+    push!(vstack, children(genealogy, root)...)
+
+    EdgeIntervalIter(genealogy, ωs, vstack, Ref(Edge(0 => 0)),
+                     RBTree{VertexType}(),
+                     sizehint!(Vector{VertexType}(undef, 2), 2))
+end
+
+function iterate(eit::EdgeIntervalIter, state = 0)
+    otheredge = eit.otheredge
+    if otheredge[] != Edge(0 => 0)
+        ret = otheredge[]
+        otheredge[] = Edge(0 => 0)
+        return ret, state + 1
     end
 
-    _dad
+    vstack = eit.vstack
+    isempty(vstack) && return nothing
+
+    genealogy = eit.genealogy
+    ω = eit.ω
+    visited = eit.visited
+
+    v = pop!(vstack)
+    for child ∈ children(genealogy, v)
+        if child ∉ visited
+            push!(vstack, child)
+            indegree(genealogy, child) > 1 && push!(visited, child)
+        end
+    end
+
+    _dads = eit.dads_buf
+    dads!(_dads, genealogy, v, ω)
+    e = Edge(first(_dads), v)
+    if length(_dads) > 1
+        otheredge[] = e
+        return Edge(last(_dads), v), state + 1
+    else
+        return e, state + 1
+    end
 end

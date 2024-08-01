@@ -6,18 +6,12 @@ import Distributions
 
 using Random: AbstractRNG, GLOBAL_RNG
 
-using Metaheuristics
+using Metaheuristics: ECA, Options, optimize, minimizer
 
 using NLPModels, NLPModelsIpopt
 
 using StrideArrays
 
-export AbstractAlpha
-"""
-    AbstractAlpha
-
-Abstract type for alpha functions.
-"""
 abstract type AbstractAlpha end
 
 export AbstractΦCopula
@@ -161,14 +155,15 @@ include("Alphas.jl")
 
 function AlphaOptimization(rng, copula::AbstractΦCopula{<:Bernoulli},
                            Φ, H, ::Type{Tree};
-                           n = 10, genpars...)
+                           n = 10,
+                           treepars = (;), genpars...)
     nrow = length(H) - 1
     multiplicities = Vector{Matrix{Int}}(undef, n)
     distances = Vector{Vector{Float64}}(undef, n)
 
     for k ∈ 1:n
         genealogy = Tree(H; genpars...)
-        build!(rng, genealogy)
+        build!(rng, genealogy, treepars...)
 
         distances[k] = 2 * latitudes(genealogy)
         multiplicities[k] = compute_mults(genealogy, Φ)
