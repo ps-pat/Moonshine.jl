@@ -6,6 +6,8 @@ using StatsFuns: logtwo
 
 using IntervalSets
 
+using LoopVectorization
+
 ## Some constants.
 const VertexType = Int
 const ∞ = Inf

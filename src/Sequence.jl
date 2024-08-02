@@ -195,7 +195,7 @@ function distance(::Hamming{T}, η1::Sequence, η2::Sequence) where T
     d = zero(T)
     nblocks = (length(η1) - 1) ÷ blocksize(η1) + 1
 
-    @inbounds for k ∈ 1:nblocks
+    @tturbo for k ∈ 1:nblocks
         d += count_ones(η1.data.chunks[k] ⊻ η2.data.chunks[k])
     end
 
