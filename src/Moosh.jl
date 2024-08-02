@@ -8,6 +8,8 @@ using IntervalSets
 
 using LoopVectorization
 
+using MultiFloats
+
 ## Some constants.
 const VertexType = Int
 const ∞ = Inf

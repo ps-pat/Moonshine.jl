@@ -59,7 +59,7 @@ end
 export Tree
 mutable struct Tree <: AbstractGenealogy
     core::TreeCore
-    logprob::BigFloat
+    logprob::Float64x2
     nextvertex::Int
 end
 

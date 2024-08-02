@@ -1,8 +1,8 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.10.3"
+julia_version = "1.10.4"
 manifest_format = "2.0"
-project_hash = "9bc4c3d4ea91a7c370ddeebb17c2e7a87f0af0f0"
+project_hash = "e6962aeb1a14fd98a8b2248ab46c700534085f87"
 
 [[deps.ASL_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1040,6 +1040,12 @@ version = "0.3.4"
 [[deps.MozillaCACerts_jll]]
 uuid = "14a3606d-f60d-562e-9121-12d972cd8159"
 version = "2023.1.10"
+
+[[deps.MultiFloats]]
+deps = ["LinearAlgebra", "Printf", "Random", "SIMD", "Test"]
+git-tree-sha1 = "3251ffff0826ac8c33458a258d81114adc2394fc"
+uuid = "bdf0d083-296b-4888-a5b6-7498122e68a5"
+version = "2.0.2"
 
 [[deps.MutableArithmetics]]
 deps = ["LinearAlgebra", "SparseArrays", "Test"]
