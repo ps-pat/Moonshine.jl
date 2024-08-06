@@ -183,26 +183,32 @@ function build! end
 
 function _sample_toilet(rng, xs, potential, threshold_prop)
     threshold = floor(Int, length(xs) * threshold_prop)
-    first_x, iter = Iterators.peel(xs)
-    z = potential(first_x)
-    μ = isinf(z) ? zero(z) : z
-    sum_z = μ
-    z -= log(randexp(rng))
+    iter = (Iterators.Stateful ∘ enumerate)(xs)
+    z = ∞
+    μ = zero(Float64)
+    ret = zero(Int)
+    for (k, x) ∈ iter
+        z = potential(x)
+        isinf(z) && continue
+        μ += z
+        z -= log(randexp(rng))
+        ret = k
+        break
+    end
 
-    ret = 1
-    for (k, x) ∈ enumerate(iter)
+    for (k, x) ∈ iter
         newz = potential(x)
         isinf(newz) && continue
-        μ += (log1p ∘ exp)(newz - sum_z)
-        sum_z += newz
+        tmin, tmax = minmax(newz, μ)
+        μ = tmax + (log1p ∘ exp)(tmin - tmax)
 
         newz -= log(randexp(rng))
         newz <= z && continue
 
         z = newz
-        ret = k + 1
+        ret = k
 
-        k < threshold || break
+        k <= threshold || break
     end
 
     ret, (z, μ)
@@ -218,17 +224,18 @@ function build!(rng, tree::Tree;
     ## Compute the norm of the sequences. They are stored as
     ## FrequencyWeights since they will be used for sampling sequences.
     norms = FrequencyWeights([distance(Dist, η0, η) + 1 for η ∈ sequences(tree, 1:n)])
-    norms_sumlive = norms.sum
 
     live = collect(leaves(tree))
     for nlive ∈ range(length(live), 2, step = -1)
         ## Sample first sequence
-        v1_idx = sample(rng, 1:nlive, norms[1:nlive])
-        tree.logprob += log(norms[v1_idx]) - log(norms_sumlive)
+        v1_idxs = sample(rng, 1:nlive, norms[1:nlive], 2, replace = false)
+        v1_idx = norms[first(v1_idxs)] > norms[last(v1_idxs)] ?
+            first(v1_idxs) : last(v1_idxs)
+        tree.logprob += log(norms[v1_idx]) - log(norms.sum)
         v1 = live[v1_idx]
         live[v1_idx] = live[nlive]
-        norms_sumlive -= norms[v1_idx]
         norms[v1_idx] = norms[nlive]
+        norms[nlive] = 0
         nlive -= 1
 
         ## Sample second sequence
@@ -239,10 +246,16 @@ function build!(rng, tree::Tree;
                     d = distance(Dist, η1, η)
                     if distance(Dist, η0, η) > η1_d0
                         ## ∞ - loggamma(∞) incorrectly returns NaN
-                        isinf(bias0) && return -∞
+                        # isinf(bias0) && return -∞
                         d += bias0
                     end
-                    d * log(μ) - loggamma(d + 1)
+
+                    iszero(d) && return zero(Float64)
+
+                    ## Use Stirling approximation.
+                    logd = log(d)
+                    ret = d * (log(μ) - logd + 1) - 0.5 * (log2π + logd)
+                    ret
                 end
             end
 
@@ -277,7 +290,6 @@ function build!(rng, tree::Tree;
 
         sequences(tree)[v] = sequence(tree, v1) & sequence(tree, v2)
         norms[v2_idx] = distance(Dist, η0, sequence(tree, v)) + 1
-        norms_sumlive += norms[v2_idx]
 
         latitudes(tree)[n - nlive] = latitude(tree, v - 1) + Δ
     end
