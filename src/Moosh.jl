@@ -19,7 +19,7 @@ const Ω = Interval{:closed, :open, Float64}
 
 include("Sequence.jl")
 include("tools.jl")
-include("CheapStack.jl")
+include("Sample.jl")
 include("Genealogy.jl")
 include("Tree.jl")
 include("Arg.jl")
