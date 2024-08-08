@@ -245,8 +245,6 @@ function build!(rng, tree::Tree;
                 function(η)
                     d = distance(Dist, η1, η)
                     if distance(Dist, η0, η) > η1_d0
-                        ## ∞ - loggamma(∞) incorrectly returns NaN
-                        # isinf(bias0) && return -∞
                         d += bias0
                     end
 
@@ -267,9 +265,7 @@ function build!(rng, tree::Tree;
         v2 = live[v2_idx]
         v = 2n - nlive
         live[v2_idx] = v
-        if !isinf(gumbel_x)
-            tree.logprob += logpdf(Gumbel(gumbel_μ), gumbel_x)
-        end
+        tree.logprob += logpdf(Gumbel(gumbel_μ), gumbel_x)
 
         ## Sample coalescence lattitude
         Δcoal_dist = Exponential(inv(nlive))
