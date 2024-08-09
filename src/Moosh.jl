@@ -19,6 +19,7 @@ const Ω = Interval{:closed, :open, Float64}
 
 include("Sequence.jl")
 include("tools.jl")
+include("foreign.jl")
 include("Sample.jl")
 include("Genealogy.jl")
 include("Tree.jl")
@@ -28,6 +29,10 @@ include("Copulas/Copulas.jl")
 include("ArgDensity.jl")
 include("Distributions.jl")
 include("ImportanceSampling.jl")
+
+function __init__()
+    __init_msprime__()
+end
 
 ##################
 # Precompilation #

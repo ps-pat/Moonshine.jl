@@ -7,7 +7,8 @@ import Base: empty,
              string,
              convert,
              hash,
-             zeros
+             zeros, ones,
+             firstindex, lastindex
 
 using Random
 
@@ -135,7 +136,9 @@ function convert(::Type{Sequence}, str::AbstractString)
     Sequence(data)
 end
 
-zeros(::Type{Sequence}, n::Integer) = (Sequence ∘ falses)(n)
+for (f, fill_f) ∈ Dict(:zeros => :falses, :ones => :trues)
+    @eval $f(::Type{Sequence}, n::Integer) = (Sequence ∘ $fill_f)(n)
+end
 
 #############
 # Distances #
@@ -228,9 +231,9 @@ Base.length(seq::Sequence) = length(seq.data)
 Base.size(seq::Sequence) = size(seq.data)
 
 ## Indexing.
-Base.firstindex(seq::Sequence) = firstindex(seq.data)
+firstindex(seq::Sequence) = firstindex(seq.data)
 
-Base.lastindex(seq::Sequence) = lastindex(seq.data)
+lastindex(seq::Sequence) = lastindex(seq.data)
 
 Base.getindex(sequence, I...) = getindex(sequence.data, I...)
 

@@ -5,6 +5,7 @@ import Base: iterate,
              getindex,
              IndexStyle
 
+using Graphs: Edge
 
 export Sample
 """
@@ -46,9 +47,72 @@ function _validate_positions(positions, nmarkers)
     positions
 end
 
-function Sample(H; μ = 0, ρ = 0, Ne = 0, sequence_length = 1, positions = [])
+function Sample(H::AbstractVector{Sequence};
+                μ = 0, ρ = 0, Ne = 0, sequence_length = 1, positions = [])
     positions = _validate_positions(positions, (length ∘ first)(H))
     Sample(H, μ, ρ, Ne, sequence_length, positions)
+end
+
+function Sample(ts::TreeSequence)
+    n = zero(Int)
+    μ = zero(Float64)
+    ρ = zero(Float64)
+    Ne = zero(Float64)
+    sequence_length = one(Float64)
+
+    ## Retreive relevant genetic parameters.
+    for p ∈ provenances(ts)
+        parameters = p.record[:parameters]
+
+        n = get(parameters, :samples, n)
+        μ = get(parameters, :rate, μ)
+        ρ = get(parameters, :recombination_rate, ρ)
+        Ne = get(parameters, :population_size, Ne)
+        sequence_length = get(parameters, :sequence_length, sequence_length)
+    end
+
+    ## Retreive positions and reconstruct sequence.
+    nmarkers = pyconvert(Int, ts.obj.num_mutations)
+    positions = Vector{Float64}(undef, nmarkers)
+    H = [zeros(Sequence, nmarkers) for _ ∈ 1:n]
+
+    @inbounds for (mutation, variant) ∈ enumerate(variants(ts))
+        pos = pyconvert(Float64, variant.site.position)
+        positions[mutation] = pos
+
+        genotypes = pyconvert(Vector{Int}, variant.genotypes)
+        for (sam, marker) ∈ enumerate(genotypes)
+            iszero(marker) && continue
+            H[sam][mutation] = true
+        end
+    end
+
+    Sample(H, μ, ρ, Ne, sequence_length, positions)
+end
+
+function Sample(rng::AbstractRNG, n, μ, ρ, Ne, sequence_length)
+    sim_ancestry = msprime[].sim_ancestry
+    sim_mutations = msprime[].sim_mutations
+    BinaryMutationModel = msprime[].BinaryMutationModel
+
+    seed = rand(rng, UInt32)
+    seed_mutations = rand(rng, UInt32)
+
+    ts = sim_ancestry(random_seed = seed,
+                      samples = n, ploidy = 1,
+                      sequence_length = sequence_length,
+                      recombination_rate = ρ,
+                      population_size = Ne,
+                      record_provenance = true)
+
+    mutated_ts = sim_mutations(ts,
+                               random_seed = seed_mutations,
+                               rate = μ,
+                               discrete_genome = false,
+                               model = BinaryMutationModel(false),
+                               record_provenance = true)
+
+    Sample(pyconvert(TreeSequence, mutated_ts))
 end
 
 ###################
@@ -81,7 +145,7 @@ iterate(sample::Sample, state = 1) =
 
 getindex(sample::Sample, I...) = getindex(sample.H, I...)
 
-@generated IndexStyle(::Type{Sequence}) = Base.IndexLinear()
+@generated IndexStyle(::Type{Sample}) = Base.IndexLinear()
 
 #################
 # Short Methods #

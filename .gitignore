@@ -2,3 +2,4 @@ statprof/
 work*.jl
 .dir-locals.el
 .vscode/
+.CondaPkg/
