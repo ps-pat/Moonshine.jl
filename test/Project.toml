@@ -1,5 +1,6 @@
 [deps]
 Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
+Graphs = "86223c79-3864-5bf0-83f7-82e725a168b6"
 JCheck = "852ab1b9-8b1f-4e09-8e6c-09fa7814d69a"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 RandomNumbers = "e6cf234a-135c-5ec9-84dd-332b85af5143"

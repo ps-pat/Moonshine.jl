@@ -24,6 +24,8 @@ using JCheck:
 
 using RandomNumbers.PCG: PCGStateOneseq
 
+using Graphs
+
 include("generators.jl")
 include("shrinkers.jl")
 

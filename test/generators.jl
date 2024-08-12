@@ -25,15 +25,15 @@ generate(rng::AbstractRNG, ::Type{Sequence}, n) =
 # Tree #
 ########
 
-specialcases(::Type{Tree}) = [Tree()]
+specialcases(::Type{Tree}) = Tree[]
 
 function generate(rng::AbstractRNG, ::Type{Tree}, n)
-    μloc = 1e-7
-    seq_length = 10
-    Ne = 1000
+    μ = 2e-5
+    ρ = 1e-8
+    seq_length = 10_000
+    Ne = 10_000
 
-    ret = [Tree(rng, 1, 1, 100, 100, seq_length = seq_length, Ne = Ne, μloc = μloc)
-           for _ ∈ 1:n]
+    ret = [Tree(rng, rand(rng, 10:100), μ, ρ, Ne, seq_length) for _ ∈ 1:n]
 
     for k ∈ 1:n
         build!(rng, ret[k])

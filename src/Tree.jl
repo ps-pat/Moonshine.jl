@@ -293,7 +293,7 @@ function build!(rng, tree::Tree;
     tree
 end
 
-function isvalid(tree::Tree)
+function validate(tree::Tree)
     n = nleaves(tree)
 
     ## Check that the latitudes of the internal vertices is increasing.
