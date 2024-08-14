@@ -12,65 +12,28 @@ using SparseArrays
 
 using Combinatorics: combinations
 
-######################
-# ArgCore Definition #
-######################
-
-struct ArgCore
-    graph::SimpleDiGraph{VertexType}
-    latitudes::Vector{Float64}
-    sequences::Vector{Sequence}
-    ancestral_intervals::Dict{Edge, Set{Ω}}
-
-    positions::Vector{Float64}
-    seq_length::Float64
-    Ne::Float64
-    μloc::Float64
-    ρloc::Float64
-end
-
-ArgCore() = ArgCore(SimpleDiGraph{VertexType}(),
-                    Float64[], Sequence[], Dict{Edge, Set{Ω}}(),
-                    Float64[], typemin(Float64),
-                    typemin(Float64), typemin(Float64), typemin(Float64))
-
-ArgCore(treecore::TreeCore, ρloc = 1e-5) =
-    ArgCore(treecore.graph, treecore.latitudes,
-            treecore.sequences, Dict{Edge, Set{Ω}}(),
-            treecore.positions, treecore.seq_length,
-            treecore.Ne, treecore.μloc, ρloc)
-
-function ArgCore(leaves::AbstractVector{Sequence};
-                 positions = nothing,
-                 seq_length = one(Float64),
-                 Ne = one(Float64),
-                 μloc = 1e-7,
-                 ρloc = 1e-5)
-    treecore = TreeCore(leaves,
-                        positions = positions,
-                        seq_length = seq_length,
-                        Ne = Ne,
-                        μloc = μloc)
-    ArgCore(treecore, ρloc)
-end
-
 ##################
 # Arg Definition #
 ##################
 
-mutable struct Arg <: AbstractGenealogy
-    core::ArgCore
-    logprob:: BigFloat
-end
 export Arg
+mutable struct Arg <: AbstractGenealogy
+    graph::SimpleDiGraph{VertexType}
+    latitudes::Vector{Float64}
+    sequences::Vector{Sequence}
+    ancestral_intervals::Dict{Edge, Set{Ω}}
+    sample::Sample
+    logprob::Base.RefValue{Float64x2}
+end
 
-Arg() = Arg(ArgCore(), zero(BigFloat))
-
-Arg(tree::Tree, ρloc = 1e-5) =
-    Arg(ArgCore(tree.core, ρloc), prob(tree, logscale = true))
-
-# Arg(leaves::AbstractVector{Sequence}; genpars...) =
-#     Arg(ArgCore(leaves, genpars...), zero(BigFloat))
+Arg(tree::Tree) = Arg(
+    graph(tree),
+    latitudes(tree),
+    sequences(tree),
+    Dict{Edge, Set{Ω}}(),
+    sam(tree),
+    Ref(prob(tree, logscale = true))
+)
 
 ###############################
 # AbstractGenealogy Interface #
@@ -135,18 +98,11 @@ function add_vertices!(arg::Arg, H, lats)
 end
 
 function add_edge!(arg::Arg, e, ints::Set{Ω})
-    arg.core.ancestral_intervals[e] = ints
+    arg.ancestral_intervals[e] = ints
     add_edge!(graph(arg), e)
 end
 
 rem_edge!(arg::Arg, e) = rem_edge!(graph(arg), e)
-
-##################
-# Simple methods #
-##################
-
-export rec_rate
-rec_rate(arg::Arg, scaled = true) = arg.core.ρloc * (scaled ? 4 * Ne(arg) : 1.)
 
 ########################
 # Ancestrality Methods #
@@ -155,9 +111,9 @@ rec_rate(arg::Arg, scaled = true) = arg.core.ρloc * (scaled ? 4 * Ne(arg) : 1.)
 function ancestral_intervals!(ωs, arg::Arg, e::Edge; wipe = true)
     wipe && empty!(ωs)
 
-    haskey(arg.core.ancestral_intervals, e) || return push!(ωs, Ω(0, ∞))
+    haskey(arg.ancestral_intervals, e) || return push!(ωs, Ω(0, ∞))
 
-    for ω ∈ arg.core.ancestral_intervals[e]
+    for ω ∈ arg.ancestral_intervals[e]
         push!(ωs, ω)
     end
 
@@ -165,7 +121,7 @@ function ancestral_intervals!(ωs, arg::Arg, e::Edge; wipe = true)
 end
 
 ancestral_intervals(arg::Arg, e::Edge) =
-    get(() -> Set{Ω}((Ω(0, ∞),)), arg.core.ancestral_intervals, e)
+    get(() -> Set{Ω}((Ω(0, ∞),)), arg.ancestral_intervals, e)
 
 ancestral_intervals!(ωs, arg::Arg, s::VertexType, d; wipe = true) =
     ancestral_intervals!(ωs, arg, Edge(s, d); wipe = wipe)
@@ -186,6 +142,12 @@ end
 
 ancestral_intervals(arg::Arg, v::VertexType) =
     ancestral_intervals!(Set{Ω}(), arg, v)
+
+ancestral_mask!(η, ωs, arg::Arg, x::Union{VertexType, Edge{VertexType}}; wipe = true) =
+    ancestral_mask!(η, sam(arg), ancestral_intervals!(ωs, arg, x), wipe = wipe)
+
+ancestral_mask(arg::Arg, x::Union{VertexType, Edge{VertexType}}) =
+    ancestral_mask!(Sequence(undef, nmarkers(arg)), Set{Ω}(), arg, x)
 
 export recbreakpoint
 """
@@ -214,49 +176,24 @@ end
 # MMN #
 #######
 
-function mutationsidx!(res, ptrs, mask, ωs, arg, e,
+function mutationsidx!(res, mask, ωs, arg, e,
                        firstchunk, firstidx, lastchunk, lastidx)
     η1, η2 = sequences(arg, e)
     ancestral_mask!(mask, ωs, arg, e)
     marker_mask = one(UInt64) << (firstidx - 1)
     idx = one(Int)
 
-    @inbounds for k ∈ range(firstchunk, lastchunk - 1)
-        xored_chunks = (η1.data.chunks[k] ⊻ η2.data.chunks[k]) &
+    @inbounds for k ∈ range(firstchunk, lastchunk)
+        xored_chunk = (η1.data.chunks[k] ⊻ η2.data.chunks[k]) &
             mask.data.chunks[k]
 
         while !iszero(marker_mask)
-            if !iszero(xored_chunks & marker_mask)
-                k = ptrs[idx]
-                if k ≤ length(res[idx])
-                    res[idx][k] = e
-                else
-                    push!(res[idx], e)
-                end
-                ptrs[idx] += 1
-            end
+            iszero(xored_chunk & marker_mask) || push!(res[idx], e)
             idx += 1
             marker_mask <<= 1
         end
 
         marker_mask = one(UInt64)
-    end
-
-    ## Process last chunk
-    xored_chunks = (η1.data.chunks[lastchunk] ⊻ η2.data.chunks[lastchunk]) &
-        mask.data.chunks[lastchunk]
-    @inbounds for _ ∈ 1:lastidx
-        if !iszero(xored_chunks & marker_mask)
-            k = ptrs[idx]
-            if k ≤ length(res[idx])
-                res[idx][k] = e
-            else
-                push!(res[idx], e)
-            end
-            ptrs[idx] += 1
-        end
-        idx += 1
-        marker_mask <<= 1
     end
 
     res
@@ -265,33 +202,30 @@ end
 export mutation_edges!, mutation_edges
 function mutation_edges!(mutations, arg, ω::Ω)
     ## Compute the chunks and indices.
-    lidx = postoidx(arg, leftendpoint(ω))
-    ridx = postoidx(arg, rightendpoint(ω))
+    idx = postoidx(arg, ω)
+    lidx, ridx = first(idx), last(idx)
+
     firstchunk = chunkidx(Sequence, lidx)
     firstidx = idxinchunk(Sequence, lidx)
     lastchunk = chunkidx(Sequence, ridx)
     lastidx = idxinchunk(Sequence, ridx)
 
-    resize!(mutations, ridx - lidx + 1)
-    ptrs = fill(one(Int), length(mutations))
+    @inbounds for k ∈ eachindex(mutations)
+        resize!(mutations[k], 0)
+    end
 
     mask = Sequence(undef, nmarkers(arg))
     ωs = Set{Ω}()
-    for edge ∈ edges_interval(arg, ω)
-        mutationsidx!(mutations, ptrs, mask, ωs, arg, edge,
+    @inbounds for edge ∈ edges_interval(arg, ω)
+        mutationsidx!(mutations, mask, ωs, arg, edge,
                       firstchunk, firstidx, lastchunk, lastidx)
-    end
-
-    @inbounds for (k, ptr) ∈ enumerate(ptrs)
-        resize!(mutations[k], ptr - 1)
     end
 
     mutations
 end
 
 function mutation_edges(arg, ω::Ω)
-    m = postoidx(arg, rightendpoint(ω)) - postoidx(arg, leftendpoint(ω)) + 1
-    ret = [Vector{Edge}(undef, nleaves(arg) ÷ 2 + 1) for _ ∈ 1:m]
+    ret = [Vector{Edge{VertexType}}(undef, 0) for _ ∈ 1:nmarkers(arg)]
     mutation_edges!(ret, arg, ω)
 end
 
@@ -328,7 +262,7 @@ function update_upstream!(arg, v)
 
         ## Update ancestry of edges.
         @inbounds for dad ∈ _dads
-            arg.core.ancestral_intervals[Edge(dad, v)] =
+            arg.ancestral_intervals[Edge(dad, v)] =
                 ancestral_intervals!(ωs_buf2, arg, Edge(dad, v)) ∩
                 ancestral_intervals!(ωs_buf1, arg, v)
         end
@@ -388,30 +322,35 @@ function recombine!(arg, redge, cedge, breakpoint, rlat, clat)
 end
 
 function build!(rng, arg::Arg; winwidth = ∞)
-    # λc = rec_rate(arg, true) / 2 * seq_length(arg)
+    λc = rec_rate(arg, false)
 
-    _mutation_edges = mutation_edges(arg, Ω(0, ∞))
-    nextidx = findfirst(>(1) ∘ length, _mutation_edges)
-    isnothing(nextidx) && return arg ## ARG is already consistent.
-    breakpoint_lbound = idxtopos(arg, max(nextidx - 1, one(nextidx)))
+    _mutation_edges = [sizehint!(Vector{Edge{VertexType}}(undef, 0), nv(arg) ÷ 2)
+                       for _ ∈ 1:nmarkers(arg)]
+    mutation_edges!(_mutation_edges, arg, Ω(first(positions(arg)), ∞))
 
-    while !isnothing(nextidx)
-        live_edges = _mutation_edges[nextidx + length(_mutation_edges) - nmarkers(arg)]
+    mepos = findfirst(>(1) ∘ length, _mutation_edges)
+    isnothing(mepos) && return arg # ARG is already consistent.
+    nextidx = mepos
+    breakpoint = isone(nextidx) ? zero(Float64) : idxtopos(arg, nextidx - 1)
+
+    while !isnothing(mepos)
+        # live_edges = _mutation_edges[nextidx + length(_mutation_edges) - nmarkers(arg)]
+        live_edges = _mutation_edges[mepos]
 
         ## Sample next breakpoint.
         nextpos = idxtopos(arg, nextidx)
-        @debug "Recombination bounds" breakpoint_lbound nextpos
-        if nextpos > breakpoint_lbound + eps(Float64)
-            breakpoint_dist = LogUniform(breakpoint_lbound + eps(Float64),
-                                         nextpos)
-            breakpoint = rand(rng, breakpoint_dist)
-            arg.logprob += logpdf(breakpoint_dist, breakpoint)
-        else
-            breakpoint = breakpoint_lbound
-        end
+        rint = Ω(breakpoint, nextpos)
+        @debug "Recombination bounds" endpoints(rint)
+        l = width(rint)
 
-        ## Create ancestral window.
-        ω = Ω(breakpoint - winwidth / 2, breakpoint + winwidth / 2)
+        if !iszero(l)
+            b = branchlength(arg, rint)
+            λ = λc * b
+            Δbp_dist = truncated(Exponential(inv(λ)), upper = l)
+            Δbp = rand(rng, Δbp_dist)
+            breakpoint += Δbp
+            arg.logprob[] += logpdf(Δbp_dist, Δbp)
+        end
 
         ## Sample recombination and recoalescence edges.
         e1, e2 = samplepair(rng, length(live_edges))
@@ -431,7 +370,7 @@ function build!(rng, arg::Arg; winwidth = ∞)
         if first(rlat_bounds) < last(rlat_bounds)
             rlat_dist = Uniform(rlat_bounds...)
             rlat = rand(rng, rlat_dist)
-            arg.logprob += logpdf(rlat_dist, rlat)
+            arg.logprob[] += logpdf(rlat_dist, rlat)
         else
             rlat = first(rlat_bounds)
         end
@@ -442,7 +381,7 @@ function build!(rng, arg::Arg; winwidth = ∞)
         if first(clat_bounds) < last(clat_bounds)
             clat_dist = Uniform(clat_bounds...)
             clat = rand(rng, clat_dist)
-            arg.logprob += logpdf(clat_dist, clat)
+            arg.logprob[] += logpdf(clat_dist, clat)
         else
             clat = first(clat_bounds)
         end
@@ -453,13 +392,13 @@ function build!(rng, arg::Arg; winwidth = ∞)
 
         ## Update variables.
         mutation_edges!(_mutation_edges, arg, Ω(breakpoint, ∞))
-        nextidx_new = findfirst(>(1) ∘ length, _mutation_edges)
+        mepos = findfirst(>(1) ∘ length, _mutation_edges)
+        isnothing(mepos) && break
+        nextidx = nextidx + mepos - 1
 
-        isnothing(nextidx_new) && break
-        nextidx_new += nmarkers(arg) - length(_mutation_edges)
-        breakpoint_lbound = nextidx_new == nextidx ? breakpoint :
-            idxtopos(arg, max(nextidx_new - 1, one(nextidx_new)))
-        nextidx = nextidx_new
+        if !isone(mepos)
+            breakpoint = idxtopos(arg, nextidx - 1)
+        end
     end
     arg
 end

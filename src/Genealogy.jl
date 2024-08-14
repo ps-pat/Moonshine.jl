@@ -642,72 +642,25 @@ function nmutations(genealogy)
               init = zero(Int))
 end
 
+function nmutations(genealogy, e)
+    mask = Sequence(undef, nmarkers(genealogy))
+    ωs = Set{Ω}()
+    nmutations!(mask, ωs, genealogy, e)
+end
+
 ## Edge functions.
 for fun ∈ [:branchlength, :nmutations]
-    @eval function $fun(genealogy, σ, δ)
-        $fun(genealogy, Edge(σ, δ))
+    @eval function $fun(genealogy, s, d)
+        $fun(genealogy, Edge(s, d))
     end
 end
 
-"""
-    mutable struct EdgeIntervalIter{G}
-
-Iterate over the edges of a genealogy that have ancestral material in a given
-interval.
-"""
-struct EdgeIntervalIter{G, O}
-    genealogy::G
-    ω::O
-    vstack::Stack{VertexType}
-    otheredge::Base.RefValue{Edge}
-    visited::RBTree{VertexType}
-    dads_buf::Vector{VertexType}
-end
-
-@generated IteratorSize(::EdgeIntervalIter) = Base.SizeUnknown()
-
-@generated eltype(::EdgeIntervalIter) = Edge
-
-function edges_interval(genealogy, ωs = Ω(0, ∞))
-    vstack = Stack{VertexType}(ceil(Int, log(nv(genealogy))))
-    root = argmax(latitudes(genealogy)) + nleaves(genealogy)
-    push!(vstack, children(genealogy, root)...)
-
-    EdgeIntervalIter(genealogy, ωs, vstack, Ref(Edge(0 => 0)),
-                     RBTree{VertexType}(),
-                     sizehint!(Vector{VertexType}(undef, 2), 2))
-end
-
-function iterate(eit::EdgeIntervalIter, state = 0)
-    otheredge = eit.otheredge
-    if otheredge[] != Edge(0 => 0)
-        ret = otheredge[]
-        otheredge[] = Edge(0 => 0)
-        return ret, state + 1
+function edges_interval(genealogy, ωs)
+    ωs_e = Set{Ω}()
+    flt = function(e)
+        ancestral_intervals!(ωs_e, genealogy, e)
+        !isdisjoint(ωs_e, ωs)
     end
 
-    vstack = eit.vstack
-    isempty(vstack) && return nothing
-
-    genealogy = eit.genealogy
-    ω = eit.ω
-    visited = eit.visited
-
-    v = pop!(vstack)
-    for child ∈ children(genealogy, v)
-        if child ∉ visited
-            push!(vstack, child)
-            indegree(genealogy, child) > 1 && push!(visited, child)
-        end
-    end
-
-    _dads = eit.dads_buf
-    dads!(_dads, genealogy, v, ω)
-    e = Edge(first(_dads), v)
-    if length(_dads) > 1
-        otheredge[] = e
-        return Edge(last(_dads), v), state + 1
-    else
-        return e, state + 1
-    end
+    Iterators.filter(flt, edges(genealogy))
 end

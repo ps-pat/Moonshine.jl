@@ -165,19 +165,25 @@ function postoidx(sample::Sample, pos)
     nmarkers(sample)
 end
 
-function ancestral_mask!(η, sample::Sample, ω::Ω; wipe = true)
+function postoidx(sample::Sample, ω::Ω)
     lpos, rpos = endpoints(ω)
 
     lidx = 1
-    while lpos > positions(sample)[lidx]
+    while idxtopos(sample, lidx) < lpos
         lidx += 1
     end
 
-    ridx = postoidx(sample, rpos)
+    ridx = nmarkers(sample)
+    while ridx > 0 && idxtopos(sample, ridx) >= rpos
+        ridx -= 1
+    end
 
+    lidx:ridx
+end
+
+function ancestral_mask!(η, sample::Sample, ω::Ω; wipe = true)
     wipe && _wipe!(η)
-    η.data[range(lidx, ridx)] .= true
-
+    η.data[postoidx(sample, ω)] .= true
     η
 end
 
@@ -194,12 +200,6 @@ end
 ancestral_mask(sample::Sample, ω) =
     ancestral_mask!(Sequence(falses(nmarkers(sample))), sample, ω,
                     wipe = false)
-
-ancestral_mask!(η, ωs, sample::Sample, x::Union{VertexType, Edge}; wipe = true) =
-    ancestral_mask!(η, sample, ancestral_intervals!(ωs, sample, x), wipe = wipe)
-
-ancestral_mask(sample::Sample, x::Union{VertexType, Edge}) =
-    ancestral_mask!(Sequence(undef, nmarkers(sample)), Set{Ω}(), sample, x)
 
 function ancestral_mask!(η, sample::Sample, x::AbstractFloat; wipe = true)
     wipe && _wipe!(η)
