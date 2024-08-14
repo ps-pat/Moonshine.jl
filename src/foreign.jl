@@ -13,6 +13,9 @@ struct TreeSequence
     obj::Py
 end
 
+ispy(::TreeSequence) = true
+Py(ts::TreeSequence) = ts.obj
+
 ## Provenance
 function provenance(ts::TreeSequence, id)
     p = ts.obj.provenance(id)

@@ -236,36 +236,11 @@ function isrecombination end
 #############
 
 """
-    validate_positions(positions, nmarkers)
-
-Validate a marker of positions. Tries to fix it if invalid. Return a vector
-of uniformly spaced positions if it cannot be fixed.
-"""
-function validate_positions(positions, nmarkers)
-    if length(positions) != nmarkers || !issorted(positions)
-        @info((isempty(positions) ? "A" : "Invalid positions: a") *
-              "ssuming equally spaced markers")
-        positions = isone(nmarkers) ?
-                    [0.0] : (collect ∘ range)(0, 1, length = nmarkers)
-    end
-    if minimum(positions) < 0
-        @info("First position is < 0: shifting positions right")
-        positions .-= minimum(positions)
-    end
-    if maximum(positions) > 1
-        @info("Last position is > 0: scaling positions")
-        positions ./= maximum(positions)
-    end
-
-    positions
-end
-
-"""
     idxtopos(genealogy, idx)
 
 Return the position of the marker given its index.
 """
-idxtopos(genealogy, idx) = getindex(positions(genealogy), idx)
+function idxtopos end
 
 """
     postoidx(genealogy, pos)
@@ -273,17 +248,16 @@ idxtopos(genealogy, idx) = getindex(positions(genealogy), idx)
 Return the largest marker's index that is at a position lesser than the one
 given.
 """
-function postoidx(genealogy, pos)
-    @inbounds for (k, p) ∈ enumerate(positions(genealogy))
-        p > pos && return k - 1
-    end
+function postoidx end
 
-    nmarkers(genealogy)
+for (f, arg) ∈ (:idxtopos => :idx, :postoidx => :pos)
+    @eval $f(genealogy::AbstractGenealogy, $arg) = $f(sam(genealogy), $arg)
 end
 
 """
-    ancestral_mask!(η, genealogy, x; wipe = true)
-    ancestral_mask(genealogy, x)
+    ancestral_mask!(η, x, ω; wipe = true)
+    ancestral_mask!(η, ωs, x, ω; wipe = true)
+    ancestral_mask(genealogy, ω)
 
 Mask non ancestral positions to 0. If `wipe = true`, all markers in `η` wil be
 initialized at 0.
@@ -291,49 +265,14 @@ initialized at 0.
 function ancestral_mask! end,
 function ancestral_mask end
 
-function ancestral_mask!(η, genealogy, ω::Ω; wipe = true)
-    lpos, rpos = endpoints(ω)
+ancestral_mask!(η, genealogy::AbstractGenealogy, ω; wipe = true) =
+    ancestral_mask!(η, sam(genealogy), ω, wipe = wipe)
 
-    lidx = 1
-    while lpos > positions(genealogy)[lidx]
-        lidx += 1
-    end
+ancestral_mask!(η, ωs, genealogy::AbstractGenealogy, x; wipe = true) =
+    ancestral_mask!(η, ωs, sam(genealogy), x, wipe = wipe)
 
-    ridx = postoidx(genealogy, rpos)
-
-    wipe && wipe!(η)
-    η.data[range(lidx, ridx)] .= true
-
-    η
-end
-
-function ancestral_mask!(η, genealogy, ωs::Set{Ω}; wipe = true)
-    wipe && wipe!(η)
-
-    for ω ∈ ωs
-        ancestral_mask!(η, genealogy, ω, wipe = false)
-    end
-
-    η
-end
-
-ancestral_mask(genealogy, ω) =
-    ancestral_mask!(Sequence(falses(nmarkers(genealogy))), genealogy, ω,
-                    wipe = false)
-
-ancestral_mask!(η, ωs, genealogy, x::Union{VertexType, Edge}; wipe = true) =
-    ancestral_mask!(η, genealogy, ancestral_intervals!(ωs, genealogy, x), wipe = wipe)
-
-ancestral_mask(genealogy, x::Union{VertexType, Edge}) =
-    ancestral_mask!(Sequence(undef, nmarkers(genealogy)), Set{Ω}(), genealogy, x)
-
-function ancestral_mask!(η, genealogy, x::AbstractFloat; wipe = true)
-    wipe && wipe!(η)
-    η[postoidx(genealogy, x)] = true
-    η
-end
-
-wipe!(η) = η.data.chunks .⊻= η.data.chunks
+ancestral_mask(genealogy::AbstractGenealogy, ω) =
+    ancestral_mask(sam(genealogy), ω)
 
 ###################
 # Pretty printing #

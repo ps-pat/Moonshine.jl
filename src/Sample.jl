@@ -165,16 +165,6 @@ function postoidx(sample::Sample, pos)
     nmarkers(sample)
 end
 
-"""
-    ancestral_mask!(η, x, ω; wipe = true)
-    ancestral_mask(x, ω)
-
-Mask non ancestral positions to 0. If `wipe = true`, all markers in `η` wil be
-initialized at 0.
-"""
-function ancestral_mask! end,
-function ancestral_mask end
-
 function ancestral_mask!(η, sample::Sample, ω::Ω; wipe = true)
     lpos, rpos = endpoints(ω)
 
@@ -218,3 +208,11 @@ function ancestral_mask!(η, sample::Sample, x::AbstractFloat; wipe = true)
 end
 
 _wipe!(η) = η.data.chunks .⊻= η.data.chunks
+
+for (f, symb) ∈ Dict(:mut_rate => :(:μ), :rec_rate => :(:ρ))
+    @eval function $f(sample::Sample, scaled = true)
+        ret = getfield(sample, $symb)
+        scaled || return ret
+        ret * sample.Ne * sample.sequence_length
+    end
+end

@@ -12,63 +12,29 @@ import Base: iterate, length, size, isempty
 
 using SpecialFunctions: loggamma
 
-#######################
-# TreeCore Definition #
-#######################
-struct TreeCore
-    graph::SimpleDiGraph{VertexType}
-    latitudes::Vector{Float64}
-    sequences::Vector{Sequence}
-
-    positions::Vector{Float64}
-    seq_length::Float64
-    Ne::Float64
-    μloc::Float64
-end
-
-TreeCore() = TreeCore(SimpleDiGraph{VertexType}(), [], [], [],
-                      typemin(Float64), typemin(Float64), typemin(Float64))
-
-function TreeCore(leaves::AbstractVector{Sequence};
-                  positions = nothing,
-                  seq_length = one(Float64),
-                  Ne = one(Float64),
-                  μloc = 1e-7)
-    n = length(leaves)
-
-    sequences = similar(leaves, 2n - 1)
-    for (k, leaf) ∈ enumerate(leaves)
-        sequences[k] = leaf
-    end
-
-    if isnothing(positions)
-        positions =
-            isone(n) ? zeros(1) : (collect ∘ range)(0, 1, length = length(leaves))
-    else
-        positions = validate_positions(positions, (length ∘ first)(leaves))
-    end
-
-    TreeCore(SimpleDiGraph(2n - 1), zeros(Float64, n - 1), sequences,
-             positions, seq_length, Ne, μloc)
-end
-
 ###################
 # Tree Definition #
 ###################
 
 export Tree
 mutable struct Tree <: AbstractGenealogy
-    core::TreeCore
-    logprob::Float64x2
-    nextvertex::Int
+    graph::SimpleDiGraph{VertexType}
+    latitudes::Vector{Float64}
+    sequences::Vector{Sequence}
+    sample::Sample
+    logprob::Base.RefValue{Float64x2}
 end
 
-Tree() = Tree(TreeCore(), zero(BigFloat), typemin(Int))
+function Tree(sample::Sample)
+    n = length(sample)
 
-Tree(core::TreeCore, logprob) = Tree(core, logprob, one(Int))
+    sequences = Vector{Sequence}(undef, 2n - 1)
+    sequences[1:n] .= sample.H
 
-function Tree(leaves::AbstractVector{Sequence}; genpars...)
-    Tree(TreeCore(leaves; genpars...), zero(BigFloat), one(Int))
+    Tree(SimpleDiGraph(2n - 1),
+         zeros(Float64, n - 1),
+         sequences,
+         sample, Ref(zero(Float64x2)))
 end
 
 ###############################
@@ -231,7 +197,7 @@ function build!(rng, tree::Tree;
         v1_idxs = sample(rng, 1:nlive, norms[1:nlive], 2, replace = false)
         v1_idx = norms[first(v1_idxs)] > norms[last(v1_idxs)] ?
             first(v1_idxs) : last(v1_idxs)
-        tree.logprob += log(norms[v1_idx]) - log(norms.sum)
+        tree.logprob[] += log(norms[v1_idx]) - log(norms.sum)
         v1 = live[v1_idx]
         live[v1_idx] = live[nlive]
         norms[v1_idx] = norms[nlive]
@@ -242,7 +208,8 @@ function build!(rng, tree::Tree;
         potential2 =
             let η1 = sequence(tree, v1),
                 η1_d0 = distance(Dist, η0, η1)
-                function(η)
+
+                function (η)
                     d = distance(Dist, η1, η)
                     if distance(Dist, η0, η) > η1_d0
                         d += bias0
@@ -265,18 +232,24 @@ function build!(rng, tree::Tree;
         v2 = live[v2_idx]
         v = 2n - nlive
         live[v2_idx] = v
-        tree.logprob += logpdf(Gumbel(gumbel_μ), gumbel_x)
+        tree.logprob[] += logpdf(Gumbel(gumbel_μ), gumbel_x)
 
-        ## Sample coalescence lattitude
+        ## Sample coalescence latitude
         Δcoal_dist = Exponential(inv(nlive))
         Δ = rand(rng, Δcoal_dist)
-        tree.logprob += logpdf(Δcoal_dist, Δ)
+        tree.logprob[] += logpdf(Δcoal_dist, Δ)
 
+        ## Add some latitude to account for mutations.
         d12 = distance(Dist, sequence(tree, v1), sequence(tree, v2))
         if !iszero(d12)
-            Δmut_dist = Gamma(d12, inv(μ))
-            Δmut = rand(rng, Δmut_dist)
-            tree.logprob += logpdf(Δmut_dist, Δmut)
+            Δmut = randexp(rng) / μ
+            for _ ∈ 2:d12
+                Δmut_new = randexp(rng) / μ
+                Δmut_new ≤ Δmut && continue
+                Δmut = Δmut_new
+            end
+            tree.logprob[] += log(μ) + log(d12) +
+                              (d12 - 1) * log(1 - exp(-μ * Δmut)) - μ * Δmut
             Δ += Δmut
         end
 
