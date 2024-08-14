@@ -6,8 +6,6 @@ using Random
 
 using StatsBase: samplepair
 
-using DataStructures: Stack, Queue
-
 using SparseArrays
 
 using Combinatorics: combinations

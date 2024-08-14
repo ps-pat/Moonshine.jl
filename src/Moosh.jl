@@ -10,6 +10,8 @@ using LoopVectorization
 
 using MultiFloats
 
+using DataStructures: Stack, Queue
+
 ## Some constants.
 const VertexType = Int
 const ∞ = Inf
@@ -42,10 +44,11 @@ end
     rng = Xoshiro(42)
     n = 2
     m = 1
+    H = Sample([Sequence(rng, m) for _ ∈ 1:n], 1e-8, 1e-8, 1000, 1000, [0.])
     @compile_workload begin
-        H = [Sequence(rng, m) for _ ∈ 1:n]
-        tree = Tree(H, positions = [0.], seq_length = 1., Ne = 1000, μloc = 1e-5)
+        tree = Tree(H)
         build!(rng, tree)
+        arg = Arg(tree)
     end
 end
 

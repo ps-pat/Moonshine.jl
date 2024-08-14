@@ -1,6 +1,6 @@
 using Distributions: logpdf
 
-using DataStructures: Stack, Queue, enqueue!, dequeue!
+using DataStructures: enqueue!, dequeue!
 
 #############
 # Interface #

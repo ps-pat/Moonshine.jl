@@ -14,7 +14,7 @@ using GeometryBasics: Point
 
 using Bumper
 
-using DataStructures: Stack, DefaultDict, RBTree
+using DataStructures: DefaultDict, RBTree
 
 import Base: IteratorSize, eltype
 
