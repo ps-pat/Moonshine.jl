@@ -12,8 +12,6 @@ using LayeredLayouts
 
 using GeometryBasics: Point
 
-using Bumper
-
 using DataStructures: DefaultDict, RBTree
 
 import Base: IteratorSize, eltype

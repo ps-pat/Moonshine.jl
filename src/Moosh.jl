@@ -12,6 +12,8 @@ using MultiFloats
 
 using DataStructures: Stack, Queue
 
+using Bumper
+
 ## Some constants.
 const VertexType = Int
 const ∞ = Inf
