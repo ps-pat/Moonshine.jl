@@ -484,6 +484,7 @@ function cbasis!(vec, arg::Arg, v, lk = Threads.ReentrantLock();
                  visited = Set{VertexType}())
     empty!(estack)
     empty!(vqueue)
+    empty!(visited)
 
     σ, δ = dads(arg, v)
     if σ < δ
@@ -573,6 +574,9 @@ end
 
 function _thevenin_update_C!(C, arg, σ, δ, r, edgesmap, estack, vqueue, visited)
     empty!(estack)
+    empty!(vqueue)
+    empty!(visited)
+
     vec = view(C, :, r + 1)
     fill!(vec, 0)
 
@@ -587,6 +591,9 @@ function thevenin!(arg::Arg, σ, δ, C, R2, g;
                    vqueue = Queue{VertexType}(ceil(Int, log(nv(arg)))),
                    visited = Set{VertexType}())
     empty!(estack)
+    empty!(vqueue)
+    empty!(visited)
+
     r = nrecombinations(arg)
 
     _thevenin_g!(g, arg, σ, edgesmap)
@@ -600,6 +607,10 @@ end
 function thevenin(arg::Arg, σ, δ;
                   estack = Stack{Edge}(ceil(Int, log(nv(arg)))),
                   edgesmap = Dict(reverse.(enumerate(edges(arg)))))
+    empty!(estack)
+    empty!(vqueue)
+    empty!(visited)
+
     r = nrecombinations(arg)
     ## Square root of impedances.
     R2 = _thevenin_R(arg, edgesmap, true)
@@ -619,6 +630,7 @@ end
 function thevenin(arg::Arg;
                   estack = Stack{Edge}(ceil(Int, log(nv(arg)))),
                   edgesmap = Dict(reverse.(enumerate(edges(arg)))))
+    empty!(estack)
     r = nrecombinations(arg)
 
     C = _thevenin_C(arg, r, edgesmap)
@@ -634,6 +646,8 @@ export thevenin_matrix
 function thevenin_matrix(arg::Arg,
                          estack = Stack{Edge}(ceil(Int, log(nv(arg)))),
                          edgesmap = Dict(reverse.(enumerate(edges(arg)))))
+    empty!(estack)
+
     n = nleaves(arg)
     r = nrecombinations(arg)
 
