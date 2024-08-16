@@ -446,23 +446,29 @@ function _path_bfs_forward!(estack, arg::Arg, σ, δ, vqueue, visited)
     estack
 end
 
-function _edgeidx(edgesid, e)
+function _update_vec!(vec, edgesid, e)
+    val = 1
     idx = get(edgesid, e, zero(Int))
-    iszero(idx) && return edgesid[reverse(e)]
-    idx
+
+    if iszero(idx)
+        idx = get(edgesid, reverse(e), zero(Int))
+        val = -1
+    end
+
+    vec[idx] = val
 end
 
 function _bfs_backtrack!(vec, edgesid, estack, lk)
     e_prev = pop!(estack)
     Threads.lock(lk) do
-        vec[_edgeidx(edgesid, e_prev)] = 1
+        _update_vec!(vec, edgesid, e_prev)
     end
     @inbounds while !isempty(estack)
         e = pop!(estack)
         dst(e) == src(e_prev) || continue
         Threads.lock(lk) do
-            vec[_edgeidx(edgesid, e)] = 1
-        end
+            _update_vec!(vec, edgesid, e)
+           end
         e_prev = e
     end
 
