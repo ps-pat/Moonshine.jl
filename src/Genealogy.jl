@@ -229,6 +229,18 @@ function isrecombination end
 
 @generated isrecombination(::Any, ::Any) = false
 
+export impedance
+"""
+    impedance(genealogy, edge)
+
+Returns the impedance associated with an edge.
+
+Default implementation returns the latitude difference of incident vertices. If
+the edge is reversed, its impedance will be negative.
+"""
+impedance(genealogy, edge) =
+    latitude(genealogy, src(edge)) - latitude(genealogy, dst(edge))
+
 #############
 # Utilities #
 #############
