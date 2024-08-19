@@ -15,7 +15,7 @@ using Combinatorics: combinations
 ##################
 
 export Arg
-mutable struct Arg <: AbstractGenealogy
+struct Arg <: AbstractGenealogy
     graph::SimpleDiGraph{VertexType}
     latitudes::Vector{Float64}
     sequences::Vector{Sequence}

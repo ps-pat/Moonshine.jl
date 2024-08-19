@@ -17,7 +17,7 @@ using SpecialFunctions: loggamma
 ###################
 
 export Tree
-mutable struct Tree <: AbstractGenealogy
+struct Tree <: AbstractGenealogy
     graph::SimpleDiGraph{VertexType}
     latitudes::Vector{Float64}
     sequences::Vector{Sequence}
