@@ -278,9 +278,6 @@ function ancestral_mask end
 ancestral_mask!(η, genealogy::AbstractGenealogy, ω; wipe = true) =
     ancestral_mask!(η, sam(genealogy), ω, wipe = wipe)
 
-ancestral_mask!(η, ωs, genealogy::AbstractGenealogy, x; wipe = true) =
-    ancestral_mask!(η, ωs, sam(genealogy), x, wipe = wipe)
-
 ancestral_mask(genealogy::AbstractGenealogy, ω) =
     ancestral_mask(sam(genealogy), ω)
 
