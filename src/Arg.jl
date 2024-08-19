@@ -405,40 +405,50 @@ end
 # Algebra #
 ###########
 
-function _path_bfs_forward!(estack, arg::Arg, σ, δ, vqueue, visited)
+"""
+    _path_bfs_forward!(estack, argm s, d, vqueue, visited)
+
+Forward pass of the path finding algorithm.
+"""
+function _path_bfs_forward!(estack, arg::Arg, s, d, vqueue, visited)
     n = nleaves(arg)
     empty!(estack)
     empty!(vqueue)
     empty!(visited)
 
-    any(v -> isleaf(arg, v), (σ, δ)) ||
-        push!(visited, first(children(arg, σ) ∩ children(arg, δ)))
-    push!(visited, σ)
-    push!(vqueue.store, σ) # Dafuq??
+    # any(v -> isleaf(arg, v), (s, d)) ||
+    #     push!(visited, first(children(arg, s) ∩ children(arg, d)))
+    push!(visited, s)
+    push!(vqueue.store, s) # Dafuq??
 
     while !isempty(vqueue)
-        σ = popfirst!(vqueue.store) # DAfuq?
+        s = popfirst!(vqueue.store) # DAfuq?
 
-        for v ∈ children(arg, σ)
+        for v ∈ children(arg, s)
             v ∈ visited && continue
 
-            ## Make sure that the edge is in the spanning tree.
+            ## Make sure that the edge is in the spanning tree. If `s` is not
+            ## the largest parent of v, skip the edge s->v. This means the
+            ## parental edge of a recombination vertex not adjacent to a
+            ## recoalescence vertex is excluded from the spanning tree.
             if isrecombination(arg, v, n)
-                any(>(σ), dads(arg, v)) && continue
+                any(>(s), dads(arg, v)) && continue
             end
 
             push!(visited, v)
-            push!(estack, Edge(σ, v))
-            v == δ && @goto done
+            push!(estack, Edge(s, v))
+            v == d && @goto done
             push!(vqueue.store, v) # Dafuq?
         end
 
-        _dads = dads(arg, σ)
+        _dads = dads(arg, s)
         isempty(_dads) && continue
-        v = maximum(dads(arg, σ))
+
+        ## Again, skip non-recoalescence edge.
+        v = maximum(dads(arg, s))
         v ∈ visited && continue
         push!(visited, v)
-        push!(estack, Edge(σ, v))
+        push!(estack, Edge(s, v))
         push!(vqueue.store, v) # Dafuq?
     end
 
@@ -446,7 +456,12 @@ function _path_bfs_forward!(estack, arg::Arg, σ, δ, vqueue, visited)
     estack
 end
 
-function _update_vec!(vec, edgesid, e)
+"""
+    _update_vec!(vec, edgesid, e, lk)
+
+Updates the variable `vec` in `_bfs_backtrack!.
+"""
+function _update_vec!(vec, edgesid, e, lk)
     val = 1
     idx = get(edgesid, e, zero(Int))
 
@@ -454,21 +469,19 @@ function _update_vec!(vec, edgesid, e)
         idx = get(edgesid, reverse(e), zero(Int))
         val = -1
     end
-
-    vec[idx] = val
+    Threads.lock(lk) do
+        vec[idx] = val
+    end
 end
 
 function _bfs_backtrack!(vec, edgesid, estack, lk)
     e_prev = pop!(estack)
-    Threads.lock(lk) do
-        _update_vec!(vec, edgesid, e_prev)
-    end
+    _update_vec!(vec, edgesid, e_prev, lk)
     @inbounds while !isempty(estack)
         e = pop!(estack)
         dst(e) == src(e_prev) || continue
-        Threads.lock(lk) do
-            _update_vec!(vec, edgesid, e)
-           end
+
+        _update_vec!(vec, edgesid, e, lk)
         e_prev = e
     end
 
@@ -476,9 +489,20 @@ function _bfs_backtrack!(vec, edgesid, estack, lk)
 end
 
 export cbasis!, cbasis
+"""
+    cbasis!(vec, arg, v, lk; estack, edgesid, vqueue, visited)
+    cbasis(arg, v, lk; estack, edgesid, vqueue, visited)
+    cbasis!(mat, arg; edgesid)
+    cbasis(arg; edgesid)
 
-function cbasis!(vec, arg::Arg, v, lk = Threads.ReentrantLock();
-                 estack = Stack{Edge}(ceil(Int, log(nv(arg)))),
+Compute the basis vector associated with recombination vertex `v`. If `v` is
+not specified, return a matrix containing all basis vectors.
+"""
+function cbasis! end,
+function cbasis end
+
+function cbasis!(vec, arg::Arg, v::VertexType, lk = Threads.ReentrantLock();
+                 estack = Stack{Edge{VertexType}}(ceil(Int, log(nv(arg)))),
                  edgesid = Dict(reverse.(enumerate(edges(arg)))),
                  vqueue = Queue{VertexType}(ceil(Int, log(nv(arg)))),
                  visited = Set{VertexType}())
@@ -486,32 +510,24 @@ function cbasis!(vec, arg::Arg, v, lk = Threads.ReentrantLock();
     empty!(vqueue)
     empty!(visited)
 
-    σ, δ = dads(arg, v)
-    if σ < δ
-        σ, δ = δ, σ
-    end
-
+    ## Add the recoalescence edge to vec.
+    _dads = minmax(dads(arg, v)...)
     Threads.lock(lk) do
-        vec[edgesid[Edge(σ => v)]] = 1
-        vec[edgesid[Edge(δ => v)]] = 1
+        vec[edgesid[Edge(last(_dads) => v)]] = -1
     end
 
-    _path_bfs_forward!(estack, arg, σ, δ, vqueue, visited)
+    _path_bfs_forward!(estack, arg, _dads..., vqueue, visited)
     _bfs_backtrack!(vec, edgesid, estack, lk)
-
-    vec
 end
 
-cbasis(arg::Arg, v;
-       estack = Stack{Edge}(ceil(Int, log(nv(arg)))),
+cbasis(arg::Arg, v::VertexType, lk = Threads.ReentrantLock();
+       estack = Stack{Edge{VertexType}}(ceil(Int, log(nv(arg)))),
        edgesid = Dict(reverse.(enumerate(edges(arg)))),
        vqueue = Queue{VertexType}(ceil(Int, log(nv(arg)))),
        visited = Set{VertexType}()) =
-           cbasis!(Vector{Float64}(undef, ne(arg)), arg, v,
-                   estack = estack,
-                   edgesid = edgesid,
-                   vqueue = vqueue,
-                   visited = visited)
+    cbasis!(zeros(Float64, ne(arg)), arg, v, lk,
+            estack = estack, edgesid = edgesid,
+            vqueue = vqueue, visited = visited)
 
 function cbasis!(mat, arg::Arg;
                  edgesid = Dict(reverse.(enumerate(edges(arg)))))
@@ -522,33 +538,36 @@ function cbasis!(mat, arg::Arg;
 
     lk = Threads.ReentrantLock()
     rec_offset = ne(arg) - nv(arg) + 1 - nrecombinations(arg)
+
     tasks = map(chunks(range(1, length = r - rec_offset),
                        n = Threads.nthreads(),
                        split = :scatter)) do ks
-        Threads.@spawn begin
-            local estack = Stack{Edge}(ceil(Int, log(nv(arg))))
-            local vqueue = Queue{VertexType}(ceil(Int, log(nv(arg))))
-            local visited = Set{VertexType}()
-            for k ∈ ks
-                v = 2(n + k + rec_offset - 1)
-                cbasis!(view(mat, :, k), arg, v, lk,
-                        edgesid = edgesid,
-                        vqueue = vqueue, estack = estack, visited = visited)
+            Threads.@spawn begin
+                local estack = Stack{Edge}(ceil(Int, log(nv(arg))))
+                local vqueue = Queue{VertexType}(ceil(Int, log(nv(arg))))
+                local visited = Set{VertexType}()
+
+                for k ∈ ks
+                    v = 2(n + k + rec_offset - 1)
+                    cbasis!(view(mat, :, k), arg, v, lk,
+                            edgesid = edgesid, vqueue = vqueue,
+                            estack = estack, visited = visited)
+                end
             end
         end
-    end
 
     fetch.(tasks)
     mat
 end
 
 cbasis(arg::Arg; edgesid = Dict(reverse.(enumerate(edges(arg))))) =
-    cbasis!(spzeros(ne(arg), nrecombinations(arg)), arg)
+    cbasis!(spzeros(ne(arg), nrecombinations(arg)), arg, edgesid = edgesid)
 
 function _thevenin_R(arg::Arg, edgesmap, take_sqrt = true)
- R = Diagonal(Vector{Float64}(undef, ne(arg)))
+    R = Diagonal(Vector{Float64}(undef, ne(arg)))
+
     for (e, idx) ∈ edgesmap
-        R[idx, idx] = latitude(arg, src(e)) - latitude(arg, dst(e))
+        R[idx, idx] = impedance(arg, e)
     end
 
     take_sqrt || return R
@@ -560,32 +579,40 @@ function _thevenin_R(arg::Arg, edgesmap, take_sqrt = true)
     R
 end
 
-function _thevenin_g!(g, arg::Arg, v, edgesmap)
-    fill!(g, 0)
-    g[edgesmap[Edge(dad(arg, v), v)]] = 1
-    g
-end
+"""
+    _thevenin_C(arg, edgesmap)
 
-function _thevenin_C(arg, r, edgesmap)
-    C = spzeros(ne(arg), r + 1)
+Return the generator of the cycle space of an ancestral recombination graph
+expanded to include space for a pseudo edge. If `arg` has r recombinations and
+k edges, an (k+2) x r+1 matrix is returned. The generator is stored in the
+upper k x r block. Remaining entriez are initialized to 0.
+"""
+function _thevenin_C(arg, edgesmap)
+    C = spzeros(ne(arg), nrecombinations(arg) + 1)
     cbasis!(C, arg, edgesid = edgesmap)
     C
 end
 
-function _thevenin_update_C!(C, arg, σ, δ, r, edgesmap, estack, vqueue, visited)
+"""
+    _thevenin_update_C!(C, arg, s, d, edgesmap, estack, vqueue, visited)
+
+Store the pseudo-cycle generated by the pair of vertices (s, d) to the last
+column of `C`.
+"""
+function _thevenin_update_C!(C, arg, s, d, edgesmap, estack, vqueue, visited)
     empty!(estack)
     empty!(vqueue)
     empty!(visited)
 
-    vec = view(C, :, r + 1)
+    vec = @view C[:,end]
     fill!(vec, 0)
 
-    _path_bfs_forward!(estack, arg, σ, δ, vqueue, visited)
+    _path_bfs_forward!(estack, arg, s, d, vqueue, visited)
     _bfs_backtrack!(vec, edgesmap, estack, Threads.ReentrantLock())
 end
 
 export thevenin!, thevenin
-function thevenin!(arg::Arg, σ, δ, C, R2, g;
+function thevenin!(arg::Arg, s, d, C, R2;
                    edgesmap = Dict(reverse.(enumerate(edges(arg)))),
                    estack = Stack{Edge}(ceil(Int, log(nv(arg)))),
                    vqueue = Queue{VertexType}(ceil(Int, log(nv(arg)))),
@@ -596,49 +623,49 @@ function thevenin!(arg::Arg, σ, δ, C, R2, g;
 
     r = nrecombinations(arg)
 
-    _thevenin_g!(g, arg, σ, edgesmap)
-    _thevenin_update_C!(C, arg, σ, δ, r, edgesmap, estack, vqueue, visited)
+    _thevenin_update_C!(C, arg, s, d, edgesmap, estack, vqueue, visited)
 
-    Cvec = view(C, edgesmap[Edge(dad(arg, σ), σ)], :)
-    current = Cvec' * ((R2 * C) \ (inv(R2) * g))
-    inv(current)
+    U = qr(R2 * C).R
+    invU = (inv ∘ Matrix)(U)
+    current = (invU * invU')
+    inv(last(current))
 end
 
-function thevenin(arg::Arg, σ, δ;
+function thevenin(arg::Arg, s, d;
                   estack = Stack{Edge}(ceil(Int, log(nv(arg)))),
-                  edgesmap = Dict(reverse.(enumerate(edges(arg)))))
+                  edgesmap = Dict(reverse.(enumerate(edges(arg)))),
+                  vqueue = Queue{VertexType}(ceil(Int, log(nv(arg)))),
+                  visited = Set{VertexType}())
     empty!(estack)
     empty!(vqueue)
     empty!(visited)
 
-    r = nrecombinations(arg)
     ## Square root of impedances.
     R2 = _thevenin_R(arg, edgesmap, true)
 
-    ## Generator
-    g = zeros(Float64, ne(arg))
-    _thevenin_g!(g, arg, σ, edgesmap)
-
     ## Compute fundamental basis
-    C = _thevenin_C(arg, r, edgesmap)
-    _thevenin_update_C!(C, arg, σ, δ, r, edgesmap, estack)
+    C = _thevenin_C(arg, edgesmap)
 
-    thevenin!(arg, σ, δ, C, R2, g,
-              edgesmap = edgesmap, estack = estack)
+    thevenin!(arg, s, d, C, R2,
+              edgesmap = edgesmap, estack = estack,
+              vqueue = vqueue, visited = visited)
 end
 
 function thevenin(arg::Arg;
                   estack = Stack{Edge}(ceil(Int, log(nv(arg)))),
-                  edgesmap = Dict(reverse.(enumerate(edges(arg)))))
+                  edgesmap = Dict(reverse.(enumerate(edges(arg)))),
+                  vqueue = Queue{VertexType}(ceil(Int, log(nv(arg)))),
+                  visited = Set{VertexType}())
     empty!(estack)
     r = nrecombinations(arg)
 
-    C = _thevenin_C(arg, r, edgesmap)
+    C = _thevenin_C(arg, edgesmap)
     R2 = _thevenin_R(arg, edgesmap, true)
-    g = zeros(Float64, ne(arg))
 
-    Iterators.map(combinations(1:nleaves(arg), 2)) do (σ, δ)
-        thevenin!(arg, σ, δ, C, R2, g, estack = estack, edgesmap = edgesmap)
+    Iterators.map(combinations(1:nleaves(arg), 2)) do (s, d)
+        thevenin!(arg, s, d, C, R2,
+                  estack = estack, edgesmap = edgesmap,
+                  vqueue = vqueue, visited = visited)
     end
 end
 
@@ -651,14 +678,14 @@ function thevenin_matrix(arg::Arg,
     n = nleaves(arg)
     r = nrecombinations(arg)
 
-    C = _thevenin_C(arg, r, edgesmap)
+    C = _thevenin_C(arg, edgesmap)
     R2 = _thevenin_R(arg, edgesmap, true)
     g = zeros(Float64, ne(arg))
 
     mat = Matrix{Float64}(undef, n, n)
     mat[diagind(mat)] .= 0
     for (j, i) ∈ combinations(1:n, 2)
-        mat[i, j] = thevenin!(arg, i, j, C, R2, g,
+        mat[i, j] = thevenin!(arg, i, j, C, R2,
                               estack = estack, edgesmap = edgesmap)
     end
 
