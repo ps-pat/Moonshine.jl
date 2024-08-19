@@ -628,9 +628,9 @@ function thevenin!(arg::Arg, s, d, C, R2;
     _thevenin_update_C!(C, arg, s, d, edgesmap, estack, vqueue, visited)
 
     U = UpperTriangular(qr(R2 * C).R)
-    invU = inv(U)
-    current = (invU * invU')
-    inv(last(current))
+    v = vcat(zeros(r), 1)
+    ldiv!(U, v)
+    last(v)^-2
 end
 
 function thevenin(arg::Arg, s, d;
