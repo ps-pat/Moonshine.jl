@@ -503,7 +503,7 @@ function cbasis end
 
 function cbasis!(vec, arg::Arg, v::VertexType, lk = Threads.ReentrantLock();
                  estack = Stack{Edge{VertexType}}(ceil(Int, log(nv(arg)))),
-                 edgesid = Dict(reverse.(enumerate(edges(arg)))),
+                 edgesid = edgesmap(arg),
                  vqueue = Queue{VertexType}(ceil(Int, log(nv(arg)))),
                  visited = Set{VertexType}())
     empty!(estack)
@@ -522,7 +522,7 @@ end
 
 cbasis(arg::Arg, v::VertexType, lk = Threads.ReentrantLock();
        estack = Stack{Edge{VertexType}}(ceil(Int, log(nv(arg)))),
-       edgesid = Dict(reverse.(enumerate(edges(arg)))),
+       edgesid = edgesmap(arg),
        vqueue = Queue{VertexType}(ceil(Int, log(nv(arg)))),
        visited = Set{VertexType}()) =
     cbasis!(zeros(Float64, ne(arg)), arg, v, lk,
@@ -530,7 +530,7 @@ cbasis(arg::Arg, v::VertexType, lk = Threads.ReentrantLock();
             vqueue = vqueue, visited = visited)
 
 function cbasis!(mat, arg::Arg;
-                 edgesid = Dict(reverse.(enumerate(edges(arg)))))
+                 edgesid = edgesmap(arg))
     fill!(mat, 0)
 
     r = nrecombinations(arg, dummy = true)
@@ -560,7 +560,7 @@ function cbasis!(mat, arg::Arg;
     mat
 end
 
-cbasis(arg::Arg; edgesid = Dict(reverse.(enumerate(edges(arg))))) =
+cbasis(arg::Arg; edgesid = edgesmap(arg)) =
     cbasis!(spzeros(ne(arg), nrecombinations(arg)), arg, edgesid = edgesid)
 
 function _thevenin_R(arg::Arg, edgesmap, take_sqrt = true)
@@ -615,7 +615,7 @@ end
 
 export thevenin!, thevenin
 function thevenin!(arg::Arg, s, d, C, R2;
-                   edgesmap = Dict(reverse.(enumerate(edges(arg)))),
+                   edgesmap = edgesmap(arg),
                    estack = Stack{Edge}(ceil(Int, log(nv(arg)))),
                    vqueue = Queue{VertexType}(ceil(Int, log(nv(arg)))),
                    visited = Set{VertexType}())
@@ -635,7 +635,7 @@ end
 
 function thevenin(arg::Arg, s, d;
                   estack = Stack{Edge}(ceil(Int, log(nv(arg)))),
-                  edgesmap = Dict(reverse.(enumerate(edges(arg)))),
+                  edgesmap = edgesmap(arg),
                   vqueue = Queue{VertexType}(ceil(Int, log(nv(arg)))),
                   visited = Set{VertexType}())
     empty!(estack)
@@ -655,7 +655,7 @@ end
 
 function thevenin(arg::Arg;
                   estack = Stack{Edge}(ceil(Int, log(nv(arg)))),
-                  edgesmap = Dict(reverse.(enumerate(edges(arg)))),
+                  edgesmap = edgesmap(arg),
                   vqueue = Queue{VertexType}(ceil(Int, log(nv(arg)))),
                   visited = Set{VertexType}())
     empty!(estack)
@@ -674,7 +674,7 @@ end
 export thevenin_matrix
 function thevenin_matrix(arg::Arg,
                          estack = Stack{Edge}(ceil(Int, log(nv(arg)))),
-                         edgesmap = Dict(reverse.(enumerate(edges(arg)))))
+                         edgesmap = edgesmap(arg))
     empty!(estack)
 
     n = nleaves(arg)

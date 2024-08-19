@@ -671,3 +671,12 @@ function edges_interval(genealogy, ωs)
 
     Iterators.filter(flt, edges(genealogy))
 end
+
+export edgesmap
+"""
+    edgesmap(genealogy)
+
+Return a `Dict` that maps every edge of a genealogy to an integer in
+1:ne(genealogy).
+"""
+edgesmap(genealogy) = Dict(reverse.(enumerate(edges(genealogy))))
