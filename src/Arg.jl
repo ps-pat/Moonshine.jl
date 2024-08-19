@@ -525,7 +525,7 @@ cbasis(arg::Arg, v::VertexType, lk = Threads.ReentrantLock();
        edgesid = edgesmap(arg),
        vqueue = Queue{VertexType}(ceil(Int, log(nv(arg)))),
        visited = Set{VertexType}()) =
-    cbasis!(zeros(Float64, ne(arg)), arg, v, lk,
+    cbasis!(spzeros(Float64, ne(arg)), arg, v, lk,
             estack = estack, edgesid = edgesid,
             vqueue = vqueue, visited = visited)
 
