@@ -567,7 +567,9 @@ function _thevenin_R(arg::Arg, edgesmap, take_sqrt = true)
     R = Diagonal(Vector{Float64}(undef, ne(arg)))
 
     for (e, idx) ∈ edgesmap
-        R[idx, idx] = impedance(arg, e)
+        ## Dirty trick to deal with numerical instability. Some impedances are
+        ## <= 0...
+        R[idx, idx] = max(eps(Float64), impedance(arg, e))
     end
 
     take_sqrt || return R
@@ -625,8 +627,8 @@ function thevenin!(arg::Arg, s, d, C, R2;
 
     _thevenin_update_C!(C, arg, s, d, edgesmap, estack, vqueue, visited)
 
-    U = qr(R2 * C).R
-    invU = (inv ∘ Matrix)(U)
+    U = UpperTriangular(qr(R2 * C).R)
+    invU = inv(U)
     current = (invU * invU')
     inv(last(current))
 end
