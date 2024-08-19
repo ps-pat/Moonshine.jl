@@ -510,9 +510,10 @@ function cbasis!(vec, arg::Arg, v::VertexType, lk = Threads.ReentrantLock();
     empty!(vqueue)
     empty!(visited)
 
-    ## Add the recoalescence edge to vec.
+    ## Add edges upstream of `v` to vec.
     _dads = minmax(dads(arg, v)...)
     Threads.lock(lk) do
+        vec[edgesid[Edge(first(_dads) => v)]] = 1
         vec[edgesid[Edge(last(_dads) => v)]] = -1
     end
 
