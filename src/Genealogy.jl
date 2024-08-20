@@ -323,7 +323,7 @@ for fun ∈ [:edges, :vertices, :ne, :nv]
 end
 
 for (fun, ret) ∈ Dict(:eltype => VertexType,
-                      :edgetype => Edge,
+                      :edgetype => Edge{VertexType},
                       :is_directed => :true)
     @eval begin
         @generated $fun(::Type{<:AbstractGenealogy}) = $ret
@@ -396,7 +396,7 @@ function graphplot(genealogy::AbstractGenealogy, ω;
                          derived_color, wild_color)
 
     ## Hide non ancestral edges.
-    ewidth = DefaultDict{Edge, Int}(edge_width)
+    ewidth = DefaultDict{Edge{VertexType}, Int}(edge_width)
     for e ∈ edges(genealogy)
         isdisjoint(ancestral_intervals(genealogy, e), ω) || continue
         ewidth[e] = 0

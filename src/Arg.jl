@@ -19,7 +19,7 @@ struct Arg <: AbstractGenealogy
     graph::SimpleDiGraph{VertexType}
     latitudes::Vector{Float64}
     sequences::Vector{Sequence}
-    ancestral_intervals::Dict{Edge, Set{Ω}}
+    ancestral_intervals::Dict{Edge{VertexType}, Set{Ω}}
     sample::Sample
     logprob::Base.RefValue{Float64x2}
 end
@@ -28,7 +28,7 @@ Arg(tree::Tree) = Arg(
     graph(tree),
     latitudes(tree),
     sequences(tree),
-    Dict{Edge, Set{Ω}}(),
+    Dict{Edge{VertexType}, Set{Ω}}(),
     sam(tree),
     Ref(prob(tree, logscale = true))
 )
@@ -544,7 +544,7 @@ function cbasis!(mat, arg::Arg;
                        n = Threads.nthreads(),
                        split = :scatter)) do ks
             Threads.@spawn begin
-                local estack = Stack{Edge}(ceil(Int, log(nv(arg))))
+                local estack = Stack{Edge{VertexType}}(ceil(Int, log(nv(arg))))
                 local vqueue = Queue{VertexType}(ceil(Int, log(nv(arg))))
                 local visited = Set{VertexType}()
 
@@ -617,7 +617,7 @@ end
 export thevenin!, thevenin
 function thevenin!(arg::Arg, s, d, C, R2;
                    edgesmap = edgesmap(arg),
-                   estack = Stack{Edge}(ceil(Int, log(nv(arg)))),
+                   estack = Stack{Edge{VertexType}}(ceil(Int, log(nv(arg)))),
                    vqueue = Queue{VertexType}(ceil(Int, log(nv(arg)))),
                    visited = Set{VertexType}())
     empty!(estack)
@@ -635,7 +635,7 @@ function thevenin!(arg::Arg, s, d, C, R2;
 end
 
 function thevenin(arg::Arg, s, d;
-                  estack = Stack{Edge}(ceil(Int, log(nv(arg)))),
+                  estack = Stack{Edge{VertexType}}(ceil(Int, log(nv(arg)))),
                   edgesmap = edgesmap(arg),
                   vqueue = Queue{VertexType}(ceil(Int, log(nv(arg)))),
                   visited = Set{VertexType}())
@@ -655,7 +655,7 @@ function thevenin(arg::Arg, s, d;
 end
 
 function thevenin(arg::Arg;
-                  estack = Stack{Edge}(ceil(Int, log(nv(arg)))),
+                  estack = Stack{Edge{VertexType}}(ceil(Int, log(nv(arg)))),
                   edgesmap = edgesmap(arg),
                   vqueue = Queue{VertexType}(ceil(Int, log(nv(arg)))),
                   visited = Set{VertexType}())
@@ -674,7 +674,7 @@ end
 
 export thevenin_matrix
 function thevenin_matrix(arg::Arg,
-                         estack = Stack{Edge}(ceil(Int, log(nv(arg)))),
+                         estack = Stack{Edge{VertexType}}(ceil(Int, log(nv(arg)))),
                          edgesmap = edgesmap(arg))
     empty!(estack)
 
