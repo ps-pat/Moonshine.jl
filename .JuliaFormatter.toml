@@ -1,0 +1,32 @@
+#          +----------------------------------------------------------+
+#          |                        Functions                         |
+#          +----------------------------------------------------------+
+
+always_use_return = false
+long_to_short_function_def = false
+pipe_to_function_call = false
+separate_kwargs_with_semicolon = false
+short_to_long_function_def = false
+surround_whereop_typeparameters = false
+whitespace_in_kwargs = true
+
+#          +----------------------------------------------------------+
+#          |                        For Loops                         |
+#          +----------------------------------------------------------+
+
+always_for_in = true
+for_in_replacement = "∈"
+
+#          +----------------------------------------------------------+
+#          |                          Other                           |
+#          +----------------------------------------------------------+
+
+format_docstrings = true
+format_markdown = true
+indent = 4
+join_lines_based_on_source = true
+margin = 85
+remove_extra_newlines = true
+trailing_comma = false
+whitespace_ops_in_indices = true
+whitespace_typedefs = true

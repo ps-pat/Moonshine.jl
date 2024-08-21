@@ -138,11 +138,12 @@ function ancestral_intervals!(ωs, arg::Arg, v::VertexType; wipe = true)
     simplify!(ωs)
 end
 
-ancestral_intervals(arg::Arg, v::VertexType) =
-    ancestral_intervals!(Set{Ω}(), arg, v)
+ancestral_intervals(arg::Arg, v::VertexType) = ancestral_intervals!(Set{Ω}(), arg, v)
 
-ancestral_mask!(η, ωs, arg::Arg, x::Union{VertexType, Edge{VertexType}}; wipe = true) =
+#! format: off
+ancestral_mask!( η, ωs, arg::Arg, x::Union{VertexType, Edge{VertexType}}; wipe = true) =
     ancestral_mask!(η, sam(arg), ancestral_intervals!(ωs, arg, x), wipe = wipe)
+#! format: on
 
 ancestral_mask(arg::Arg, x::Union{VertexType, Edge{VertexType}}) =
     ancestral_mask!(Sequence(undef, nmarkers(arg)), Set{Ω}(), arg, x)
@@ -174,16 +175,14 @@ end
 # MMN #
 #######
 
-function mutationsidx!(res, mask, ωs, arg, e,
-                       firstchunk, firstidx, lastchunk, lastidx)
+function mutationsidx!(res, mask, ωs, arg, e, firstchunk, firstidx, lastchunk)
     η1, η2 = sequences(arg, e)
     ancestral_mask!(mask, ωs, arg, e)
     marker_mask = one(UInt64) << (firstidx - 1)
     idx = one(Int)
 
     @inbounds for k ∈ range(firstchunk, lastchunk)
-        xored_chunk = (η1.data.chunks[k] ⊻ η2.data.chunks[k]) &
-            mask.data.chunks[k]
+        xored_chunk = (η1.data.chunks[k] ⊻ η2.data.chunks[k]) & mask.data.chunks[k]
 
         while !iszero(marker_mask)
             iszero(xored_chunk & marker_mask) || push!(res[idx], e)
@@ -216,7 +215,7 @@ function mutation_edges!(mutations, arg, ω::Ω)
     ωs = Set{Ω}()
     @inbounds for edge ∈ edges_interval(arg, ω)
         mutationsidx!(mutations, mask, ωs, arg, edge,
-                      firstchunk, firstidx, lastchunk, lastidx)
+            firstchunk, firstidx, lastchunk)
     end
 
     mutations
@@ -285,10 +284,10 @@ Add a recombination event to an ARG.
 function recombine!(arg, redge, cedge, breakpoint, rlat, clat)
     ## Add recombination and recoalescence vertices to arg.
     rvertex, cvertex = nv(arg) .+ (1, 2)
-    add_vertices!(arg,
-                  (Sequence(trues(nmarkers(arg))),
-                   Sequence(trues(nmarkers(arg)))),
-                  (rlat, clat))
+    add_vertices!(
+        arg,
+        (Sequence(trues(nmarkers(arg))), Sequence(trues(nmarkers(arg)))),
+        (rlat, clat))
 
     ## Replace recombination edge.
     ωr = ancestral_intervals(arg, redge)
@@ -305,9 +304,7 @@ function recombine!(arg, redge, cedge, breakpoint, rlat, clat)
         add_edge!(arg, Edge(src(cedge), cvertex), ωc ∪ (ωr ∩ Ω(breakpoint, ∞)))
 
     ## Compute sequence of new vertices.
-    let mask = Sequence(undef, nmarkers(arg)),
-        ωs = Set{Ω}()
-
+    let mask = Sequence(undef, nmarkers(arg)), ωs = Set{Ω}()
         _compute_sequence!(arg, rvertex, mask, ωs)
         _compute_sequence!(arg, cvertex, mask, ωs)
     end
@@ -322,8 +319,10 @@ end
 function build!(rng, arg::Arg; winwidth = ∞)
     λc = rec_rate(arg, false)
 
-    _mutation_edges = [sizehint!(Vector{Edge{VertexType}}(undef, 0), nv(arg) ÷ 2)
-                       for _ ∈ 1:nmarkers(arg)]
+    _mutation_edges = [
+        sizehint!(Vector{Edge{VertexType}}(undef, 0), nv(arg) ÷ 2) for
+        _ ∈ 1:nmarkers(arg)
+    ]
     mutation_edges!(_mutation_edges, arg, Ω(first(positions(arg)), ∞))
 
     mepos = findfirst(>(1) ∘ length, _mutation_edges)
@@ -364,7 +363,7 @@ function build!(rng, arg::Arg; winwidth = ∞)
         ## vertices at the latitude of dst(redge). However, this is a
         ## substantial amount of trouble for very little gain...
         rlat_bounds = (latitude(arg, dst(redge)) + eps(Float64),
-                       min(latitude(arg, src(redge)), latitude(arg, src(cedge))))
+            min(latitude(arg, src(redge)), latitude(arg, src(cedge))))
         if first(rlat_bounds) < last(rlat_bounds)
             rlat_dist = Uniform(rlat_bounds...)
             rlat = rand(rng, rlat_dist)
@@ -374,8 +373,8 @@ function build!(rng, arg::Arg; winwidth = ∞)
         end
 
         ## Sample recoalescence latitude.
-        clat_bounds = (max(rlat, latitude(arg, dst(cedge))),
-                       latitude(arg, src(cedge)))
+        clat_bounds =
+            (max(rlat, latitude(arg, dst(cedge))), latitude(arg, src(cedge)))
         if first(clat_bounds) < last(clat_bounds)
             clat_dist = Uniform(clat_bounds...)
             clat = rand(rng, clat_dist)
@@ -416,8 +415,6 @@ function _path_bfs_forward!(estack, arg::Arg, s, d, vqueue, visited)
     empty!(vqueue)
     empty!(visited)
 
-    # any(v -> isleaf(arg, v), (s, d)) ||
-    #     push!(visited, first(children(arg, s) ∩ children(arg, d)))
     push!(visited, s)
     push!(vqueue.store, s) # Dafuq??
 
@@ -499,14 +496,13 @@ export cbasis!, cbasis
 Compute the basis vector associated with recombination vertex `v`. If `v` is
 not specified, return a matrix containing all basis vectors.
 """
-function cbasis! end,
-function cbasis end
+function cbasis! end, function cbasis end
 
 function cbasis!(vec, arg::Arg, v::VertexType, lk = Threads.ReentrantLock();
-                 estack = Stack{Edge{VertexType}}(ceil(Int, log(nv(arg)))),
-                 edgesid = edgesmap(arg),
-                 vqueue = Queue{VertexType}(ceil(Int, log(nv(arg)))),
-                 visited = Set{VertexType}())
+    estack = Stack{Edge{VertexType}}(ceil(Int, log(nv(arg)))),
+    edgesid = edgesmap(arg),
+    vqueue = Queue{VertexType}(ceil(Int, log(nv(arg)))),
+    visited = Set{VertexType}())
     empty!(estack)
     empty!(vqueue)
     empty!(visited)
@@ -522,17 +518,17 @@ function cbasis!(vec, arg::Arg, v::VertexType, lk = Threads.ReentrantLock();
     _bfs_backtrack!(vec, edgesid, estack, lk)
 end
 
-cbasis(arg::Arg, v::VertexType, lk = Threads.ReentrantLock();
-       estack = Stack{Edge{VertexType}}(ceil(Int, log(nv(arg)))),
-       edgesid = edgesmap(arg),
-       vqueue = Queue{VertexType}(ceil(Int, log(nv(arg)))),
-       visited = Set{VertexType}()) =
+function cbasis(arg::Arg, v::VertexType, lk = Threads.ReentrantLock();
+    estack = Stack{Edge{VertexType}}(ceil(Int, log(nv(arg)))),
+    edgesid = edgesmap(arg),
+    vqueue = Queue{VertexType}(ceil(Int, log(nv(arg)))),
+    visited = Set{VertexType}())
     cbasis!(spzeros(Float64, ne(arg)), arg, v, lk,
-            estack = estack, edgesid = edgesid,
-            vqueue = vqueue, visited = visited)
+        estack = estack, edgesid = edgesid,
+        vqueue = vqueue, visited = visited)
+end
 
-function cbasis!(mat, arg::Arg;
-                 edgesid = edgesmap(arg))
+function cbasis!(mat, arg::Arg; edgesid = edgesmap(arg))
     fill!(mat, 0)
 
     r = nrecombinations(arg, dummy = true)
@@ -541,22 +537,22 @@ function cbasis!(mat, arg::Arg;
     lk = Threads.ReentrantLock()
     rec_offset = ne(arg) - nv(arg) + 1 - nrecombinations(arg)
 
-    tasks = map(chunks(range(1, length = r - rec_offset),
-                       n = Threads.nthreads(),
-                       split = :scatter)) do ks
-            Threads.@spawn begin
-                local estack = Stack{Edge{VertexType}}(ceil(Int, log(nv(arg))))
-                local vqueue = Queue{VertexType}(ceil(Int, log(nv(arg))))
-                local visited = Set{VertexType}()
+    tasks_chunks = chunks(range(1, length = r - rec_offset),
+        n = Threads.nthreads(), split = :scatter)
+    tasks = map(tasks_chunks) do ks
+        Threads.@spawn begin
+            local estack = Stack{Edge{VertexType}}(ceil(Int, log(nv(arg))))
+            local vqueue = Queue{VertexType}(ceil(Int, log(nv(arg))))
+            local visited = Set{VertexType}()
 
-                for k ∈ ks
-                    v = 2(n + k + rec_offset - 1)
-                    cbasis!(view(mat, :, k), arg, v, lk,
-                            edgesid = edgesid, vqueue = vqueue,
-                            estack = estack, visited = visited)
-                end
+            for k ∈ ks
+                v = 2(n + k + rec_offset - 1)
+                cbasis!(view(mat, :, k), arg, v, lk,
+                    edgesid = edgesid, vqueue = vqueue,
+                    estack = estack, visited = visited)
             end
         end
+    end
 
     fetch.(tasks)
     mat
@@ -622,7 +618,7 @@ function _impedance_update_C!(C, arg, ss, ds, edgesmap, estack, vqueue, visited)
     d1, iter = Iterators.peel(Iterators.flatten((ds, ss)))
 
     for (k, v) ∈ enumerate(iter)
-        vec = @view C[:,r + k]
+        vec = @view C[:, r + k]
         fill!(vec, 0)
 
         _path_bfs_forward!(estack, arg, v, d1, vqueue, visited)
@@ -642,10 +638,10 @@ through arguments `ss` and `ds` respectively. Otherwise, impedances are
 computed pairwise between leaves.
 """
 function impedance!(arg::Arg, ss, ds, C, Z2;
-                    edgesmap = edgesmap(arg),
-                    estack = Stack{Edge{VertexType}}(ceil(Int, log(nv(arg)))),
-                    vqueue = Queue{VertexType}(ceil(Int, log(nv(arg)))),
-                    visited = Set{VertexType}())
+    edgesmap = edgesmap(arg),
+    estack = Stack{Edge{VertexType}}(ceil(Int, log(nv(arg)))),
+    vqueue = Queue{VertexType}(ceil(Int, log(nv(arg)))),
+    visited = Set{VertexType}())
     empty!(estack)
     empty!(vqueue)
     empty!(visited)
@@ -659,14 +655,14 @@ function impedance!(arg::Arg, ss, ds, C, Z2;
     U = (UpperTriangular ∘ Matrix)(U_qr.R[U_perm, U_perm])
     X = vcat(zeros(eltype(U), r + length(ds) - 1, length(ss)), I)
     ldiv!(U, ldiv!(U', X))
-    (inv ∘ sum)(X[(r+1):end,:])
+    (inv ∘ sum)(X[(r + 1):end, :])
 end
 
 function impedance(arg::Arg, ss, ds;
-                   estack = Stack{Edge{VertexType}}(ceil(Int, log(nv(arg)))),
-                   edgesmap = edgesmap(arg),
-                   vqueue = Queue{VertexType}(ceil(Int, log(nv(arg)))),
-                   visited = Set{VertexType}())
+    estack = Stack{Edge{VertexType}}(ceil(Int, log(nv(arg)))),
+    edgesmap = edgesmap(arg),
+    vqueue = Queue{VertexType}(ceil(Int, log(nv(arg)))),
+    visited = Set{VertexType}())
     empty!(estack)
     empty!(vqueue)
     empty!(visited)
@@ -680,15 +676,15 @@ function impedance(arg::Arg, ss, ds;
     C = _impedance_C(arg, p - 1, edgesmap)
 
     impedance!(arg, ss, ds, C, Z2,
-               edgesmap = edgesmap, estack = estack,
-               vqueue = vqueue, visited = visited)
+        edgesmap = edgesmap, estack = estack,
+        vqueue = vqueue, visited = visited)
 end
 
 function impedance(arg::Arg;
-                   estack = Stack{Edge{VertexType}}(ceil(Int, log(nv(arg)))),
-                   edgesmap = edgesmap(arg),
-                   vqueue = Queue{VertexType}(ceil(Int, log(nv(arg)))),
-                   visited = Set{VertexType}())
+    estack = Stack{Edge{VertexType}}(ceil(Int, log(nv(arg)))),
+    edgesmap = edgesmap(arg),
+    vqueue = Queue{VertexType}(ceil(Int, log(nv(arg)))),
+    visited = Set{VertexType}())
     empty!(estack)
 
     C = _impedance_C(arg, 1, edgesmap)
@@ -696,15 +692,15 @@ function impedance(arg::Arg;
 
     Iterators.map(combinations(1:nleaves(arg), 2)) do (s, d)
         impedance!(arg, s, d, C, Z2,
-                   estack = estack, edgesmap = edgesmap,
-                   vqueue = vqueue, visited = visited)
+            estack = estack, edgesmap = edgesmap,
+            vqueue = vqueue, visited = visited)
     end
 end
 
 export impedance_matrix
 function impedance_matrix(arg::Arg,
-                          estack = Stack{Edge{VertexType}}(ceil(Int, log(nv(arg)))),
-                          edgesmap = edgesmap(arg))
+    estack = Stack{Edge{VertexType}}(ceil(Int, log(nv(arg)))),
+    edgesmap = edgesmap(arg))
     empty!(estack)
 
     n = nleaves(arg)
@@ -715,8 +711,8 @@ function impedance_matrix(arg::Arg,
     mat = Matrix{Float64}(undef, n, n)
     mat[diagind(mat)] .= 0
     for (j, i) ∈ combinations(1:n, 2)
-        mat[i, j] = impedance!(arg, (i,), (j,), C, Z2,
-                               estack = estack, edgesmap = edgesmap)
+        mat[i, j] =
+            impedance!(arg, (i,), (j,), C, Z2, estack = estack, edgesmap = edgesmap)
     end
 
     Symmetric(mat, :L)
