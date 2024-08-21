@@ -128,7 +128,7 @@ ancestral_intervals(arg::Arg, s::VertexType, d) =
     ancestral_intervals(arg, Edge(s, d))
 
 function ancestral_intervals!(ωs, arg::Arg, v::VertexType; wipe = true)
-    empty!(ωs)
+    wipe && empty!(ωs)
     isleaf(arg, v) && return push!(ωs, Ω(0, ∞))
 
     for child ∈ children(arg, v)
