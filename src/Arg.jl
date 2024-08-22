@@ -10,6 +10,8 @@ using SparseArrays
 
 using Combinatorics: combinations
 
+using Distributions
+
 ##################
 # Arg Definition #
 ##################
@@ -732,3 +734,104 @@ function impedance_matrix(arg::Arg,
 
     Symmetric(mat, :L)
 end
+
+#          +----------------------------------------------------------+
+#          |                      Thévenin Tree                       |
+#          +----------------------------------------------------------+
+
+export thevenin!, thevenin
+"""
+    thevenin!(rng, tree, arg)
+    thevenin(rng, arg)
+
+Sample a Thévenin tree conditional on an ARG.
+"""
+function thevenin! end, function thevenin end
+
+function _thevenin_impedance_helper!(tree, arg, v1_leaves, v2, C, Z2,
+    edgesmap, estack, vqueue, visited)
+    r = nrecombinations(arg)
+    v2_leaves = descendants(tree, v2) ∩ leaves(tree)
+    if isempty(v2_leaves)
+        push!(v2_leaves, v2)
+    end
+
+    p = length(v1_leaves) + length(v2_leaves)
+    C_view = @view C[:, range(1, r + p - 1)]
+    impedance!(arg, v1_leaves, v2_leaves, C_view, Z2,
+        edgesmap = edgesmap, estack = estack,
+        vqueue = vqueue, visited = visited)
+end
+
+function thevenin!(rng, tree, arg::Arg)
+    n = nleaves(arg)
+    r = nrecombinations(arg)
+
+    ## Initialize tree ##
+    empty!(graph(tree).fadjlist)
+    graph(tree).ne = 0
+    add_vertices!(graph(tree), 2n - 1)
+
+    resize!(latitudes(tree), n - 1)
+
+    resize!(sequences(tree), 2n - 1)
+    sequences(tree)[1:n] .= sequences(arg, leaves(arg))
+
+    tree.logprob[] = 0
+
+    # ## Build tree ##
+    edgesid = edgesmap(arg)
+    estack = Stack{Edge{VertexType}}(ceil(Int, log(nv(arg))))
+    vqueue = Queue{VertexType}(ceil(Int, log(nv(arg))))
+    visited = Set{VertexType}()
+
+    # ## To limit allocations, we make `C` large enough to handle the worst case
+    # ## scenario. We can pass an appropriate `view` to `impedance!`.
+    C = _impedance_C(arg, n - 1, edgesid)
+    Z2 = _impedance_Z(arg, edgesid, true)
+
+    live = collect(leaves(tree))
+    for nlive ∈ range(length(live), 2, step = -1)
+        ## Sample first vertex ##
+        v1_idx = sample(rng, 1:nlive)
+        tree.logprob[] -= log(nlive)
+        v1 = live[v1_idx]
+        live[v1_idx] = live[nlive]
+        nlive -= 1
+
+        ## Sample second vertex ##
+        v1_leaves = descendants(tree, v1) ∩ leaves(tree)
+        if isempty(v1_leaves)
+            push!(v1_leaves, v1)
+        end
+
+        potential = function (v)
+            log(
+                _thevenin_impedance_helper!(tree, arg, v1_leaves, v, C, Z2,
+                    edgesid, estack, vqueue, visited))
+        end
+
+        v2_idx, (gumbel_x, gumbel_μ) = _sample_toilet(rng,
+            live[1:nlive], potential, 1)
+        v2 = live[v2_idx]
+        v = 2n - nlive
+        live[v2_idx] = v
+        tree.logprob[] += logpdf(Gumbel(gumbel_μ), gumbel_x)
+
+        ## Compute coalescence latitude ##
+        Δcoal_dist = Exponential(inv(nlive))
+        Δcoal = rand(rng, Δcoal_dist)
+        tree.logprob[] += logpdf(Δcoal_dist, Δcoal)
+
+        ## Add event to tree ##
+        add_edge!(tree, v, v1)
+        add_edge!(tree, v, v2)
+
+        sequences(tree)[v] = sequence(tree, v1) & sequence(tree, v2)
+        latitudes(tree)[n - nlive] = latitude(tree, v - 1) + Δcoal
+    end
+
+    tree
+end
+
+thevenin(rng, arg::Arg) = thevenin!(rng, Tree(sam(arg)), arg)
