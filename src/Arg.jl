@@ -670,6 +670,7 @@ function impedance!(arg::Arg, ss, ds, C, Z2;
 
     _impedance_update_C!(C, arg, ss, ds, edgesmap, estack, vqueue, visited)
 
+    ## TODO: work out the ordering thing.
     U = (UpperTriangular ∘ Matrix)(qr(Z2 * C, ordering = 0).R)
     X = vcat(zeros((first ∘ size)(U) - 1), 1.0)
     ldiv!(U, ldiv!(U', X))
