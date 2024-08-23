@@ -318,7 +318,43 @@ function recombine!(arg, redge, cedge, breakpoint, rlat, clat)
     arg
 end
 
-function build!(rng, arg::Arg; winwidth = ∞)
+function sample_recombination_constrained!(rng, arg, breakpoint, live_edges)
+    ## Sample recombination and recoalescence edges ##
+    e1, e2 = samplepair(rng, length(live_edges))
+    redge = live_edges[e1]
+    cedge = live_edges[e2]
+    if latitude(arg, dst(redge)) > latitude(arg, dst(cedge))
+        redge, cedge = cedge, redge
+    end
+
+    ## Sample recombination latitude ##
+    rlat_bounds = (latitude(arg, dst(redge)) + eps(Float64),
+        min(latitude(arg, src(redge)), latitude(arg, src(cedge))))
+    if first(rlat_bounds) < last(rlat_bounds)
+        rlat_dist = Uniform(rlat_bounds...)
+        rlat = rand(rng, rlat_dist)
+        arg.logprob[] += logpdf(rlat_dist, rlat)
+    else
+        rlat = first(rlat_bounds)
+    end
+
+    ## Sample recoalescence latitude ##
+    clat_bounds =
+        (max(rlat, latitude(arg, dst(cedge))), latitude(arg, src(cedge)))
+    if first(clat_bounds) < last(clat_bounds)
+        clat_dist = Uniform(clat_bounds...)
+        clat = rand(rng, clat_dist)
+        arg.logprob[] += logpdf(clat_dist, clat)
+    else
+        clat = first(clat_bounds)
+    end
+
+    ## Add recombination event to the graph ##
+    @debug "Recombination event" redge, cedge, breakpoint, rlat, clat
+    recombine!(arg, redge, cedge, breakpoint, rlat, clat)
+end
+
+function build!(rng, arg::Arg)
     λc = rec_rate(arg, false)
 
     _mutation_edges = [
@@ -333,7 +369,6 @@ function build!(rng, arg::Arg; winwidth = ∞)
     breakpoint = isone(nextidx) ? zero(Float64) : idxtopos(arg, nextidx - 1)
 
     while !isnothing(mepos)
-        # live_edges = _mutation_edges[nextidx + length(_mutation_edges) - nmarkers(arg)]
         live_edges = _mutation_edges[mepos]
 
         ## Sample next breakpoint.
@@ -351,43 +386,7 @@ function build!(rng, arg::Arg; winwidth = ∞)
             arg.logprob[] += logpdf(Δbp_dist, Δbp)
         end
 
-        ## Sample recombination and recoalescence edges.
-        e1, e2 = samplepair(rng, length(live_edges))
-        redge = live_edges[e1]
-        cedge = live_edges[e2]
-        if latitude(arg, dst(redge)) > latitude(arg, dst(cedge))
-            redge, cedge = cedge, redge
-        end
-
-        ## Sample recombination latitude.
-        ## It would be more accurate to use a truncated exponential
-        ## distribution with rate proportional to the number of live
-        ## vertices at the latitude of dst(redge). However, this is a
-        ## substantial amount of trouble for very little gain...
-        rlat_bounds = (latitude(arg, dst(redge)) + eps(Float64),
-            min(latitude(arg, src(redge)), latitude(arg, src(cedge))))
-        if first(rlat_bounds) < last(rlat_bounds)
-            rlat_dist = Uniform(rlat_bounds...)
-            rlat = rand(rng, rlat_dist)
-            arg.logprob[] += logpdf(rlat_dist, rlat)
-        else
-            rlat = first(rlat_bounds)
-        end
-
-        ## Sample recoalescence latitude.
-        clat_bounds =
-            (max(rlat, latitude(arg, dst(cedge))), latitude(arg, src(cedge)))
-        if first(clat_bounds) < last(clat_bounds)
-            clat_dist = Uniform(clat_bounds...)
-            clat = rand(rng, clat_dist)
-            arg.logprob[] += logpdf(clat_dist, clat)
-        else
-            clat = first(clat_bounds)
-        end
-
-        ## Add recombination event to the graph.
-        @debug "Recombination event" redge, cedge, breakpoint, rlat, clat
-        recombine!(arg, redge, cedge, breakpoint, rlat, clat)
+        sample_recombination_constrained!(rng, arg, breakpoint, live_edges)
 
         ## Update variables.
         mutation_edges!(_mutation_edges, arg, Ω(breakpoint, ∞))
