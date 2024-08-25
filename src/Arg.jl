@@ -39,15 +39,7 @@ Arg(tree::Tree) = Arg(
 # AbstractGenealogy Interface #
 ###############################
 
-function nleaves(arg::Arg)
-    ret = zero(Int)
-    for η ∈ range(1, nv(arg))
-        iszero(outdegree(arg, η)) || return ret
-        ret += 1
-    end
-
-    ret
-end
+nleaves(arg::Arg) = length(sam(arg).H)
 
 describe(::Arg, long = true) = long ? "Ancestral Recombination Graph" : "ARG"
 
@@ -120,8 +112,9 @@ function ancestral_intervals!(ωs, arg::Arg, e::Edge; wipe = true)
     ωs
 end
 
+## Use this `get!` method so the interval doesn't get constructed every call.
 ancestral_intervals(arg::Arg, e::Edge) =
-    get(() -> Set{Ω}((Ω(0, ∞),)), arg.ancestral_intervals, e)
+    get!(() -> Set{Ω}((Ω(0, ∞),)), arg.ancestral_intervals, e)
 
 ancestral_intervals!(ωs, arg::Arg, s::VertexType, d; wipe = true) =
     ancestral_intervals!(ωs, arg, Edge(s, d); wipe = wipe)
