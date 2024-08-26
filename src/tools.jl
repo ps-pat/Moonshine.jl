@@ -79,8 +79,15 @@ function union!(As::Set{<:AI}, B::T; buffer = default_buffer()) where T<:AI
         tmp = @alloc(T, length(As))
 
         @inbounds for k ∈ eachindex(tmp)
-            tmp[k] = pop!(As) ∪ B
+            A = pop!(As)
+            if isdisjoint(B, A)
+                tmp[k] = A
+            else
+                tmp[k] = A ∪ B
+            end
         end
+
+        push!(As, B)
 
         @inbounds for k ∈ eachindex(tmp)
             push!(As, tmp[k])
@@ -95,19 +102,32 @@ union(As::Set{<:AI}, B::T; buffer = default_buffer()) where T<:AI =
 
 function union!(As::Set{T}, Bs::Set{<:AI}; buffer = default_buffer()) where T<:AI
     @no_escape buffer begin
-        tmp = @alloc(T, length(As) * length(Bs))
-        n = length(As)
-        m = length(Bs)
+        tmpAB = @alloc(T, length(As) * length(Bs))
+        tmpB = @alloc(T, length(Bs))
+        ptrAB, ptrB = firstindex(tmpAB), firstindex(tmpB)
 
-        @inbounds for i ∈ 1:n
+        ## Find disjoint Bs ##
+        for B ∈ Bs
+            isdisjoint(B, As) || continue
+            tmpB[ptrB] = pop!(Bs, B)
+            ptrB += 1
+        end
+
+        @inbounds while !isempty(As)
             A = pop!(As)
-            for (j, B) ∈ enumerate(Bs)
-                tmp[i * (n - 1) + j] = A ∪ B
+            for B ∈ Bs
+                tmpAB[ptrAB] = A ∪ B
+                ptrAB += 1
             end
         end
 
-        @inbounds for k ∈ eachindex(tmp)
-            push!(As, tmp[k])
+        @inbounds for B ∈ view(tmpB, 1:(ptrB-1))
+            push!(As, B)
+            push!(Bs, B)
+        end
+
+        @inbounds for AB ∈ view(tmpAB, 1:(ptrAB-1))
+            push!(As, AB)
         end
     end
 
