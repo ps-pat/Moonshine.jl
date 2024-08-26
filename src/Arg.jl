@@ -208,15 +208,17 @@ function mutation_edges!(mutations, arg, ω::Ω; buffer = default_buffer())
 
     mask = Sequence(undef, nmarkers(arg))
     ωs = Set{Ω}()
+    blength = zero(Float64)
     @no_escape buffer begin
         store = @alloc(Edge{VertexType}, nleaves(arg))
         @inbounds for edge ∈ edges_interval(arg, ω, store)
+            blength += branchlength(arg, edge)
             mutationsidx!(mutations, mask, ωs, arg, edge,
                           firstchunk, firstidx, lastchunk)
         end
     end
 
-    mutations
+    mutations, blength
 end
 
 function mutation_edges(arg, ω::Ω)
@@ -366,8 +368,8 @@ function build!(rng, arg::Arg; winwidth = ∞, τ = 0.1)
             sizehint!(Vector{Edge{VertexType}}(undef, 0), nv(arg) ÷ 2) for
             _ ∈ 1:nmarkers(arg)
         ]
-        mutation_edges!(_mutation_edges, arg, Ω(first(positions(arg)), ∞),
-                        buffer = buffer)
+        _, blength = mutation_edges!(_mutation_edges, arg, Ω(first(positions(arg)), ∞),
+                                     buffer = buffer)
 
         mepos = findfirst(>(1) ∘ length, _mutation_edges)
         nextidx = mepos
@@ -383,8 +385,7 @@ function build!(rng, arg::Arg; winwidth = ∞, τ = 0.1)
             l = width(rint)
 
             if !iszero(l)
-                b = branchlength(arg, rint, buffer)
-                λ = λc * b
+                λ = λc * blength
                 Δbp_dist = truncated(Exponential(inv(λ)), upper = l)
                 Δbp = rand(rng, Δbp_dist)
                 breakpoint += Δbp
@@ -394,7 +395,7 @@ function build!(rng, arg::Arg; winwidth = ∞, τ = 0.1)
             sample_recombination_constrained!(rng, arg, breakpoint, live_edges,
                                                   buffer)
             ## Update variables.
-            mutation_edges!(_mutation_edges, arg, Ω(breakpoint, ∞), buffer = buffer)
+            _, blength = mutation_edges!(_mutation_edges, arg, Ω(breakpoint, ∞), buffer = buffer)
             mepos = findfirst(>(1) ∘ length, _mutation_edges)
             isnothing(mepos) && break
             nextidx = nextidx + mepos - 1
