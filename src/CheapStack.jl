@@ -40,11 +40,7 @@ push!(s::CheapStack) = s
 function push!(s::CheapStack, x)
     s.ptr[] += 1
 
-    if s.ptr[] > length(s.store)
-        push!(s.store, x)
-    else
-        @inline s.store[s.ptr[]] = x
-    end
+    @inline s.store[s.ptr[]] = x
 
     s
 end

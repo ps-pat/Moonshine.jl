@@ -227,7 +227,7 @@ function mutation_edges!(mutations, arg, ω::Ω; buffer = default_buffer())
     ωs = Set{Ω}()
     blength = zero(Float64)
     @no_escape buffer begin
-        store = @alloc(Edge{VertexType}, nleaves(arg))
+        store = @alloc(Edge{VertexType}, nleaves(arg) + nrecombinations(arg))
         @inbounds for edge ∈ edges_interval(arg, ω, store)
             blength += branchlength(arg, edge)
             mutationsidx!(mutations, mask, ωs, arg, edge,
