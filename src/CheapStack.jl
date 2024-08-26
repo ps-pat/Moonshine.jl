@@ -9,29 +9,28 @@ import Base: eltype,
              iterate,
              vec
 
-mutable struct CheapStack{T}
-    const store::Vector{T}
-    ptr::Int
+using UnsafeArrays: UnsafeArray
+
+export CheapStack
+struct CheapStack{T}
+    store::UnsafeArray{T, 1}
+    ptr::Base.RefValue{Int}
 end
 
-## TODO: Get rid of this constructor.
-CheapStack(T, n) = CheapStack{T}(Vector{T}(undef, n), 0)
+CheapStack(store::UnsafeArray{T, 1}) where T =
+    CheapStack{T}(store, Ref(0))
 
-function CheapStack{T}(n) where T
-    CheapStack{T}(Vector{T}(undef, n), 0)
-end
+isempty(s::CheapStack) = iszero(s.ptr[])
 
-isempty(s::CheapStack) = iszero(s.ptr)
+empty!(s::CheapStack) = s.ptr = Ref(0)
 
-empty!(s::CheapStack) = s.ptr = 0
+first(s::CheapStack) = s.store[s.ptr[]]
 
-first(s::CheapStack) = s.store[s.ptr]
-
-length(s::CheapStack) = s.ptr
+length(s::CheapStack) = s.ptr[]
 
 function pop!(s::CheapStack)
-    @inline ret = s.store[s.ptr]
-    s.ptr -= 1
+    @inline ret = s.store[s.ptr[]]
+    s.ptr[] -= 1
 
     ret
 end
@@ -39,8 +38,13 @@ end
 push!(s::CheapStack) = s
 
 function push!(s::CheapStack, x)
-    s.ptr += 1
-    @inline s.store[s.ptr] = x
+    s.ptr[] += 1
+
+    if s.ptr[] > length(s.store)
+        push!(s.store, x)
+    else
+        @inline s.store[s.ptr[]] = x
+    end
 
     s
 end
@@ -62,7 +66,7 @@ end
 iterate(s::CheapStack) = isempty(s) ? nothing : (first(s.store), 1)
 function iterate(s::CheapStack, state)
     state += 1
-    state ≤ s.ptr ? (s.store[state], state) : nothing
+    state ≤ s.ptr[] ? (s.store[state], state) : nothing
 end
 
 @generated eltype(::Type{CheapStack{T}}) where T = T

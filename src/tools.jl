@@ -1,11 +1,14 @@
-import Base: union,
-    intersect,
-    join,
-    in,
-    issubset,
-    isdisjoint
+import Base:
+union,
+intersect, intersect!,
+join,
+in,
+issubset,
+isdisjoint
 
 import IntervalSets: leftendpoint, rightendpoint, endpoints
+
+const AI = AbstractInterval
 
 ######################
 # Khatri-Rao Product #
@@ -38,103 +41,159 @@ end
 # Set of intervals #
 ####################
 
-function simplify!(xs::Set{T}) where T
-    tmp = Set{T}()
+function simplify!(xs::Set{T}; buffer = default_buffer()) where T
+    @no_escape buffer begin
+        tmp = @alloc(T, length(xs))
+        tmpidx = firstindex(tmp)
 
-    while !isempty(xs)
-        @label main
-        x = pop!(xs)
-        isempty(x) && continue
+        while !isempty(xs)
+            x = pop!(xs)
+            isempty(x) && continue
 
-        for y ∈ xs
-            isempty(x ∩ y) && continue
-            yy = x ∪ pop!(xs, y)
-            push!(xs, yy)
-            @goto main
+            newint = false
+            for y ∈ xs
+                isempty(x ∩ y) && continue
+                newint = true
+                yy = x ∪ pop!(xs, y)
+                push!(xs, yy)
+            end
+
+            if !newint
+                tmp[tmpidx] = x
+                tmpidx += 1
+            end
         end
 
-        push!(tmp, x)
-    end
-
-    while !isempty(tmp)
-        push!(xs, pop!(tmp))
+        for k ∈ 1:(tmpidx-1)
+            push!(xs, tmp[k])
+        end
     end
 
     xs
 end
 
-function union(A::T, Bs::Set{<:T}) where T<:AbstractInterval
-    ret = Set{T}()
-    push!(ret, A)
-    push!(ret, Bs...)
-    simplify!(ret)
-end
+# -- Union -------------------------------------------------------------
 
-function union(As::Set{<:T}, Bs::Set{<:T}) where T<:AbstractInterval
-    ret = Set{T}()
+function union!(As::Set{T}, B::T; buffer = default_buffer()) where T<:AI
+    @no_escape buffer begin
+        tmp = @alloc(T, length(As))
 
-    for A ∈ As
-        push!(ret, A)
-    end
+        @inbounds for k ∈ eachindex(tmp)
+            tmp[k] = pop!(As) ∪ B
+        end
 
-    for B ∈ Bs
-        push!(ret, B)
-    end
-
-    simplify!(ret)
-end
-
-function intersect(A::T, Bs::Set{<:T}) where T<:AbstractInterval
-    ret = Set{T}()
-    for B ∈ Bs
-        push!(ret, A ∩ B)
-    end
-
-    simplify!(ret)
-end
-
-function intersect(As::Set{T}, Bs::Set{T}) where T <:AbstractInterval
-    ret = Set{T}()
-    for A ∈ As
-        for B ∈ Bs
-            push!(ret, A ∩ B)
+        @inbounds for k ∈ eachindex(tmp)
+            push!(As, tmp[k])
         end
     end
 
-    simplify!(ret)
+    simplify!(As, buffer = buffer)
 end
+
+union(As::Set{T}, B::T; buffer = default_buffer()) where T<:AI =
+    union!(deepcopy(As), B, buffer = buffer)
+
+function union!(As::Set{T}, Bs::Set{T}; buffer = default_buffer()) where T<:AI
+    @no_escape buffer begin
+        tmp = @alloc(T, length(As) * length(Bs))
+        n = length(As)
+        m = length(Bs)
+
+        @inbounds for i ∈ 1:n
+            A = pop!(As)
+            for (j, B) ∈ enumerate(Bs)
+                tmp[i * (n - 1) + j] = A ∪ B
+            end
+        end
+
+        @inbounds for k ∈ eachindex(tmp)
+            push!(As, tmp[k])
+        end
+    end
+
+    simplify!(As, buffer = buffer)
+end
+
+union(As::Set{T}, B::Set{T}; buffer = default_buffer()) where T<:AI =
+    union!(deepcopy(As), B, buffer = buffer)
+
+# -- Intersection ------------------------------------------------------
+
+function intersect!(As::Set{<:T}, B::T; buffer = default_buffer()) where T<:AI
+    @no_escape buffer begin
+        tmp = @alloc(T, length(As))
+
+        @inbounds for k ∈ 1:length(As)
+            tmp[k] = pop!(As) ∩ B
+        end
+
+        @inbounds for k ∈ eachindex(tmp)
+            push!(As, tmp[k])
+        end
+    end
+
+    simplify!(As, buffer = buffer)
+end
+
+intersect(As::Set{<:T}, B::T; buffer = default_buffer()) where T<:AI =
+    intersect!(deepcopy(As), B, buffer = buffer)
+
+function intersect!(As::Set{T}, Bs::Set{T}; buffer = default_buffer()) where T<:AI
+    @no_escape buffer begin
+        tmp = @alloc(T, length(As))
+
+        @inbounds for B ∈ Bs
+            for k ∈ 1:length(As)
+                tmp[k] = pop!(As) ∩ B
+            end
+        end
+
+        @inbounds for k ∈ eachindex(tmp)
+            push!(As, tmp[k])
+        end
+    end
+
+    simplify!(As, buffer = buffer)
+end
+
+intersect(As::Set{T}, Bs::Set{T}; buffer = default_buffer()) where T<:AI =
+    intersect!(deepcopy(As), Bs, buffer = buffer)
+
+# -- Inclusion ---------------------------------------------------------
 
 in(x, As::Set{<:AbstractInterval}) = any(A -> x ∈ A, As)
 
-function issubset(As::Set{<:AbstractInterval}, Bs::Set{<:AbstractInterval})
+function issubset(As::Set{<:T}, Bs::Set{<:T}) where T<:AI
     for A ∈ As
         A ⊆ Bs || return false
     end
     true
 end
 
-issubset(A::AbstractInterval, Bs::Set{<:AbstractInterval}) = any(B -> A ⊆ B, Bs)
+issubset(A::AI, Bs::Set{<:AI}) = any(B -> A ⊆ B, Bs)
 
-issubset(As::Set{<:AbstractInterval}, B::AbstractInterval) = all(A -> A ⊆ B, As)
+issubset(As::Set{<:AI}, B::AI) = all(A -> A ⊆ B, As)
 
-function isdisjoint(A::AbstractInterval, Bs::Set{<:AbstractInterval})
-    for B ∈ Bs
+function isdisjoint(As::Set{T}, B::T) where T<:AI
+    for A ∈ As
         isdisjoint(A, B) || return false
     end
 
     true
 end
 
-function isdisjoint(As::Set{<:AbstractInterval}, Bs::Set{<:AbstractInterval})
+function isdisjoint(As::Set{T}, Bs::Set{T}) where T<:AI
     for A ∈ As
-        isdisjoint(A, Bs) || return false
+        isdisjoint(Bs, A) || return false
     end
 
     true
 end
 
+# -- Helpers -----------------------------------------------------------
+
 for fun ∈ [:union, :intersect, :isdisjoint]
-    @eval $fun(As::Set{T}, B::T) where T<:AbstractInterval = $fun(B, As)
+    @eval $fun(A::T, Bs::Set{T}) where T<:AI = $fun(Bs, A)
 end
 
 for (fun, op) ∈ Dict(:leftendpoint => :<, :rightendpoint => :>)

@@ -12,7 +12,7 @@ using LayeredLayouts
 
 using GeometryBasics: Point
 
-using DataStructures: DefaultDict, RBTree
+using DataStructures: DefaultDict, Stack
 
 import Base: IteratorSize, eltype
 
@@ -475,8 +475,15 @@ branchlength(genealogy, e::Edge) =
 
 branchlength(genealogy) = mapreduce(e -> branchlength(genealogy, e), +, edges(genealogy))
 
-branchlength(genealogy, ω) = mapreduce(e -> branchlength(genealogy, e), +,
-                                       edges_interval(genealogy, ω))
+function branchlength(genealogy, ωs; buffer = buffer)
+    @no_escape buffer begin
+        store = @alloc(Edge{VertexType}, nleaves(genealogy))
+        ret = sum(e -> branchlength(genealogy, e),
+                  edges_interval(genealogy, ωs, store))
+    end
+
+    ret
+end
 
 export tmrca
 function tmrca(genealogy)
@@ -649,6 +656,63 @@ for fun ∈ [:branchlength, :nmutations]
         $fun(genealogy, Edge(s, d))
     end
 end
+
+export EdgesInterval
+struct EdgesInterval{T}
+    genealogy::T
+    ωs::Ω
+    buffer::CheapStack{Edge{VertexType}}
+    funbuffer::Vector{VertexType}
+    visited::BitVector
+end
+
+function EdgesInterval(genealogy, ωs, store)
+    ##TODO: manage `visited` and `funbuffer` manually.
+    eibuffer = CheapStack(store)
+    funbuffer = Vector{VertexType}(undef, 2)
+    visited = falses(nrecombinations(genealogy))
+
+    s = mrca(genealogy)
+    for d ∈ children!(funbuffer, genealogy, s, ωs)
+        push!(eibuffer, Edge(s => d))
+    end
+
+    EdgesInterval(genealogy, ωs, eibuffer, funbuffer, visited)
+end
+
+IteratorSize(::EdgesInterval) = Base.SizeUnknown()
+
+eltype(::EdgesInterval) = Edge{VertexType}
+
+function iterate(iter::EdgesInterval, state = 1)
+    buffer = iter.buffer
+    isempty(buffer) && return nothing
+
+    genealogy = iter.genealogy
+    ωs = iter.ωs
+    funbuffer = iter.funbuffer
+    visited = iter.visited
+    n = nleaves(genealogy)
+
+    e = pop!(buffer)
+    s = dst(e)
+    if isrecombination(genealogy, s)
+        ridx = (s - 2(n - 1)) ÷ 2
+        visited[ridx] && return e, state + 1
+        visited[ridx] = true
+    end
+
+    resize!(funbuffer, 2)
+    for d ∈ children!(funbuffer, genealogy, s, ωs)
+        push!(buffer, Edge(s => d))
+    end
+
+    e, state + 1
+end
+
+export edges_interval
+
+edges_interval(genealogy, ωs, store) = EdgesInterval(genealogy, ωs, store)
 
 function edges_interval(genealogy, ωs)
     ωs_e = Set{Ω}()

@@ -187,7 +187,7 @@ function ancestral_mask!(η, sample::Sample, ω::Ω; wipe = true)
     η
 end
 
-function ancestral_mask!(η, sample::Sample, ωs::Set{Ω}; wipe = true)
+function ancestral_mask!(η, sample::Sample, ωs::AbstractSet{Ω}; wipe = true)
     wipe && _wipe!(η)
 
     for ω ∈ ωs

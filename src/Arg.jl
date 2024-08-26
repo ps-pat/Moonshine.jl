@@ -192,7 +192,7 @@ function mutationsidx!(res, mask, ωs, arg, e, firstchunk, firstidx, lastchunk)
 end
 
 export mutation_edges!, mutation_edges
-function mutation_edges!(mutations, arg, ω::Ω)
+function mutation_edges!(mutations, arg, ω::Ω; buffer = default_buffer())
     ## Compute the chunks and indices.
     idx = postoidx(arg, ω)
     lidx, ridx = first(idx), last(idx)
@@ -208,9 +208,12 @@ function mutation_edges!(mutations, arg, ω::Ω)
 
     mask = Sequence(undef, nmarkers(arg))
     ωs = Set{Ω}()
-    @inbounds for edge ∈ edges_interval(arg, ω)
-        mutationsidx!(mutations, mask, ωs, arg, edge,
-            firstchunk, firstidx, lastchunk)
+    @no_escape buffer begin
+        store = @alloc(Edge{VertexType}, nleaves(arg))
+        @inbounds for edge ∈ edges_interval(arg, ω, store)
+            mutationsidx!(mutations, mask, ωs, arg, edge,
+                          firstchunk, firstidx, lastchunk)
+        end
     end
 
     mutations
@@ -276,42 +279,49 @@ export recombine!
 
 Add a recombination event to an ARG.
 """
-function recombine!(arg, redge, cedge, breakpoint, rlat, clat)
-    ## Add recombination and recoalescence vertices to arg.
+function recombine!(arg, redge, cedge, breakpoint, rlat, clat;
+                    buffer = default_buffer())
+
+    ## Add recombination and recoalescence vertices to arg ##
     rvertex, cvertex = nv(arg) .+ (1, 2)
     add_vertices!(
         arg,
         (Sequence(trues(nmarkers(arg))), Sequence(trues(nmarkers(arg)))),
         (rlat, clat))
 
-    ## Replace recombination edge.
+    ## Replace recombination edge ##
     ωr = ancestral_intervals(arg, redge)
+    ωr_left = intersect(ωr, Ω(0, breakpoint), buffer = buffer)
+    ωr_right = intersect(ωr, Ω(breakpoint, ∞), buffer = buffer)
+
     add_edge!(arg, Edge(rvertex, dst(redge)), ωr)
-    add_edge!(arg, Edge(src(redge), rvertex), ωr ∩ Ω(0, breakpoint))
+    add_edge!(arg, Edge(src(redge), rvertex), ωr_left)
     rem_edge!(arg, redge)
 
-    ## Replace recoalescence edge.
+    ## Replace recoalescence edge ##
     ωc = ancestral_intervals(arg, cedge)
-    add_edge!(arg, Edge(cvertex, rvertex), ωr ∩ Ω(breakpoint, ∞))
+    add_edge!(arg, Edge(cvertex, rvertex), ωr_right)
     add_edge!(arg, Edge(cvertex, dst(cedge)), ωc)
     root_recombination = !rem_edge!(arg, cedge)
-    root_recombination ||
-        add_edge!(arg, Edge(src(cedge), cvertex), ωc ∪ (ωr ∩ Ω(breakpoint, ∞)))
+    if !root_recombination
+        ωc_new = union(ωc, ωr_right, buffer = buffer)
+        add_edge!(arg, Edge(src(cedge), cvertex), ωc_new)
+    end
 
-    ## Compute sequence of new vertices.
+    ## Compute sequence of new vertices ##
     let mask = Sequence(undef, nmarkers(arg)), ωs = Set{Ω}()
         _compute_sequence!(arg, rvertex, mask, ωs)
         _compute_sequence!(arg, cvertex, mask, ωs)
     end
 
-    ## Update sequences and ancetral intervals.
+    ## Update sequences and ancetral intervals ##
     update_upstream!(arg, src(redge))
     root_recombination || update_upstream!(arg, src(cedge))
 
     arg
 end
 
-function sample_recombination_constrained!(rng, arg, breakpoint, live_edges)
+function sample_recombination_constrained!(rng, arg, breakpoint, live_edges, buffer)
     ## Sample recombination and recoalescence edges ##
     e1, e2 = samplepair(rng, length(live_edges))
     redge = live_edges[e1]
@@ -344,53 +354,57 @@ function sample_recombination_constrained!(rng, arg, breakpoint, live_edges)
 
     ## Add recombination event to the graph ##
     @debug "Recombination event" redge, cedge, breakpoint, rlat, clat
-    recombine!(arg, redge, cedge, breakpoint, rlat, clat)
+    recombine!(arg, redge, cedge, breakpoint, rlat, clat, buffer = buffer)
 end
 
-function build!(rng, arg::Arg)
+function build!(rng, arg::Arg; winwidth = ∞, τ = 0.1)
     λc = rec_rate(arg, false)
 
-    _mutation_edges = [
-        sizehint!(Vector{Edge{VertexType}}(undef, 0), nv(arg) ÷ 2) for
-        _ ∈ 1:nmarkers(arg)
-    ]
-    mutation_edges!(_mutation_edges, arg, Ω(first(positions(arg)), ∞))
+    buffer = default_buffer()
+    @no_escape buffer begin
+        _mutation_edges = [
+            sizehint!(Vector{Edge{VertexType}}(undef, 0), nv(arg) ÷ 2) for
+            _ ∈ 1:nmarkers(arg)
+        ]
+        mutation_edges!(_mutation_edges, arg, Ω(first(positions(arg)), ∞),
+                        buffer = buffer)
 
-    mepos = findfirst(>(1) ∘ length, _mutation_edges)
-    isnothing(mepos) && return arg # ARG is already consistent.
-    nextidx = mepos
-    breakpoint = isone(nextidx) ? zero(Float64) : idxtopos(arg, nextidx - 1)
-
-    while !isnothing(mepos)
-        live_edges = _mutation_edges[mepos]
-
-        ## Sample next breakpoint.
-        nextpos = idxtopos(arg, nextidx)
-        rint = Ω(breakpoint, nextpos)
-        @debug "Recombination bounds" endpoints(rint)
-        l = width(rint)
-
-        if !iszero(l)
-            b = branchlength(arg, rint)
-            λ = λc * b
-            Δbp_dist = truncated(Exponential(inv(λ)), upper = l)
-            Δbp = rand(rng, Δbp_dist)
-            breakpoint += Δbp
-            arg.logprob[] += logpdf(Δbp_dist, Δbp)
-        end
-
-        sample_recombination_constrained!(rng, arg, breakpoint, live_edges)
-
-        ## Update variables.
-        mutation_edges!(_mutation_edges, arg, Ω(breakpoint, ∞))
         mepos = findfirst(>(1) ∘ length, _mutation_edges)
-        isnothing(mepos) && break
-        nextidx = nextidx + mepos - 1
+        nextidx = mepos
+        breakpoint = isone(nextidx) ? zero(Float64) : idxtopos(arg, nextidx - 1)
 
-        if !isone(mepos)
-            breakpoint = idxtopos(arg, nextidx - 1)
+        while !isnothing(mepos)
+            live_edges = _mutation_edges[mepos]
+
+            ## Sample next breakpoint.
+            nextpos = idxtopos(arg, nextidx)
+            rint = Ω(breakpoint, nextpos)
+            @debug "Recombination bounds" endpoints(rint)
+            l = width(rint)
+
+            if !iszero(l)
+                b = branchlength(arg, rint, buffer)
+                λ = λc * b
+                Δbp_dist = truncated(Exponential(inv(λ)), upper = l)
+                Δbp = rand(rng, Δbp_dist)
+                breakpoint += Δbp
+                arg.logprob[] += logpdf(Δbp_dist, Δbp)
+            end
+
+            sample_recombination_constrained!(rng, arg, breakpoint, live_edges,
+                                                  buffer)
+            ## Update variables.
+            mutation_edges!(_mutation_edges, arg, Ω(breakpoint, ∞), buffer = buffer)
+            mepos = findfirst(>(1) ∘ length, _mutation_edges)
+            isnothing(mepos) && break
+            nextidx = nextidx + mepos - 1
+
+            if !isone(mepos)
+                breakpoint = idxtopos(arg, nextidx - 1)
+            end
         end
     end
+
     arg
 end
 
