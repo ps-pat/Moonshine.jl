@@ -96,6 +96,23 @@ end
 
 rem_edge!(arg::Arg, e) = rem_edge!(graph(arg), e)
 
+function mrca(arg::Arg, vs, ωs)
+    μ = mrca(arg, vs)
+    iszero(μ) && return μ
+
+    while true
+        @label beg
+        for c ∈ children(arg, μ, ωs)
+            vs ⊆ descendants(arg, c, ωs) || continue
+            μ = c
+            @goto beg
+        end
+        break
+    end
+
+    μ
+end
+
 ########################
 # Ancestrality Methods #
 ########################

@@ -110,48 +110,13 @@ sequences(genealogy, e::Edge) = (sequence(genealogy, src(e)),
 
 export mrca
 """
-    mrca(genealogy, idx[, vs = leaves(genealogy)])
+    mrca(genealogy[, vs = leaves(genealogy), ωs = Ω(0, ∞)])
 
-Most recent common ancestor of a set of vertices. If omited, returns the mrca
-of the whole genealogy.
+Most recent common ancestor of a set of vertices.
 
 See also [`tmrca`](@ref) for the time to the most recent common ancestor.
 """
 function mrca end
-
-function mrca(genealogy, idx::Integer, vs::AbstractVector = leaves(genealogy))
-    length(vs) < 2 && return zero(VertexType)
-
-    μ = argmax(latitudes(genealogy)) + nleaves(genealogy)
-    vstack = Stack{VertexType}(ceil(Int, log(nv(genealogy))))
-    push!(vstack, children(genealogy, μ, pos)...)
-
-    ds = Set{VertexType}()
-    while !isempty(vstack)
-        μ2 = pop!(vstack)
-        isleaf(genealogy, μ2) && continue
-        vs ⊆ descendants!(ds, genealogy, μ2, pos) || continue
-
-        μ = μ2
-        push!(vstack, children(genealogy, μ, pos)...)
-    end
-
-    μ
-end
-
-function mrca(genealogy, vs::AbstractVector = leaves(genealogy))
-    length(vs) < 2 && return zero(VertexType)
-
-    μ = argmax(latitudes(genealogy)) + nleaves(genealogy)
-    predicate = child ->
-        isempty(ancestral_intervals(genealogy, Edge(μ, child)) ∩ Ω(0, 1))
-    @inbounds while any(predicate, children(genealogy, μ))
-        k = findfirst(!predicate, children(genealogy, μ))
-        μ = children(genealogy, μ)[k]
-    end
-
-    μ
-end
 
 export prob
 """

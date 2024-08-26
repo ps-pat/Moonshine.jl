@@ -43,4 +43,29 @@ for G ∈ (:Tree, :Arg)
 
         @eval $f($Gargname::$G, scaled = true) = $f(sam($Gargname), scaled)
     end
+
+# -- MRCA --------------------------------------------------------------
+
+    @eval function mrca($Gargname::$G)
+    any(iszero, latitudes($Gargname)) && return zero(VertexType)
+    isone(nv($Gargname)) && return one(VertexType)
+    argmax(latitudes($Gargname)) + nleaves($Gargname)
+    end
+
+    @eval function mrca($Gargname::$G, vs)
+        μ = mrca($Gargname)
+        iszero(μ) && return μ
+
+        while true
+            @label beg
+            for c ∈ children($Gargname, μ)
+                vs ⊆ descendants($Gargname, c) || continue
+                μ = c
+                @goto beg
+            end
+            break
+        end
+
+        μ
+    end
 end
