@@ -529,7 +529,7 @@ end
 let funtransorder = Dict(:dads => (:ancestors, (x, y) -> (x, y)),
                          :children => (:descendants, (x, y) -> (y, x))),
 
-    typesandfun = ((:Real, in), (:Ω, !isdisjoint), (:(Set{Ω}), !isdisjoint))
+    typesandfun = ((:Real, in), (:AbstractInterval, !isdisjoint), (:(Set{<:AbstractInterval}), !isdisjoint))
     for (fun, (transfun, order)) ∈ funtransorder
         transfun! = Symbol(string(transfun) * '!')
 
@@ -658,9 +658,9 @@ for fun ∈ [:branchlength, :nmutations]
 end
 
 export EdgesInterval
-struct EdgesInterval{T}
+struct EdgesInterval{T, I}
     genealogy::T
-    ωs::Ω
+    ωs::I
     buffer::CheapStack{Edge{VertexType}}
     funbuffer::Vector{VertexType}
     visited::BitVector

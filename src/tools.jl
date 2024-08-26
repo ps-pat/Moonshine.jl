@@ -74,7 +74,7 @@ end
 
 # -- Union -------------------------------------------------------------
 
-function union!(As::Set{T}, B::T; buffer = default_buffer()) where T<:AI
+function union!(As::Set{<:AI}, B::T; buffer = default_buffer()) where T<:AI
     @no_escape buffer begin
         tmp = @alloc(T, length(As))
 
@@ -90,10 +90,10 @@ function union!(As::Set{T}, B::T; buffer = default_buffer()) where T<:AI
     simplify!(As, buffer = buffer)
 end
 
-union(As::Set{T}, B::T; buffer = default_buffer()) where T<:AI =
+union(As::Set{<:AI}, B::T; buffer = default_buffer()) where T<:AI =
     union!(deepcopy(As), B, buffer = buffer)
 
-function union!(As::Set{T}, Bs::Set{T}; buffer = default_buffer()) where T<:AI
+function union!(As::Set{T}, Bs::Set{<:AI}; buffer = default_buffer()) where T<:AI
     @no_escape buffer begin
         tmp = @alloc(T, length(As) * length(Bs))
         n = length(As)
@@ -114,12 +114,12 @@ function union!(As::Set{T}, Bs::Set{T}; buffer = default_buffer()) where T<:AI
     simplify!(As, buffer = buffer)
 end
 
-union(As::Set{T}, B::Set{T}; buffer = default_buffer()) where T<:AI =
+union(As::Set{<:AI}, B::Set{<:AI}; buffer = default_buffer()) =
     union!(deepcopy(As), B, buffer = buffer)
 
 # -- Intersection ------------------------------------------------------
 
-function intersect!(As::Set{<:T}, B::T; buffer = default_buffer()) where T<:AI
+function intersect!(As::Set{<:AI}, B::T; buffer = default_buffer()) where T<:AI
     @no_escape buffer begin
         tmp = @alloc(T, length(As))
 
@@ -135,10 +135,10 @@ function intersect!(As::Set{<:T}, B::T; buffer = default_buffer()) where T<:AI
     simplify!(As, buffer = buffer)
 end
 
-intersect(As::Set{<:T}, B::T; buffer = default_buffer()) where T<:AI =
+intersect(As::Set{<:AI}, B::T; buffer = default_buffer()) where T<:AI =
     intersect!(deepcopy(As), B, buffer = buffer)
 
-function intersect!(As::Set{T}, Bs::Set{T}; buffer = default_buffer()) where T<:AI
+function intersect!(As::Set{T}, Bs::Set{<:AI}; buffer = default_buffer()) where T<:AI
     @no_escape buffer begin
         tmp = @alloc(T, length(As))
 
@@ -156,14 +156,14 @@ function intersect!(As::Set{T}, Bs::Set{T}; buffer = default_buffer()) where T<:
     simplify!(As, buffer = buffer)
 end
 
-intersect(As::Set{T}, Bs::Set{T}; buffer = default_buffer()) where T<:AI =
+intersect(As::Set{<:AI}, Bs::Set{<:AI}; buffer = default_buffer()) =
     intersect!(deepcopy(As), Bs, buffer = buffer)
 
 # -- Inclusion ---------------------------------------------------------
 
-in(x, As::Set{<:AbstractInterval}) = any(A -> x ∈ A, As)
+in(x, As::Set{<:AI}) = any(A -> x ∈ A, As)
 
-function issubset(As::Set{<:T}, Bs::Set{<:T}) where T<:AI
+function issubset(As::Set{<:AI}, Bs::Set{<:AI})
     for A ∈ As
         A ⊆ Bs || return false
     end
@@ -174,7 +174,7 @@ issubset(A::AI, Bs::Set{<:AI}) = any(B -> A ⊆ B, Bs)
 
 issubset(As::Set{<:AI}, B::AI) = all(A -> A ⊆ B, As)
 
-function isdisjoint(As::Set{T}, B::T) where T<:AI
+function isdisjoint(As::Set{<:AI}, B::T) where T<:AI
     for A ∈ As
         isdisjoint(A, B) || return false
     end
@@ -182,7 +182,7 @@ function isdisjoint(As::Set{T}, B::T) where T<:AI
     true
 end
 
-function isdisjoint(As::Set{T}, Bs::Set{T}) where T<:AI
+function isdisjoint(As::Set{<:AI}, Bs::Set{<:AI})
     for A ∈ As
         isdisjoint(Bs, A) || return false
     end
@@ -193,7 +193,7 @@ end
 # -- Helpers -----------------------------------------------------------
 
 for fun ∈ [:union, :intersect, :isdisjoint]
-    @eval $fun(A::T, Bs::Set{T}) where T<:AI = $fun(Bs, A)
+    @eval $fun(A::T, Bs::Set{<:AI}) where T<:AI = $fun(Bs, A)
 end
 
 for (fun, op) ∈ Dict(:leftendpoint => :<, :rightendpoint => :>)
