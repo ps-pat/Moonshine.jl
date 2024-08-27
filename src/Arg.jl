@@ -397,8 +397,10 @@ function build!(rng, arg::Arg; winwidth = ∞, τ = 0.1)
                 arg.logprob[] += logpdf(Δbp_dist, Δbp)
             end
 
-            sample_recombination_constrained!(rng, arg, breakpoint, live_edges,
-                                                  buffer)
+            window = breakpoint ± winwidth
+            sample_recombination_constrained!(rng, arg, breakpoint, window,
+                                              live_edges, buffer)
+
             ## Update variables.
             _, blength = mutation_edges!(_mutation_edges, arg, Ω(breakpoint, ∞), buffer = buffer)
             mepos = findfirst(>(1) ∘ length, _mutation_edges)
