@@ -681,7 +681,7 @@ end
 
 export edges_interval
 
-edges_interval(genealogy, ωs, store, 
+edges_interval(genealogy, ωs, store,
                root = mrca(genealogy), min_latitude = zero(Float64)) =
     EdgesInterval(genealogy, ωs, store, root, min_latitude)
 
