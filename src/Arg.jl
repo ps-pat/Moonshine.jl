@@ -371,7 +371,7 @@ function sample_recombination_constrained!(rng, arg, breakpoint, window, live_ed
         arg.logprob[] += logpdf(rlat_dist, rlat)
     else
         rlat = rlat_lbound
-        @info "Recombination edge has length 0" redge
+        @debug "Recombination edge has length 0" redge
     end
 
     ## Sample recoalescence latitude ##
@@ -385,7 +385,7 @@ function sample_recombination_constrained!(rng, arg, breakpoint, window, live_ed
         clat = rlat + Δclat
     else
         clat = rlat + clat_lbound
-        @info "Interval available for recoalescence has length 0" redge
+        @debug "Interval available for recoalescence has length 0" redge
     end
 
     ## Sample recoalescence edge ##
