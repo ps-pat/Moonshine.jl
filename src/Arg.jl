@@ -4,7 +4,7 @@ import Graphs: add_vertices!, add_edge!, rem_edge!
 
 using Random
 
-using StatsBase: samplepair
+using StatsBase: samplepair, ProbabilityWeights
 
 using SparseArrays
 
@@ -328,44 +328,79 @@ function recombine!(arg, redge, cedge, breakpoint, rlat, clat;
     arg
 end
 
-function sample_recombination_constrained!(rng, arg, breakpoint, live_edges, buffer)
-    ## Sample recombination and recoalescence edges ##
-    e1, e2 = samplepair(rng, length(live_edges))
-    redge = live_edges[e1]
-    cedge = live_edges[e2]
-    if latitude(arg, dst(redge)) > latitude(arg, dst(cedge))
-        redge, cedge = cedge, redge
+function _sample_cedge(rng, arg, lat, window, live_edge::T, buffer) where T
+    @no_escape buffer begin
+        cedges = @alloc(T, ne(arg))
+        cedges_ptr = firstindex(cedges)
+
+        store = @alloc(T, nleaves(arg))
+            @inbounds for e ∈ edges_interval(arg, window, store, src(live_edge), lat)
+                latitude(arg, dst(e)) <= lat <= latitude(arg, src(e)) || continue
+                cedges[cedges_ptr] = e
+                cedges_ptr += 1
+            end
+
+        rand(rng, view(cedges, 1:(cedges_ptr-1)))
+    end
+end
+
+function sample_recombination_constrained!(rng, arg, breakpoint, window, live_edges, buffer)
+    n = length(live_edges)
+
+    ## Sample recombination edge ##
+    @no_escape buffer begin
+        ws_data = @alloc(Float64, length(live_edges))
+        map!(e -> branchlength(arg, e), ws_data, live_edges)
+        ws = ProbabilityWeights(ws_data)
+        e1, e2 = sample(rng, eachindex(live_edges), ws, 2; replace = false)
+    end
+    arg.logprob[] += log(2) - log(n) - log(n - 1)
+
+    ## This ensures that there is a least one edge available for recoalescence.
+    if latitude(arg, dst(live_edges[e1])) > latitude(arg, dst(live_edges[e2]))
+        e1, e2 = e2, e1
     end
 
+    redge = live_edges[e1]
+
     ## Sample recombination latitude ##
-    rlat_bounds = (latitude(arg, dst(redge)) + eps(Float64),
-        min(latitude(arg, src(redge)), latitude(arg, src(cedge))))
-    if first(rlat_bounds) < last(rlat_bounds)
-        rlat_dist = Uniform(rlat_bounds...)
+    rlat_lbound = latitude(arg, dst(redge))
+    rlat_ubound = min(latitude(arg, src(redge)), latitude(arg, src(live_edges[e2])))
+    if rlat_lbound < rlat_ubound
+        rlat_dist = Uniform(rlat_lbound, rlat_ubound)
         rlat = rand(rng, rlat_dist)
         arg.logprob[] += logpdf(rlat_dist, rlat)
     else
-        rlat = first(rlat_bounds)
+        rlat = rlat_lbound
+        @info "Recombination edge has length 0" redge
     end
 
     ## Sample recoalescence latitude ##
-    clat_bounds =
-        (max(rlat, latitude(arg, dst(cedge))), latitude(arg, src(cedge)))
-    if first(clat_bounds) < last(clat_bounds)
-        clat_dist = Uniform(clat_bounds...)
-        clat = rand(rng, clat_dist)
-        arg.logprob[] += logpdf(clat_dist, clat)
+    clat_lbound = max(rlat, latitude(arg, dst(live_edges[e2])))
+    clat_ubound = latitude(arg, src(live_edges[e2]))
+    if clat_lbound < clat_ubound
+        ## It would be more accurate to sample from a shifted-truncated
+        ## exponential distribution. However, it is highly numerically
+        ## unstable to do so :(
+        Δclat_dist = Uniform(clat_lbound - rlat, clat_ubound - rlat)
+        Δclat = rand(rng, Δclat_dist)
+        arg.logprob[] += logpdf(Δclat_dist, Δclat)
+        clat = rlat + Δclat
     else
-        clat = first(clat_bounds)
+        clat = rlat + clat_lbound
+        @info "Interval available for recoalescence has length 0" redge
     end
 
+    ## Sample recoalescence edge ##
+    cedge = _sample_cedge(rng, arg, clat, window, live_edges[e2], buffer)
+
     ## Add recombination event to the graph ##
-    @debug "Recombination event" redge, cedge, breakpoint, rlat, clat
+    @debug "Recombination event" redge cedge breakpoint rlat clat
     recombine!(arg, redge, cedge, breakpoint, rlat, clat, buffer = buffer)
 end
 
 function build!(rng, arg::Arg; winwidth = ∞, τ = 0.1)
-    λc = rec_rate(arg, false)
+    λc = rec_rate(arg, true)
 
     buffer = default_buffer()
     @no_escape buffer begin
