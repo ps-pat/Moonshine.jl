@@ -65,19 +65,7 @@ function recombinations(arg::Arg; dummy = false)
     StepRange{Int, Int}(start, step, stop)
 end
 
-function nrecombinations(arg::Arg; dummy = false)
-    ret = ne(arg) - nv(arg) + 1
-
-    if !dummy
-        v = 2nleaves(arg)
-        while isinf(recbreakpoint(arg, v))
-            ret -= 1
-            v += 2
-        end
-    end
-
-    ret
-end
+nrecombinations(arg::Arg) = ne(arg) - nv(arg) + 1
 
 ###########################
 # AbstractGraph Interface #
