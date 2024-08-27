@@ -205,7 +205,6 @@ function mutation_edges!(mutations, arg, ω::Ω; buffer = default_buffer())
     firstchunk = chunkidx(Sequence, lidx)
     firstidx = idxinchunk(Sequence, lidx)
     lastchunk = chunkidx(Sequence, ridx)
-    lastidx = idxinchunk(Sequence, ridx)
 
     @inbounds for k ∈ eachindex(mutations)
         resize!(mutations[k], 0)
