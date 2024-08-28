@@ -365,6 +365,7 @@ function sample_recombination_constrained!(rng, arg, breakpoint, window, live_ed
     ## Sample recombination latitude ##
     rlat_lbound = latitude(arg, dst(redge)) + eps(Float64)
     rlat_ubound = latitude(arg, src(live_edges[e2]))
+    rlat_ubound = min(latitude(arg, src(redge)), latitude(arg, src(live_edges[e2])))
     if rlat_lbound < rlat_ubound
         rlat_dist = Uniform(rlat_lbound, rlat_ubound)
         rlat = rand(rng, rlat_dist)
