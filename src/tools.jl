@@ -141,15 +141,20 @@ intersect(As::Set{<:AI}, B::T; buffer = default_buffer()) where T<:AI =
 
 function intersect!(As::Set{T}, Bs::Set{<:AI}; buffer = default_buffer()) where T<:AI
     @no_escape buffer begin
-        tmp = @alloc(T, length(As))
+        tmp = @alloc(T, length(As) * length(Bs))
+        tmp_ptr = firstindex(tmp)
 
-        @inbounds for B ∈ Bs
-            for k ∈ 1:length(As)
-                tmp[k] = pop!(As) ∩ B
+        @inbounds while !isempty(As)
+            A = pop!(As)
+            for B ∈ Bs
+                AB = A ∩ B
+                isempty(AB) && continue
+                tmp[tmp_ptr] = AB
+                tmp_ptr += 1
             end
         end
 
-        @inbounds for k ∈ eachindex(tmp)
+        @inbounds for k ∈ 1:(tmp_ptr-1)
             push!(As, tmp[k])
         end
     end
