@@ -41,6 +41,11 @@ end
 # Set of intervals #
 ####################
 
+function isdisconnected(A::AI, B::AI)
+    AB = A ∩ B
+    isempty(AB) && !=(endpoints(AB)...)
+end
+
 function simplify!(xs::Set{T}; buffer = default_buffer()) where T
     @no_escape buffer begin
         tmp = @alloc(T, length(xs))
@@ -74,13 +79,14 @@ end
 
 # -- Union -------------------------------------------------------------
 
-function union!(As::Set{<:AI}, B::T; buffer = default_buffer()) where T<:AI
+function union!(As::Set{<:AI}, B::T;
+                buffer = default_buffer(), simplify = true) where T<:AI
     @no_escape buffer begin
         tmp = @alloc(T, length(As))
 
         @inbounds for k ∈ eachindex(tmp)
             A = pop!(As)
-            if isdisjoint(B, A)
+            if isdisconnected(A, B)
                 tmp[k] = A
             else
                 tmp[k] = A ∪ B
@@ -94,41 +100,16 @@ function union!(As::Set{<:AI}, B::T; buffer = default_buffer()) where T<:AI
         end
     end
 
-    simplify!(As, buffer = buffer)
+    simplify && simplify!(As, buffer = buffer)
+    As
 end
 
 union(As::Set{<:AI}, B::T; buffer = default_buffer()) where T<:AI =
     union!(deepcopy(As), B, buffer = buffer)
 
-function union!(As::Set{T}, Bs::Set{<:AI}; buffer = default_buffer()) where T<:AI
-    @no_escape buffer begin
-        tmpAB = @alloc(T, length(As) * length(Bs))
-        tmpB = @alloc(T, length(Bs))
-        ptrAB, ptrB = firstindex(tmpAB), firstindex(tmpB)
-
-        ## Find disjoint Bs ##
-        for B ∈ Bs
-            isdisjoint(B, As) || continue
-            tmpB[ptrB] = pop!(Bs, B)
-            ptrB += 1
-        end
-
-        @inbounds while !isempty(As)
-            A = pop!(As)
-            for B ∈ Bs
-                tmpAB[ptrAB] = A ∪ B
-                ptrAB += 1
-            end
-        end
-
-        @inbounds for B ∈ view(tmpB, 1:(ptrB-1))
-            push!(As, B)
-            push!(Bs, B)
-        end
-
-        @inbounds for AB ∈ view(tmpAB, 1:(ptrAB-1))
-            push!(As, AB)
-        end
+function union!(As::Set{<:AI}, Bs::Set{<:AI}; buffer = default_buffer())
+    for B ∈ Bs
+        union!(As, B, buffer = buffer, simplify = false)
     end
 
     simplify!(As, buffer = buffer)
