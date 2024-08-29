@@ -580,6 +580,60 @@ let funtransorder = Dict(:dads => (:ancestors, (x, y) -> (x, y)),
     end
 end
 
+export siblings, sibling
+"""
+    siblings(genealogy, v)
+    sibling(genealogy, v)
+
+Return the siblings of a vertex, that is the other vertices in the genealogy
+that have the same parents.
+
+If you are certain that `v` only has one sibling, you can use the `sibling`
+method to avoid allocation.
+"""
+function siblings end,
+function sibling end
+
+function siblings(genealogy, v)
+    ret = Vector{VertexType}(undef, 0)
+
+    for _dad ∈ dads(genealogy, v)
+        for _child ∈ children(genealogy, _dad)
+            _child == v && continue
+            push!(ret, _child)
+        end
+    end
+
+    ret
+end
+
+function sibling(genealogy, v)
+    for _child ∈ children(genealogy, dad(genealogy, v))
+        _child == v && continue
+        return _child
+    end
+    zero(VertexType)
+end
+
+export dad, child
+"""
+    dad(genealogy, v)
+    child(genealogy, v)
+
+Return the parent/child of a vertex or 0 if none. It only makes sense to
+use this method if you know `v` has a single parent/child.
+"""
+function dad end,
+function child end
+
+for (fun, nei) ∈ Dict(:dad => :inneighbors, :child => :outneighbors)
+    @eval function $fun(genealogy, v)
+        neig = $nei(genealogy, v)
+        isempty(neig) && return zero(VertexType)
+        first(neig)
+    end
+end
+
 export nmutations
 """
     nmutations(genealogy[, e])
