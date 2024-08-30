@@ -225,4 +225,22 @@ for (fun, op) ∈ Dict(:leftendpoint => :<, :rightendpoint => :>)
     end
 end
 
-endpoints(As::Set{<:AbstractInterval}) = leftendpoint(As), rightendpoint(As)
+function endpoints(As::Set{<:AI})
+    ω, ωs = Iterators.peel(As)
+    left, right = endpoints(ω)
+
+    for ω ∈ ωs
+        newleft, newright = endpoints(ω)
+
+        if newleft < left
+            left = newleft
+        end
+
+        if newright > right
+            right = newright
+        end
+
+    end
+
+    left, right
+end
