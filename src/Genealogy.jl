@@ -218,21 +218,21 @@ for (f, arg) ∈ (:idxtopos => :idx, :postoidx => :pos)
 end
 
 """
-    ancestral_mask!(η, x, ω; wipe = true)
-    ancestral_mask!(η, ωs, x, ω; wipe = true)
-    ancestral_mask(genealogy, ω)
+    ancestral_mask!(η, reference, x; ωs_buf = Set{Ω}(), wipe = true)
+    ancestral_mask(reference, x; ωs_buf = Set{Ω}())
 
-Mask non ancestral positions to 0. If `wipe = true`, all markers in `η` wil be
-initialized at 0.
+Mask non ancestral positions to 0. If `wipe = true`, all markers in `η` will be
+initialized to 0.
 """
 function ancestral_mask! end,
 function ancestral_mask end
 
-ancestral_mask!(η, genealogy::AbstractGenealogy, ω; wipe = true) =
-    ancestral_mask!(η, sam(genealogy), ω, wipe = wipe)
+ancestral_mask!(η, genealogy::AbstractGenealogy, x; wipe = true) =
+    ancestral_mask!(η, sam(genealogy), x, wipe = wipe)
 
-ancestral_mask(genealogy::AbstractGenealogy, ω) =
-    ancestral_mask(sam(genealogy), ω)
+ancestral_mask(genealogy::AbstractGenealogy, x) =
+    ancestral_mask!(Sequence(falses(nmarkers(genealogy))), genealogy, x,
+                    wipe = false)
 
 ###################
 # Pretty printing #
@@ -643,9 +643,9 @@ number of mutations on that edge.
 """
 function nmutations end
 
-function nmutations!(mask, ωs, genealogy, e)
+function nmutations!(mask, genealogy, e; ωs_buf = Set{Ω}())
     ret = zero(Int)
-    ancestral_mask!(mask, ωs, genealogy, e)
+    ancestral_mask!(mask, genealogy, e, ωs_buf = ωs_buf)
 
     nchunks = (length(positions(genealogy)) - 1) ÷ blocksize(Sequence) + 1
     η1, η2 = sequences(genealogy, e)
@@ -658,15 +658,15 @@ end
 
 function nmutations(genealogy)
     mask = Sequence(undef, nmarkers(genealogy))
-    ωs = Set{Ω}()
-    mapreduce(e -> nmutations!(mask, ωs, genealogy, e), +, edges(genealogy),
+    ωs_buf = Set{Ω}()
+    mapreduce(e -> nmutations!(mask, genealogy, e, ωs_buf = ωs_buf), +, edges(genealogy),
               init = zero(Int))
 end
 
 function nmutations(genealogy, e)
     mask = Sequence(undef, nmarkers(genealogy))
-    ωs = Set{Ω}()
-    nmutations!(mask, ωs, genealogy, e)
+    ωs_buf = Set{Ω}()
+    nmutations!(mask, genealogy, e, ωs_buf)
 end
 
 ## Edge functions.

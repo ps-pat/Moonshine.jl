@@ -195,13 +195,12 @@ function ancestral_mask!(η, sample::Sample, ωs::AbstractSet{Ω}; wipe = true)
     η
 end
 
-ancestral_mask(sample::Sample, ω) =
-    ancestral_mask!(Sequence(falses(nmarkers(sample))), sample, ω,
-                    wipe = false)
+ancestral_mask(sample::Sample, x) =
+    ancestral_mask!(Sequence(falses(nmarkers(sample))), sample, x, wipe = false)
 
-function ancestral_mask!(η, sample::Sample, x::AbstractFloat; wipe = true)
+function ancestral_mask!(η, sample::Sample, pos::AbstractFloat; wipe = true)
     wipe && _wipe!(η)
-    η[postoidx(sample, x)] = true
+    η[postoidx(sample, pos)] = true
     η
 end
 

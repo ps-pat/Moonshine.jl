@@ -140,13 +140,14 @@ end
 
 ancestral_intervals(arg::Arg, v::VertexType) = ancestral_intervals!(Set{Ω}(), arg, v)
 
-#! format: off
-ancestral_mask!( η, ωs, arg::Arg, x::Union{VertexType, Edge{VertexType}}; wipe = true) =
-    ancestral_mask!(η, sam(arg), ancestral_intervals!(ωs, arg, x), wipe = wipe)
-#! format: on
+ancestral_mask!(η, arg::Arg, x::Union{VertexType, Edge{VertexType}};
+                ωs_buf = Set{Ω}(), wipe = true) =
+    ancestral_mask!(η, sam(arg), ancestral_intervals!(ωs_buf, arg, x), wipe = wipe)
 
-ancestral_mask(arg::Arg, x::Union{VertexType, Edge{VertexType}}) =
-    ancestral_mask!(Sequence(undef, nmarkers(arg)), Set{Ω}(), arg, x)
+ancestral_mask(arg::Arg, x::Union{VertexType, Edge{VertexType}};
+               ωs_buf = Set{Ω}()) =
+    ancestral_mask!(Sequence(falses(nmarkers(arg))), arg, x,
+                    ωs_buf = ωs_buf, wipe = false)
 
 export recbreakpoint
 """
@@ -175,9 +176,10 @@ end
 # MMN #
 #######
 
-function mutationsidx!(res, mask, ωs, arg, e, firstchunk, firstidx, lastchunk)
+function mutationsidx!(res, mask, arg, e, firstchunk, firstidx, lastchunk;
+                       ωs_buf = Set{Ω}())
     η1, η2 = sequences(arg, e)
-    ancestral_mask!(mask, ωs, arg, e)
+    ancestral_mask!(mask, arg, e, ωs_buf = ωs_buf)
     marker_mask = one(UInt64) << (firstidx - 1)
     idx = one(Int)
 
@@ -212,14 +214,14 @@ function mutation_edges!(mutations, arg, ω::Ω; buffer = default_buffer())
     end
 
     mask = Sequence(undef, nmarkers(arg))
-    ωs = Set{Ω}()
+    ωs_buf = Set{Ω}()
     blength = zero(Float64)
     @no_escape buffer begin
         store = @alloc(Edge{VertexType}, nleaves(arg) + nrecombinations(arg))
         @inbounds for edge ∈ edges_interval(arg, ω, store)
             blength += branchlength(arg, edge)
-            mutationsidx!(mutations, mask, ωs, arg, edge,
-                          firstchunk, firstidx, lastchunk)
+            mutationsidx!(mutations, mask, arg, edge, firstchunk, firstidx, lastchunk,
+                          ωs_buf = ωs_buf)
         end
     end
 
@@ -235,16 +237,16 @@ end
 # Recombinations #
 ##################
 
-function _compute_sequence!(arg, v, mask, ωs)
+function _compute_sequence!(arg, v, mask; ωs_buf = Set{Ω}())
     η = sequence(arg, v)
     η.data.chunks .⊻= .~η.data.chunks
 
     @inbounds for child ∈ children(arg, v)
-        ancestral_mask!(mask, arg, ancestral_intervals!(ωs, arg, Edge(v, child)))
+        ancestral_mask!(mask, arg, Edge(v, child), ωs_buf = ωs_buf)
         η.data.chunks .&= sequence(arg, child).data.chunks .| .~mask.data.chunks
     end
 
-    ancestral_mask!(mask, ωs, arg, v)
+    ancestral_mask!(mask, arg, v, ωs_buf = ωs_buf)
     η.data.chunks .&= mask.data.chunks
     η
 end
@@ -316,9 +318,9 @@ function recombine!(arg, redge, cedge, breakpoint, rlat, clat;
     end
 
     ## Compute sequence of new vertices ##
-    let mask = Sequence(undef, nmarkers(arg)), ωs = Set{Ω}()
-        _compute_sequence!(arg, rvertex, mask, ωs)
-        _compute_sequence!(arg, cvertex, mask, ωs)
+    let mask = Sequence(undef, nmarkers(arg)), ωs_buf = Set{Ω}()
+        _compute_sequence!(arg, rvertex, mask, ωs_buf = ωs_buf)
+        _compute_sequence!(arg, cvertex, mask, ωs_buf = ωs_buf)
     end
 
     ## Update sequences and ancetral intervals ##
