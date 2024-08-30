@@ -20,6 +20,8 @@ export Arg
 struct Arg <: AbstractGenealogy
     graph::SimpleDiGraph{VertexType}
     latitudes::Vector{Float64}
+    breakpoints::Vector{Float64}
+    rightdads::Vector{VertexType}
     sequences::Vector{Sequence}
     ancestral_intervals::Dict{Edge{VertexType}, Set{Ω}}
     sample::Sample
@@ -29,6 +31,8 @@ end
 Arg(tree::Tree) = Arg(
     graph(tree),
     latitudes(tree),
+    Vector{Float64}(undef, 0),
+    Vector{VertexType}(undef, 0),
     sequences(tree),
     Dict{Edge{VertexType}, Set{Ω}}(),
     sam(tree),
@@ -149,26 +153,33 @@ ancestral_mask(arg::Arg, x::Union{VertexType, Edge{VertexType}};
     ancestral_mask!(Sequence(falses(nmarkers(arg))), arg, x,
                     ωs_buf = ωs_buf, wipe = false)
 
+recidx(arg, v) = (v - 2(nleaves(arg) - 1)) ÷ 2
+
 export recbreakpoint
 """
     recbreakpoint(arg, v)
 
 Returns the breakpoint associated with vertex `v`. If `v` is not a
-recombination vertex, returns ∞. If `v` is not a "true" recombination vertex
-i.e. one of its outgoing edge is non ancestral, returns ∞.
+recombination vertex, returns ∞.
 """
-function recbreakpoint(arg::Arg, v)
-    ret = ∞
-    isrecombination(arg, v) || return ret
+function recbreakpoint end
 
-    _dads = dads(arg, v)
-    ωs1 = ancestral_intervals(arg, Edge(first(_dads) => v))
-    ωs2 = ancestral_intervals(arg, Edge(last(_dads) => v))
+export rightdad
+"""
+    rightdad(arg, v)
 
-    (isempty(ωs1) || isempty(ωs2)) && return ∞
+Returns the parent of recombination vertex `v` ancestral for material
+to the right of the breakpoint associated with `v`. If `v` is not a
+recombination vertex, returns 0.
+"""
+function rightdad end
 
-    for (p1, p2) ∈ Iterators.product(endpoints.((ωs1, ωs2))...)
-        p1 == p2 && return p1
+for (fun, (def, field)) ∈ Dict(:recbreakpoint => (:∞, Meta.quot(:breakpoints)),
+                                 :rightdad => (:(zero(VertexType)), Meta.quot(:rightdads)))
+    @eval function $fun(arg::Arg, v)
+        ret = $def
+        isrecombination(arg, v) || return ret
+        getfield(arg, $field)[recidx(arg, v)]
     end
 end
 
@@ -306,6 +317,9 @@ function recombine!(arg, redge, cedge, breakpoint, rlat, clat;
     add_edge!(arg, Edge(rvertex, dst(redge)), ωr)
     add_edge!(arg, Edge(src(redge), rvertex), ωr_left)
     rem_edge!(arg, redge)
+    if isrecombination(arg, dst(redge)) && src(redge) == rightdad(arg, dst(redge))
+        arg.rightdads[recidx(arg, dst(redge))] = rvertex
+    end
 
     ## Replace recoalescence edge ##
     ωc = ancestral_intervals(arg, cedge)
@@ -315,6 +329,9 @@ function recombine!(arg, redge, cedge, breakpoint, rlat, clat;
     if !root_recombination
         ωc_new = union(ωc, ωr_right, buffer = buffer)
         add_edge!(arg, Edge(src(cedge), cvertex), ωc_new)
+    end
+    if isrecombination(arg, dst(cedge)) && src(cedge) == rightdad(arg, dst(cedge))
+        arg.rightdads[recidx(arg, dst(cedge))] = cvertex
     end
 
     ## Compute sequence of new vertices ##
@@ -327,6 +344,8 @@ function recombine!(arg, redge, cedge, breakpoint, rlat, clat;
     update_upstream!(arg, src(redge))
     root_recombination || update_upstream!(arg, src(cedge))
 
+    push!(arg.rightdads, cvertex)
+    push!(arg.breakpoints, breakpoint)
     arg
 end
 
