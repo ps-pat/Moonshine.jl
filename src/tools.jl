@@ -4,7 +4,8 @@ intersect, intersect!,
 join,
 in,
 issubset,
-isdisjoint
+isdisjoint,
+==, !=
 
 import IntervalSets: leftendpoint, rightendpoint, endpoints
 
@@ -195,6 +196,14 @@ function isdisjoint(As::Set{<:AI}, Bs::Set{<:AI})
 
     true
 end
+
+function ==(As::Set{<:AI}, Bs::Set{<:AI})
+    issubset(As, Bs) || return false
+    issubset(Bs, As) || return false
+    true
+end
+
+!=(As::Set{<:AI}, Bs::Set{<:AI}) = !(As == Bs)
 
 # -- Helpers -----------------------------------------------------------
 
