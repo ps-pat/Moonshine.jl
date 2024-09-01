@@ -486,13 +486,14 @@ function _sample_cedge(rng, arg, lat, idx, window, live_edge::T, taboo, buffer) 
     end
 end
 
-function sample_recombination_constrained!(rng, arg, breakpoint, window, live_edges, buffer)
+function sample_recombination_constrained!(rng, arg, breakpoint, winwidth, live_edges;
+                                           buffer = default_buffer())
     n = length(live_edges)
 
     ## Sample recombination edge ##
     @no_escape buffer begin
         ws_data = @alloc(Float64, length(live_edges))
-        map!(e -> branchlength(arg, e), ws_data, live_edges)
+        map!(e -> max(eps(Float64), branchlength(arg, e)), ws_data, live_edges)
         ws = ProbabilityWeights(ws_data)
         e1, e2 = sample(rng, eachindex(live_edges), ws, 2; replace = false)
     end
@@ -503,7 +504,12 @@ function sample_recombination_constrained!(rng, arg, breakpoint, window, live_ed
         e1, e2 = e2, e1
     end
 
-    redge = live_edges[e1]
+    redge = popat!(live_edges, e1)
+    if e2 > e1
+        e2 -= 1
+    end
+
+    window = breakpoint ± winwidth
 
     ## Sample recombination latitude ##
     rlat_lbound = latitude(arg, dst(redge))
@@ -517,9 +523,14 @@ function sample_recombination_constrained!(rng, arg, breakpoint, window, live_ed
         @info "Recombination edge has length 0" redge
     end
 
+    ## Sample recoalescence edge ##
+    breakpoint_idx = postoidx(arg, breakpoint)
+    cedge = _sample_cedge(rng, arg, rlat, breakpoint_idx,
+                          window, live_edges[e2], redge, buffer)
+
     ## Sample recoalescence latitude ##
-    clat_lbound = max(rlat, latitude(arg, dst(live_edges[e2])))
-    clat_ubound = latitude(arg, src(live_edges[e2]))
+    clat_lbound = max(rlat, latitude(arg, dst(cedge)))
+    clat_ubound = latitude(arg, src(cedge))
     if clat_lbound < clat_ubound
         ## It would be more accurate to sample from a shifted-truncated
         ## exponential distribution. However, it is highly numerically
@@ -529,64 +540,64 @@ function sample_recombination_constrained!(rng, arg, breakpoint, window, live_ed
         arg.logprob[] += logpdf(Δclat_dist, Δclat)
         clat = rlat + Δclat
     else
-        clat = rlat + clat_lbound
+        clat = clat_lbound
         @info "Interval available for recoalescence has length 0" redge
     end
-
-    ## Sample recoalescence edge ##
-    cedge = _sample_cedge(rng, arg, clat, window, live_edges[e2], buffer)
 
     ## Add recombination event to the graph ##
     @debug "Recombination event" redge cedge breakpoint rlat clat
     recombine!(arg, redge, cedge, breakpoint, rlat, clat, buffer = buffer)
+
+    ## Compute new live edge ##
+    news = src(cedge)
+    newd = nv(arg)
+    if news != src(live_edges[e2])
+        while sequence(arg, news)[breakpoint_idx]
+            newd = news
+            news = (first ∘ dads)(arg, news, breakpoint)
+        end
+    end
+    replace_idx = findfirst(e -> src(e) == news, live_edges)
+    live_edges[replace_idx] = Edge(news => newd)
+
+    breakpoint
 end
 
-function build!(rng, arg::Arg; winwidth = ∞, τ = 0.1)
-    λc = rec_rate(arg, true)
-
-    buffer = default_buffer()
+function build!(rng, arg::Arg; winwidth = ∞, buffer = default_buffer())
     @no_escape buffer begin
         _mutation_edges = [
             sizehint!(Vector{Edge{VertexType}}(undef, 0), nv(arg) ÷ 2) for
             _ ∈ 1:nmarkers(arg)
         ]
-        _, blength = mutation_edges!(_mutation_edges, arg, Ω(first(positions(arg)), ∞),
-                                     buffer = buffer)
+        mutation_edges!(_mutation_edges, arg, Ω(first(positions(arg)), ∞),
+                        buffer = buffer)
 
-        mepos = findfirst(>(1) ∘ length, _mutation_edges)
-        nextidx = mepos
-        breakpoint = isone(nextidx) ? zero(Float64) : idxtopos(arg, nextidx - 1)
+        meidx = findfirst(>(1) ∘ length, _mutation_edges)
 
-        while !isnothing(mepos)
-            live_edges = _mutation_edges[mepos]
+        while !isnothing(meidx)
+            nextidx = meidx
+            live_edges = _mutation_edges[meidx]
+            nbp = length(live_edges) - 1
 
-            ## Sample next breakpoint.
-            nextpos = idxtopos(arg, nextidx)
-            rint = Ω(breakpoint, nextpos)
-            @debug "Recombination bounds" endpoints(rint)
-            l = width(rint)
+            ## Sample breakpoints ##
+            bp_lbound = isone(nextidx) ?
+                zero(eltype(positions(arg))) : idxtopos(arg, nextidx - 1)
+            bp_ubound = idxtopos(arg, nextidx)
+            bp_dist = Uniform(bp_lbound, bp_ubound)
+            breakpoints = (sort ∘ rand)(rng, bp_dist, nbp)
+            arg.logprob[] -= nbp * log(bp_ubound - bp_lbound)
 
-            if !iszero(l)
-                λ = λc * blength
-                Δbp_dist = truncated(Exponential(inv(λ)), upper = l)
-                Δbp = rand(rng, Δbp_dist)
-                breakpoint += Δbp
-                arg.logprob[] += logpdf(Δbp_dist, Δbp)
+            ## Constrained recombinations ##
+            for breakpoint ∈ breakpoints
+                sample_recombination_constrained!(rng, arg, breakpoint,
+                                                  winwidth, live_edges,
+                                                  buffer = buffer)
             end
 
-            window = breakpoint ± winwidth
-            sample_recombination_constrained!(rng, arg, breakpoint, window,
-                                              live_edges, buffer)
+            mutation_edges!(_mutation_edges, arg, Ω(first(positions(arg)), ∞), buffer = buffer)
+            meidx = findfirst(>(1) ∘ length, _mutation_edges)
 
-            ## Update variables.
-            _, blength = mutation_edges!(_mutation_edges, arg, Ω(breakpoint, ∞), buffer = buffer)
-            mepos = findfirst(>(1) ∘ length, _mutation_edges)
-            isnothing(mepos) && break
-            nextidx = nextidx + mepos - 1
-
-            if !isone(mepos)
-                breakpoint = idxtopos(arg, nextidx - 1)
-            end
+            isnothing(meidx) && break
         end
     end
 
