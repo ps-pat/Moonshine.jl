@@ -391,6 +391,77 @@ function recombine!(arg, redge, cedge, breakpoint, rlat, clat;
 end
 
 function _sample_cedge(rng, arg, lat, window, live_edge::T, buffer) where T
+# -- Edges Iterator ----------------------------------------------------
+
+struct EdgesIntervalRec{I}
+    genealogy::Arg
+    ωs::I
+    buffer::CheapStack{Edge{VertexType}}
+    funbuffer::Vector{VertexType}
+    visited::BitVector
+    min_latitude::Float64
+    breakpoint::Float64
+    breakpointidx::Int
+end
+
+function EdgesIntervalRec(arg, ωs, store, breakpoint,
+                          root = mrca(arg), min_latitude = zero(Float64))
+    ##TODO: manage `visited` and `funbuffer` manually.
+    eibuffer = CheapStack(store)
+    funbuffer = Vector{VertexType}(undef, 2)
+    visited = falses(nrecombinations(arg))
+
+    breakpointidx = postoidx(arg, breakpoint)
+    for d ∈ children!(funbuffer, arg, root, ωs)
+        e = Edge(root => d)
+        (breakpoint ∈ ancestral_intervals(arg, e) && !sequence(arg, dst(e))[breakpointidx]) && continue
+        push!(eibuffer, e)
+    end
+
+    EdgesIntervalRec(arg, ωs, eibuffer, funbuffer, visited, min_latitude,
+                     breakpoint, breakpointidx)
+end
+
+IteratorSize(::EdgesIntervalRec) = Base.SizeUnknown()
+
+eltype(::EdgesIntervalRec) = Edge{VertexType}
+
+function iterate(iter::EdgesIntervalRec, state = 1)
+    buffer = iter.buffer
+    isempty(buffer) && return nothing
+
+    arg = iter.genealogy
+    ωs = iter.ωs
+    funbuffer = iter.funbuffer
+    visited = iter.visited
+    min_latitude = iter.min_latitude
+    breakpoint = iter.breakpoint
+    breakpointidx = iter.breakpointidx
+    n = nleaves(arg)
+
+    e = pop!(buffer)
+    s = dst(e)
+    if isrecombination(arg, s)
+        ridx = (s - 2(n - 1)) ÷ 2
+        visited[ridx] && return e, state + 1
+        visited[ridx] = true
+    end
+
+    resize!(funbuffer, 2)
+    if latitude(arg, s) >= min_latitude
+        for d ∈ children!(funbuffer, arg, s, ωs)
+            newe = Edge(s => d)
+            if breakpoint ∈ ancestral_intervals(arg, newe)
+                sequence(arg, dst(newe))[breakpointidx] || continue
+            end
+
+            push!(buffer, newe)
+        end
+    end
+
+    e, state + 1
+end
+
     @no_escape buffer begin
         cedges = @alloc(T, ne(arg))
         cedges_ptr = firstindex(cedges)

@@ -683,21 +683,20 @@ struct EdgesInterval{T, I}
     buffer::CheapStack{Edge{VertexType}}
     funbuffer::Vector{VertexType}
     visited::BitVector
-    min_latitude::Float64
 end
 
-function EdgesInterval(genealogy, ωs, store,
-                       root = mrca(genealogy), min_latitude = zero(Float64))
+function EdgesInterval(genealogy, ωs, store)
     ##TODO: manage `visited` and `funbuffer` manually.
     eibuffer = CheapStack(store)
     funbuffer = Vector{VertexType}(undef, 2)
     visited = falses(nrecombinations(genealogy))
 
+    root = mrca(genealogy)
     for d ∈ children!(funbuffer, genealogy, root, ωs)
         push!(eibuffer, Edge(root => d))
     end
 
-    EdgesInterval(genealogy, ωs, eibuffer, funbuffer, visited, min_latitude)
+    EdgesInterval(genealogy, ωs, eibuffer, funbuffer, visited)
 end
 
 IteratorSize(::EdgesInterval) = Base.SizeUnknown()
@@ -712,7 +711,6 @@ function iterate(iter::EdgesInterval, state = 1)
     ωs = iter.ωs
     funbuffer = iter.funbuffer
     visited = iter.visited
-    min_latitude = iter.min_latitude
     n = nleaves(genealogy)
 
     e = pop!(buffer)
@@ -724,10 +722,8 @@ function iterate(iter::EdgesInterval, state = 1)
     end
 
     resize!(funbuffer, 2)
-    if latitude(genealogy, s) >= min_latitude
-        for d ∈ children!(funbuffer, genealogy, s, ωs)
-            push!(buffer, Edge(s => d))
-        end
+    for d ∈ children!(funbuffer, genealogy, s, ωs)
+        push!(buffer, Edge(s => d))
     end
 
     e, state + 1
@@ -735,9 +731,7 @@ end
 
 export edges_interval
 
-edges_interval(genealogy, ωs, store,
-               root = mrca(genealogy), min_latitude = zero(Float64)) =
-    EdgesInterval(genealogy, ωs, store, root, min_latitude)
+edges_interval(genealogy, ωs, store) = EdgesInterval(genealogy, ωs, store)
 
 function edges_interval(genealogy, ωs)
     ωs_e = Set{Ω}()
