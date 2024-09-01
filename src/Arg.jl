@@ -1040,3 +1040,102 @@ function thevenin!(rng, tree, arg::Arg)
 end
 
 thevenin(rng, arg::Arg) = thevenin!(rng, Tree(sam(arg)), arg)
+
+function validate(arg::Arg)
+    flag = true
+    n = nleaves(arg)
+
+    ## General properties ##
+    if nmutations(arg) != nmarkers(arg)
+        @info "Number of mutations not equal to the number of markers"
+        flag = false
+    end
+
+    ## Leaves ##
+    for v ∈ leaves(arg)
+        if (!iszero ∘ length)(children(arg, v))
+            @info "Leaf with children" v
+            flag = false
+        end
+
+        if (!isone ∘ length)(dads(arg, v))
+            @info "Leaf with number of parents not equal to 1" v
+            flag = false
+        end
+
+        if ancestral_intervals(arg, v) != Set([Ω(0, ∞)])
+            @info "Ancestral interval of leaf's parental edge not equal to [0, ∞)" v
+            flag = false
+        end
+    end
+
+    ## Non-root coalescence vertices ##
+    for v ∈ Iterators.flatten((range(n + 1, 2n - 2), range(2n + 1, nv(arg), step = 2)))
+        if length(children(arg, v)) != 2
+            @info "Coalescence vertex with number of children not equal to 2" v
+            flag = false
+        end
+
+        if (!isone ∘ length)(dads(arg, v))
+            @info "Coalescence vertex with number of parents not equal to 1" v
+            flag = false
+        end
+
+        ai_children = mapreduce(x -> ancestral_intervals(arg, Edge(v => x)), ∪, children(arg, v))
+        if ancestral_intervals(arg, Edge(dad(arg, v) => v)) != ai_children
+            msg = "Coalescence vertex whose parental edge's ancestral interval" *
+                " is not equal to the union of the ancestral intervals of its" *
+                " children's edge."
+            @info msg v
+            flag = false
+        end
+    end
+
+    ## Recombination vertices ##
+    for v ∈ range(2n, nv(arg), step = 2)
+        if (!isone ∘ length)(children(arg, v))
+            @info "Recombination vertex with number of children not equal to 1" v
+            flag = false
+        end
+
+        if length(dads(arg, v)) != 2
+            @info "Recombination vertex with number of parents not equal to 2" v
+            flag = false
+        end
+
+        ai_child = ancestral_intervals(arg, Edge(v => child(arg, v)))
+        ai_right = ancestral_intervals(arg, Edge(rightdad(arg, v) => v))
+        leftparent = dads(arg, v)[findfirst(!=(rightdad(arg, v)), dads(arg, v))]
+        ai_left = ancestral_intervals(arg, Edge(leftparent => v))
+        if ai_child != ai_left ∪ ai_right
+            msg = "Recombination vertex whose children edge's ancestral" *
+                " interval is not equal to the union of it parental edges's" *
+                " ancestral intervals."
+            @info msg v ai_child ai_left ai_right
+            flag = false
+        end
+    end
+
+    ## Internal vertices ##
+    for v ∈ ivertices(arg)
+        ref = mapreduce(&, children(arg, v)) do _child
+            sequence(arg, _child) | ~ancestral_mask(arg, Edge(v => _child))
+        end
+        ref &= ancestral_mask(arg, v)
+
+        if sequence(arg, v) != ref
+            @info "Inconsistent sequence" v
+            flag = false
+        end
+    end
+
+    ## Edges ##
+    for e ∈ edges(arg)
+        if isempty(ancestral_intervals(arg, e))
+            @info "Empty ancestral interval" e
+            flag = false
+        end
+    end
+
+    flag
+end
