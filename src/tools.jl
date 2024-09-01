@@ -106,7 +106,7 @@ function union!(As::Set{<:AI}, B::T;
 end
 
 union(As::Set{<:AI}, B::T; buffer = default_buffer()) where T<:AI =
-    union!(deepcopy(As), B, buffer = buffer)
+    union!(copy(As), B, buffer = buffer)
 
 function union!(As::Set{<:AI}, Bs::Set{<:AI}; buffer = default_buffer())
     for B ∈ Bs
@@ -117,7 +117,7 @@ function union!(As::Set{<:AI}, Bs::Set{<:AI}; buffer = default_buffer())
 end
 
 union(As::Set{<:AI}, B::Set{<:AI}; buffer = default_buffer()) =
-    union!(deepcopy(As), B, buffer = buffer)
+    union!(copy(As), B, buffer = buffer)
 
 # -- Intersection ------------------------------------------------------
 
@@ -138,7 +138,7 @@ function intersect!(As::Set{<:AI}, B::T; buffer = default_buffer()) where T<:AI
 end
 
 intersect(As::Set{<:AI}, B::T; buffer = default_buffer()) where T<:AI =
-    intersect!(deepcopy(As), B, buffer = buffer)
+    intersect!(copy(As), B, buffer = buffer)
 
 function intersect!(As::Set{T}, Bs::Set{<:AI}; buffer = default_buffer()) where T<:AI
     @no_escape buffer begin
@@ -164,7 +164,7 @@ function intersect!(As::Set{T}, Bs::Set{<:AI}; buffer = default_buffer()) where 
 end
 
 intersect(As::Set{<:AI}, Bs::Set{<:AI}; buffer = default_buffer()) =
-    intersect!(deepcopy(As), Bs, buffer = buffer)
+    intersect!(copy(As), Bs, buffer = buffer)
 
 # -- Inclusion ---------------------------------------------------------
 
