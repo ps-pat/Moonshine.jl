@@ -12,7 +12,7 @@ using LayeredLayouts
 
 using GeometryBasics: Point
 
-using DataStructures: DefaultDict, Stack
+using DataStructures: DefaultDict
 
 import Base: IteratorSize, eltype
 
