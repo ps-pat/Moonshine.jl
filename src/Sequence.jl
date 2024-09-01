@@ -8,7 +8,8 @@ import Base: empty,
              convert,
              hash,
              zeros, ones,
-             firstindex, lastindex
+             firstindex, lastindex,
+             copy!
 
 using Random
 
@@ -138,6 +139,16 @@ end
 
 for (f, fill_f) ∈ Dict(:zeros => :falses, :ones => :trues)
     @eval $f(::Type{Sequence}, n::Integer) = (Sequence ∘ $fill_f)(n)
+end
+
+function wipe!(sequence::Sequence)
+    sequence.data .⊻= sequence.data
+    sequence
+end
+
+function copy!(s1::Sequence, s2::Sequence)
+    s1.data .⊻= s1.data .⊻ s2.data
+    s1
 end
 
 #############
