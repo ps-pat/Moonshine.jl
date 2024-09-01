@@ -58,7 +58,7 @@ function simplify!(xs::Set{T}; buffer = default_buffer()) where T
 
             newint = false
             for y ∈ xs
-                isempty(x ∩ y) && continue
+                isdisconnected(x, y) && continue
                 newint = true
                 yy = x ∪ pop!(xs, y)
                 push!(xs, yy)
