@@ -392,7 +392,6 @@ function recombine!(arg, redge, cedge, breakpoint, rlat, clat;
     arg
 end
 
-function _sample_cedge(rng, arg, lat, window, live_edge::T, buffer) where T
 # -- Edges Iterator ----------------------------------------------------
 
 struct EdgesIntervalRec{I}
@@ -464,18 +463,26 @@ function iterate(iter::EdgesIntervalRec, state = 1)
     e, state + 1
 end
 
+function _sample_cedge(rng, arg, lat, idx, window, live_edge::T, taboo, buffer) where T
+    pos = idxtopos(arg, idx)
+
     @no_escape buffer begin
         cedges = @alloc(T, ne(arg))
         cedges_ptr = firstindex(cedges)
 
-        store = @alloc(T, nleaves(arg))
-            @inbounds for e ∈ edges_interval(arg, window, store, src(live_edge), lat)
-                latitude(arg, dst(e)) <= lat <= latitude(arg, src(e)) || continue
-                cedges[cedges_ptr] = e
-                cedges_ptr += 1
-            end
+        store = @alloc(T, nv(arg))
+        @inbounds for e ∈ EdgesIntervalRec(arg, window, store, pos, src(live_edge), lat)
+            ## Might happen if `src(live_edge) == src(taboo)`.
+            src(e) == src(taboo) && continue
+            ## Might happen if `dst(taboo)` is a recombination vertex.
+            dst(e) == dst(taboo) && continue
 
-        rand(rng, view(cedges, 1:(cedges_ptr-1)))
+            cedges[cedges_ptr] = e
+            cedges_ptr += 1
+        end
+
+        ret = rand(rng, view(cedges, 1:(cedges_ptr-1)))
+        ret
     end
 end
 
