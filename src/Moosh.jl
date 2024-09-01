@@ -18,9 +18,6 @@ using Bumper
 const VertexType = Int
 const ∞ = Inf
 
-export Ω
-const Ω = Interval{:closed, :open, Float64}
-
 include("Sequence.jl")
 include("tools.jl")
 include("foreign.jl")
