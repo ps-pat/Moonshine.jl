@@ -7,7 +7,7 @@ issubset,
 isdisjoint,
 ==, !=
 
-import IntervalSets: leftendpoint, rightendpoint, endpoints
+import IntervalSets: leftendpoint, rightendpoint, endpoints, width
 
 const AI = AbstractInterval
 
@@ -211,6 +211,8 @@ for fun ∈ [:union, :intersect, :isdisjoint]
     @eval $fun(A::T, Bs::Set{<:AI}) where T<:AI = $fun(Bs, A)
 end
 
+# -- Endpoints ---------------------------------------------------------
+
 for (fun, op) ∈ Dict(:leftendpoint => :<, :rightendpoint => :>)
     @eval function $fun(As::Set{<:AbstractInterval})
         ret, As_rest = Iterators.peel(As)
@@ -244,3 +246,18 @@ function endpoints(As::Set{<:AI})
 
     left, right
 end
+
+function width(As::Set{<:AI})
+    ep = endpoints(As)
+    last(ep) - first(ep)
+end
+
+export closure
+"""
+    closure(x)
+
+Mathematical closure of `x`
+"""
+function closure end
+
+closure(As::Set{<:AI{T}}) where T = ClosedInterval{T}(endpoints(As)...)
