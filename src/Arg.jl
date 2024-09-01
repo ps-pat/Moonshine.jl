@@ -110,12 +110,14 @@ end
 ########################
 
 function ancestral_intervals!(ωs, arg::Arg, e::Edge; wipe = true)
-    wipe && empty!(ωs)
+    if wipe
+        copy!(ωs, get(() -> Set{Ω}((Ω(0, ∞),)), arg.ancestral_intervals, e))
+    else
+        haskey(arg.ancestral_intervals, e) || return push!(ωs, Ω(0, ∞))
 
-    haskey(arg.ancestral_intervals, e) || return push!(ωs, Ω(0, ∞))
-
-    for ω ∈ arg.ancestral_intervals[e]
-        push!(ωs, ω)
+        for ω ∈ arg.ancestral_intervals[e]
+            push!(ωs, ω)
+        end
     end
 
     ωs
