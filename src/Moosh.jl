@@ -21,6 +21,7 @@ using AutoHashEquals
 const VertexType = Int
 const ∞ = Inf
 
+include("workarounds.jl")
 include("Sequence.jl")
 include("tools.jl")
 include("foreign.jl")
