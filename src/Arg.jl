@@ -218,8 +218,8 @@ function mutation_edges!(mutations, arg, ω::Ω; buffer = default_buffer())
     ωs_buf = Set{Ω}()
     @no_escape buffer begin
         store = @alloc(Edge{VertexType}, nleaves(arg) + nrecombinations(arg))
-        @inbounds for edge ∈ edges_interval(arg, ω, store)
-            mutationsidx!(mutations, mask, arg, edge, firstchunk, firstidx, lastchunk,
+        @inbounds for e ∈ edges_interval(arg, ω, store)
+            mutationsidx!(mutations, mask, arg, e, firstchunk, firstidx, lastchunk,
                           ωs_buf = ωs_buf)
         end
     end
@@ -238,6 +238,7 @@ end
 
 function _compute_sequence!(arg, v, mask; ωs_buf = Set{Ω}())
     η = sequence(arg, v)
+    ## Set every markers to 1 ##
     η.data.chunks .⊻= .~η.data.chunks
 
     @inbounds for child ∈ children(arg, v)
