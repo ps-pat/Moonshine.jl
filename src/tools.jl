@@ -9,7 +9,7 @@ isdisjoint,
 
 import IntervalSets: leftendpoint, rightendpoint, endpoints, width
 
-const AI = AbstractInterval
+using IntervalSets: TypedEndpointsInterval
 
 ######################
 # Khatri-Rao Product #
@@ -45,6 +45,28 @@ end
 function isdisconnected(A::AI, B::AI)
     AB = A ∩ B
     isempty(AB) && !=(endpoints(AB)...)
+end
+
+for idx ∈ 0:15
+    L1 = isone(idx & 1) ? :closed : :open
+    idx >>= 1
+    R1 = isone(idx & 1) ? :closed : :open
+    idx >>= 1
+    L2 = isone(idx & 1) ? :closed : :open
+    idx >>= 1
+    R2 = isone(idx & 1) ? :closed : :open
+
+    TypeA = TypedEndpointsInterval{L1, R1}
+    TypeB = TypedEndpointsInterval{L2, R2}
+
+    cmp1 = all(==(:closed), (R1, L2)) ? :(<) : :(<=)
+    cmp2 = all(==(:closed), (L1, R2)) ? :(>) : :(>=)
+
+    @eval function isdisjoint(A::$TypeA, B::$TypeB)
+        $cmp1(rightendpoint(A), leftendpoint(B)) && return true
+        $cmp2(leftendpoint(A), rightendpoint(B)) && return true
+        false
+    end
 end
 
 function simplify!(xs::Set{T}; buffer = default_buffer()) where T
@@ -181,7 +203,7 @@ issubset(A::AI, Bs::Set{<:AI}) = any(B -> A ⊆ B, Bs)
 
 issubset(As::Set{<:AI}, B::AI) = all(A -> A ⊆ B, As)
 
-function isdisjoint(As::Set{<:AI}, B::T) where T<:AI
+function isdisjoint(As::Set{<:AI{T}}, B::AI{T}) where T
     for A ∈ As
         isdisjoint(A, B) || return false
     end
