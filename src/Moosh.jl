@@ -15,6 +15,8 @@ using DataStructures: Stack, Queue
 
 using Bumper
 
+using AutoHashEquals
+
 ## Some constants.
 const VertexType = Int
 const ∞ = Inf
