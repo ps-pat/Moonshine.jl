@@ -7,6 +7,9 @@ import Base: iterate,
 
 using Graphs: Edge
 
+export Ω
+const Ω = Interval{:closed, :open, Float64}
+
 export Sample
 """
     struct Sample
@@ -158,20 +161,18 @@ nmarkers(sample::Sample) = (length ∘ first)(sample.H)
 idxtopos(sample::Sample, idx) = getindex(positions(sample), idx)
 
 function postoidx(sample::Sample, pos)
-    @inbounds for (k, p) ∈ enumerate(positions(sample))
-        p > pos && return k - 1
+    ret = 1
+    while idxtopos(sample, ret) < pos
+        ret += 1
     end
 
-    nmarkers(sample)
+    ret
 end
 
 function postoidx(sample::Sample, ω::Ω)
     lpos, rpos = endpoints(ω)
 
-    lidx = 1
-    while idxtopos(sample, lidx) < lpos
-        lidx += 1
-    end
+    lidx = postoidx(sample, lpos)
 
     ridx = nmarkers(sample)
     while ridx > 0 && idxtopos(sample, ridx) >= rpos
@@ -197,13 +198,12 @@ function ancestral_mask!(η, sample::Sample, ωs::AbstractSet{Ω}; wipe = true)
     η
 end
 
-ancestral_mask(sample::Sample, ω) =
-    ancestral_mask!(Sequence(falses(nmarkers(sample))), sample, ω,
-                    wipe = false)
+ancestral_mask(sample::Sample, x) =
+    ancestral_mask!(Sequence(falses(nmarkers(sample))), sample, x, wipe = false)
 
-function ancestral_mask!(η, sample::Sample, x::AbstractFloat; wipe = true)
+function ancestral_mask!(η, sample::Sample, pos::AbstractFloat; wipe = true)
     wipe && _wipe!(η)
-    η[postoidx(sample, x)] = true
+    η[postoidx(sample, pos)] = true
     η
 end
 

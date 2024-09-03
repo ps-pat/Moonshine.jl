@@ -4,11 +4,12 @@ intersect, intersect!,
 join,
 in,
 issubset,
-isdisjoint
+isdisjoint,
+==, !=
 
-import IntervalSets: leftendpoint, rightendpoint, endpoints
+import IntervalSets: leftendpoint, rightendpoint, endpoints, width
 
-const AI = AbstractInterval
+using IntervalSets: TypedEndpointsInterval
 
 ######################
 # Khatri-Rao Product #
@@ -41,6 +42,33 @@ end
 # Set of intervals #
 ####################
 
+function isdisconnected(A::AI, B::AI)
+    AB = A ∩ B
+    isempty(AB) && !=(endpoints(AB)...)
+end
+
+for idx ∈ 0:15
+    L1 = isone(idx & 1) ? :closed : :open
+    idx >>= 1
+    R1 = isone(idx & 1) ? :closed : :open
+    idx >>= 1
+    L2 = isone(idx & 1) ? :closed : :open
+    idx >>= 1
+    R2 = isone(idx & 1) ? :closed : :open
+
+    TypeA = TypedEndpointsInterval{L1, R1}
+    TypeB = TypedEndpointsInterval{L2, R2}
+
+    cmp1 = all(==(:closed), (R1, L2)) ? :(<) : :(<=)
+    cmp2 = all(==(:closed), (L1, R2)) ? :(>) : :(>=)
+
+    @eval function isdisjoint(A::$TypeA, B::$TypeB)
+        $cmp1(rightendpoint(A), leftendpoint(B)) && return true
+        $cmp2(leftendpoint(A), rightendpoint(B)) && return true
+        false
+    end
+end
+
 function simplify!(xs::Set{T}; buffer = default_buffer()) where T
     @no_escape buffer begin
         tmp = @alloc(T, length(xs))
@@ -52,7 +80,7 @@ function simplify!(xs::Set{T}; buffer = default_buffer()) where T
 
             newint = false
             for y ∈ xs
-                isempty(x ∩ y) && continue
+                isdisconnected(x, y) && continue
                 newint = true
                 yy = x ∪ pop!(xs, y)
                 push!(xs, yy)
@@ -74,13 +102,14 @@ end
 
 # -- Union -------------------------------------------------------------
 
-function union!(As::Set{<:AI}, B::T; buffer = default_buffer()) where T<:AI
+function union!(As::Set{<:AI}, B::T;
+                buffer = default_buffer(), simplify = true) where T<:AI
     @no_escape buffer begin
         tmp = @alloc(T, length(As))
 
         @inbounds for k ∈ eachindex(tmp)
             A = pop!(As)
-            if isdisjoint(B, A)
+            if isdisconnected(A, B)
                 tmp[k] = A
             else
                 tmp[k] = A ∪ B
@@ -94,48 +123,23 @@ function union!(As::Set{<:AI}, B::T; buffer = default_buffer()) where T<:AI
         end
     end
 
-    simplify!(As, buffer = buffer)
+    simplify && simplify!(As, buffer = buffer)
+    As
 end
 
 union(As::Set{<:AI}, B::T; buffer = default_buffer()) where T<:AI =
-    union!(deepcopy(As), B, buffer = buffer)
+    union!(copy(As), B, buffer = buffer)
 
-function union!(As::Set{T}, Bs::Set{<:AI}; buffer = default_buffer()) where T<:AI
-    @no_escape buffer begin
-        tmpAB = @alloc(T, length(As) * length(Bs))
-        tmpB = @alloc(T, length(Bs))
-        ptrAB, ptrB = firstindex(tmpAB), firstindex(tmpB)
-
-        ## Find disjoint Bs ##
-        for B ∈ Bs
-            isdisjoint(B, As) || continue
-            tmpB[ptrB] = pop!(Bs, B)
-            ptrB += 1
-        end
-
-        @inbounds while !isempty(As)
-            A = pop!(As)
-            for B ∈ Bs
-                tmpAB[ptrAB] = A ∪ B
-                ptrAB += 1
-            end
-        end
-
-        @inbounds for B ∈ view(tmpB, 1:(ptrB-1))
-            push!(As, B)
-            push!(Bs, B)
-        end
-
-        @inbounds for AB ∈ view(tmpAB, 1:(ptrAB-1))
-            push!(As, AB)
-        end
+function union!(As::Set{<:AI}, Bs::Set{<:AI}; buffer = default_buffer())
+    for B ∈ Bs
+        union!(As, B, buffer = buffer, simplify = false)
     end
 
     simplify!(As, buffer = buffer)
 end
 
 union(As::Set{<:AI}, B::Set{<:AI}; buffer = default_buffer()) =
-    union!(deepcopy(As), B, buffer = buffer)
+    union!(copy(As), B, buffer = buffer)
 
 # -- Intersection ------------------------------------------------------
 
@@ -156,19 +160,24 @@ function intersect!(As::Set{<:AI}, B::T; buffer = default_buffer()) where T<:AI
 end
 
 intersect(As::Set{<:AI}, B::T; buffer = default_buffer()) where T<:AI =
-    intersect!(deepcopy(As), B, buffer = buffer)
+    intersect!(copy(As), B, buffer = buffer)
 
 function intersect!(As::Set{T}, Bs::Set{<:AI}; buffer = default_buffer()) where T<:AI
     @no_escape buffer begin
-        tmp = @alloc(T, length(As))
+        tmp = @alloc(T, length(As) * length(Bs))
+        tmp_ptr = firstindex(tmp)
 
-        @inbounds for B ∈ Bs
-            for k ∈ 1:length(As)
-                tmp[k] = pop!(As) ∩ B
+        @inbounds while !isempty(As)
+            A = pop!(As)
+            for B ∈ Bs
+                AB = A ∩ B
+                isempty(AB) && continue
+                tmp[tmp_ptr] = AB
+                tmp_ptr += 1
             end
         end
 
-        @inbounds for k ∈ eachindex(tmp)
+        @inbounds for k ∈ 1:(tmp_ptr-1)
             push!(As, tmp[k])
         end
     end
@@ -177,7 +186,7 @@ function intersect!(As::Set{T}, Bs::Set{<:AI}; buffer = default_buffer()) where 
 end
 
 intersect(As::Set{<:AI}, Bs::Set{<:AI}; buffer = default_buffer()) =
-    intersect!(deepcopy(As), Bs, buffer = buffer)
+    intersect!(copy(As), Bs, buffer = buffer)
 
 # -- Inclusion ---------------------------------------------------------
 
@@ -194,7 +203,7 @@ issubset(A::AI, Bs::Set{<:AI}) = any(B -> A ⊆ B, Bs)
 
 issubset(As::Set{<:AI}, B::AI) = all(A -> A ⊆ B, As)
 
-function isdisjoint(As::Set{<:AI}, B::T) where T<:AI
+function isdisjoint(As::Set{<:AI{T}}, B::AI{T}) where T
     for A ∈ As
         isdisjoint(A, B) || return false
     end
@@ -210,11 +219,21 @@ function isdisjoint(As::Set{<:AI}, Bs::Set{<:AI})
     true
 end
 
+function ==(As::Set{<:AI}, Bs::Set{<:AI})
+    issubset(As, Bs) || return false
+    issubset(Bs, As) || return false
+    true
+end
+
+!=(As::Set{<:AI}, Bs::Set{<:AI}) = !(As == Bs)
+
 # -- Helpers -----------------------------------------------------------
 
 for fun ∈ [:union, :intersect, :isdisjoint]
     @eval $fun(A::T, Bs::Set{<:AI}) where T<:AI = $fun(Bs, A)
 end
+
+# -- Endpoints ---------------------------------------------------------
 
 for (fun, op) ∈ Dict(:leftendpoint => :<, :rightendpoint => :>)
     @eval function $fun(As::Set{<:AbstractInterval})
@@ -230,4 +249,37 @@ for (fun, op) ∈ Dict(:leftendpoint => :<, :rightendpoint => :>)
     end
 end
 
-endpoints(As::Set{<:AbstractInterval}) = leftendpoint(As), rightendpoint(As)
+function endpoints(As::Set{<:AI})
+    ω, ωs = Iterators.peel(As)
+    left, right = endpoints(ω)
+
+    for ω ∈ ωs
+        newleft, newright = endpoints(ω)
+
+        if newleft < left
+            left = newleft
+        end
+
+        if newright > right
+            right = newright
+        end
+
+    end
+
+    left, right
+end
+
+function width(As::Set{<:AI})
+    ep = endpoints(As)
+    last(ep) - first(ep)
+end
+
+export closure
+"""
+    closure(x)
+
+Mathematical closure of `x`
+"""
+function closure end
+
+closure(As::Set{<:AI{T}}) where T = ClosedInterval{T}(endpoints(As)...)

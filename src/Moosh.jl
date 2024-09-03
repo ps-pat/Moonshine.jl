@@ -5,6 +5,7 @@ using PrecompileTools
 using StatsFuns: logtwo, log2π
 
 using IntervalSets
+const AI = AbstractInterval
 
 using LoopVectorization
 
@@ -14,12 +15,11 @@ using DataStructures: Stack, Queue
 
 using Bumper
 
+using AutoHashEquals
+
 ## Some constants.
 const VertexType = Int
 const ∞ = Inf
-
-export Ω
-const Ω = Interval{:closed, :open, Float64}
 
 include("Sequence.jl")
 include("tools.jl")

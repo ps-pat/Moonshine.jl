@@ -8,7 +8,8 @@ import Base: empty,
              convert,
              hash,
              zeros, ones,
-             firstindex, lastindex
+             firstindex, lastindex,
+             copy!
 
 using Random
 
@@ -20,7 +21,7 @@ using SpecialFunctions: loggamma
 
 export Sequence
 ## "Efficient storage of marker data."
-struct Sequence
+@auto_hash_equals struct Sequence
     data::BitVector
 end
 
@@ -72,15 +73,6 @@ end
 
 bitcount(η::Sequence; init::T = 0) where T =
     bitcount(η.data.chunks, init = init)
-
-function hash(η::Sequence, h::UInt)
-    h = hash(η.data, h)
-    hash(Sequence, h)
-end
-
-==(η1::Sequence, η2::Sequence) = η1.data == η2.data
-==(seq::Sequence, str::AbstractString) = string(seq) == str
-==(str::AbstractString, seq::Sequence) = seq == str
 
 """
     Sequence(undef, n)
@@ -138,6 +130,16 @@ end
 
 for (f, fill_f) ∈ Dict(:zeros => :falses, :ones => :trues)
     @eval $f(::Type{Sequence}, n::Integer) = (Sequence ∘ $fill_f)(n)
+end
+
+function wipe!(sequence::Sequence)
+    sequence.data .⊻= sequence.data
+    sequence
+end
+
+function copy!(s1::Sequence, s2::Sequence)
+    s1.data .⊻= s1.data .⊻ s2.data
+    s1
 end
 
 #############

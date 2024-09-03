@@ -58,24 +58,6 @@ add_edge!(tree::Tree, v1, v2) = add_edge!(graph(tree), v1, v2)
 # Methods #
 ###########
 
-export dad, sibling
-"""
-    dad(tree, v)
-    sibling(tree, v)
-
-Parent/sibling of a vertex.
-"""
-function dad end,
-function sibling end
-
-for fun ∈ [:dad, :sibling]
-    fun_gen = Symbol(string(fun) * 's')
-
-    @eval function $fun(tree, v)
-        (first ∘ $fun_gen)(tree, v)
-    end
-end
-
 export depth
 """
     depth(tree, v)

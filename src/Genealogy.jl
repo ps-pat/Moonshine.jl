@@ -12,7 +12,7 @@ using LayeredLayouts
 
 using GeometryBasics: Point
 
-using DataStructures: DefaultDict, Stack
+using DataStructures: DefaultDict
 
 import Base: IteratorSize, eltype
 
@@ -218,21 +218,21 @@ for (f, arg) ∈ (:idxtopos => :idx, :postoidx => :pos)
 end
 
 """
-    ancestral_mask!(η, x, ω; wipe = true)
-    ancestral_mask!(η, ωs, x, ω; wipe = true)
-    ancestral_mask(genealogy, ω)
+    ancestral_mask!(η, reference, x; ωs_buf = Set{Ω}(), wipe = true)
+    ancestral_mask(reference, x; ωs_buf = Set{Ω}())
 
-Mask non ancestral positions to 0. If `wipe = true`, all markers in `η` wil be
-initialized at 0.
+Mask non ancestral positions to 0. If `wipe = true`, all markers in `η` will be
+initialized to 0.
 """
 function ancestral_mask! end,
 function ancestral_mask end
 
-ancestral_mask!(η, genealogy::AbstractGenealogy, ω; wipe = true) =
-    ancestral_mask!(η, sam(genealogy), ω, wipe = wipe)
+ancestral_mask!(η, genealogy::AbstractGenealogy, x; wipe = true) =
+    ancestral_mask!(η, sam(genealogy), x, wipe = wipe)
 
-ancestral_mask(genealogy::AbstractGenealogy, ω) =
-    ancestral_mask(sam(genealogy), ω)
+ancestral_mask(genealogy::AbstractGenealogy, x) =
+    ancestral_mask!(Sequence(falses(nmarkers(genealogy))), genealogy, x,
+                    wipe = false)
 
 ###################
 # Pretty printing #
@@ -494,7 +494,7 @@ end
 let funtransorder = Dict(:dads => (:ancestors, (x, y) -> (x, y)),
                          :children => (:descendants, (x, y) -> (y, x))),
 
-    typesandfun = ((:Real, in), (:AbstractInterval, !isdisjoint), (:(Set{<:AbstractInterval}), !isdisjoint))
+    typesandfun = ((:Real, in), (:AI, !isdisjoint), (:(Set{<:AI}), !isdisjoint))
     for (fun, (transfun, order)) ∈ funtransorder
         transfun! = Symbol(string(transfun) * '!')
 
@@ -580,6 +580,60 @@ let funtransorder = Dict(:dads => (:ancestors, (x, y) -> (x, y)),
     end
 end
 
+export siblings, sibling
+"""
+    siblings(genealogy, v)
+    sibling(genealogy, v)
+
+Return the siblings of a vertex, that is the other vertices in the genealogy
+that have the same parents.
+
+If you are certain that `v` only has one sibling, you can use the `sibling`
+method to avoid allocation.
+"""
+function siblings end,
+function sibling end
+
+function siblings(genealogy, v)
+    ret = Vector{VertexType}(undef, 0)
+
+    for _dad ∈ dads(genealogy, v)
+        for _child ∈ children(genealogy, _dad)
+            _child == v && continue
+            push!(ret, _child)
+        end
+    end
+
+    ret
+end
+
+function sibling(genealogy, v)
+    for _child ∈ children(genealogy, dad(genealogy, v))
+        _child == v && continue
+        return _child
+    end
+    zero(VertexType)
+end
+
+export dad, child
+"""
+    dad(genealogy, v)
+    child(genealogy, v)
+
+Return the parent/child of a vertex or 0 if none. It only makes sense to
+use this method if you know `v` has a single parent/child.
+"""
+function dad end,
+function child end
+
+for (fun, nei) ∈ Dict(:dad => :inneighbors, :child => :outneighbors)
+    @eval function $fun(genealogy, v)
+        neig = $nei(genealogy, v)
+        isempty(neig) && return zero(VertexType)
+        first(neig)
+    end
+end
+
 export nmutations
 """
     nmutations(genealogy[, e])
@@ -589,9 +643,9 @@ number of mutations on that edge.
 """
 function nmutations end
 
-function nmutations!(mask, ωs, genealogy, e)
+function nmutations!(mask, genealogy, e; ωs_buf = Set{Ω}())
     ret = zero(Int)
-    ancestral_mask!(mask, ωs, genealogy, e)
+    ancestral_mask!(mask, genealogy, e, ωs_buf = ωs_buf)
 
     nchunks = (length(positions(genealogy)) - 1) ÷ blocksize(Sequence) + 1
     η1, η2 = sequences(genealogy, e)
@@ -604,15 +658,15 @@ end
 
 function nmutations(genealogy)
     mask = Sequence(undef, nmarkers(genealogy))
-    ωs = Set{Ω}()
-    mapreduce(e -> nmutations!(mask, ωs, genealogy, e), +, edges(genealogy),
+    ωs_buf = Set{Ω}()
+    mapreduce(e -> nmutations!(mask, genealogy, e, ωs_buf = ωs_buf), +, edges(genealogy),
               init = zero(Int))
 end
 
 function nmutations(genealogy, e)
     mask = Sequence(undef, nmarkers(genealogy))
-    ωs = Set{Ω}()
-    nmutations!(mask, ωs, genealogy, e)
+    ωs_buf = Set{Ω}()
+    nmutations!(mask, genealogy, e, ωs_buf)
 end
 
 ## Edge functions.
@@ -629,21 +683,20 @@ struct EdgesInterval{T, I}
     buffer::CheapStack{Edge{VertexType}}
     funbuffer::Vector{VertexType}
     visited::BitVector
-    min_latitude::Float64
 end
 
-function EdgesInterval(genealogy, ωs, store,
-                       root = mrca(genealogy), min_latitude = zero(Float64))
+function EdgesInterval(genealogy, ωs, store)
     ##TODO: manage `visited` and `funbuffer` manually.
     eibuffer = CheapStack(store)
     funbuffer = Vector{VertexType}(undef, 2)
     visited = falses(nrecombinations(genealogy))
 
+    root = mrca(genealogy)
     for d ∈ children!(funbuffer, genealogy, root, ωs)
         push!(eibuffer, Edge(root => d))
     end
 
-    EdgesInterval(genealogy, ωs, eibuffer, funbuffer, visited, min_latitude)
+    EdgesInterval(genealogy, ωs, eibuffer, funbuffer, visited)
 end
 
 IteratorSize(::EdgesInterval) = Base.SizeUnknown()
@@ -658,7 +711,6 @@ function iterate(iter::EdgesInterval, state = 1)
     ωs = iter.ωs
     funbuffer = iter.funbuffer
     visited = iter.visited
-    min_latitude = iter.min_latitude
     n = nleaves(genealogy)
 
     e = pop!(buffer)
@@ -670,10 +722,8 @@ function iterate(iter::EdgesInterval, state = 1)
     end
 
     resize!(funbuffer, 2)
-    if latitude(genealogy, s) >= min_latitude
-        for d ∈ children!(funbuffer, genealogy, s, ωs)
-            push!(buffer, Edge(s => d))
-        end
+    for d ∈ children!(funbuffer, genealogy, s, ωs)
+        push!(buffer, Edge(s => d))
     end
 
     e, state + 1
@@ -681,9 +731,7 @@ end
 
 export edges_interval
 
-edges_interval(genealogy, ωs, store,
-               root = mrca(genealogy), min_latitude = zero(Float64)) =
-    EdgesInterval(genealogy, ωs, store, root, min_latitude)
+edges_interval(genealogy, ωs, store) = EdgesInterval(genealogy, ωs, store)
 
 function edges_interval(genealogy, ωs)
     ωs_e = Set{Ω}()
