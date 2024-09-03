@@ -557,8 +557,11 @@ function sample_recombination_constrained!(rng, arg, breakpoint, winwidth, live_
             news = (first ∘ dads!)(_dads, arg, news, breakpoint)
         end
     end
-    replace_idx = findfirst(e -> src(e) == news, live_edges)
-    live_edges[replace_idx] = Edge(news => newd)
+
+    for (k, e) ∈ enumerate(live_edges)
+        src(e) == news || continue
+        live_edges[k] = Edge(news => newd)
+    end
 
     breakpoint
 end
