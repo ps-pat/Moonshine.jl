@@ -542,9 +542,6 @@ function sample_recombination_constrained!(rng, arg, breakpoint, winwidth, live_
         @debug "Interval available for recoalescence has length 0" redge
     end
 
-    ## Sample recoalescence edge ##
-    cedge = _sample_cedge(rng, arg, clat, window, live_edges[e2], buffer)
-
     ## Add recombination event to the graph ##
     @debug "Recombination event" redge cedge breakpoint rlat clat
     recombine!(arg, redge, cedge, breakpoint, rlat, clat, buffer = buffer)
