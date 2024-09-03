@@ -438,12 +438,11 @@ function iterate(iter::EdgesIntervalRec, state = 1)
     min_latitude = iter.min_latitude
     breakpoint = iter.breakpoint
     breakpointidx = iter.breakpointidx
-    n = nleaves(arg)
 
     e = pop!(buffer)
     s = dst(e)
     if isrecombination(arg, s)
-        ridx = (s - 2(n - 1)) ÷ 2
+        ridx = recidx(arg, s)
         visited[ridx] && return e, state + 1
         visited[ridx] = true
     end
