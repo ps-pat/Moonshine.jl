@@ -480,7 +480,7 @@ function sample_recombination_constrained!(rng, arg, breakpoint, winwidth, live_
     ## Sample recombination edge ##
     @no_escape buffer begin
         ws_data = @alloc(Float64, length(live_edges))
-        map!(e -> max(eps(Float64), branchlength(arg, e)), ws_data, live_edges)
+        map!(e -> branchlength(arg, e), ws_data, live_edges)
         ws = ProbabilityWeights(ws_data)
         e1, e2 = sample(rng, eachindex(live_edges), ws, 2; replace = false)
     end
@@ -501,14 +501,9 @@ function sample_recombination_constrained!(rng, arg, breakpoint, winwidth, live_
     ## Sample recombination latitude ##
     rlat_lbound = latitude(arg, dst(redge))
     rlat_ubound = min(latitude(arg, src(redge)), latitude(arg, src(live_edges[e2])))
-    if rlat_lbound < rlat_ubound
-        rlat_dist = Uniform(rlat_lbound, rlat_ubound)
-        rlat = rand(rng, rlat_dist)
-        arg.logprob[] += logpdf(rlat_dist, rlat)
-    else
-        rlat = rlat_lbound
-        @debug "Recombination edge has length 0" redge
-    end
+    rlat_dist = Uniform(rlat_lbound, rlat_ubound)
+    rlat = rand(rng, rlat_dist)
+    arg.logprob[] += logpdf(rlat_dist, rlat)
 
     ## Sample recoalescence edge ##
     breakpoint_idx = postoidx(arg, breakpoint)
@@ -518,18 +513,10 @@ function sample_recombination_constrained!(rng, arg, breakpoint, winwidth, live_
     ## Sample recoalescence latitude ##
     clat_lbound = max(rlat, latitude(arg, dst(cedge)))
     clat_ubound = latitude(arg, src(cedge))
-    if clat_lbound < clat_ubound
-        ## It would be more accurate to sample from a shifted-truncated
-        ## exponential distribution. However, it is highly numerically
-        ## unstable to do so :(
-        Δclat_dist = Uniform(clat_lbound - rlat, clat_ubound - rlat)
-        Δclat = rand(rng, Δclat_dist)
-        arg.logprob[] += logpdf(Δclat_dist, Δclat)
-        clat = rlat + Δclat
-    else
-        clat = rlat + clat_lbound
-        @debug "Interval available for recoalescence has length 0" redge
-    end
+    Δclat_dist = Uniform(clat_lbound - rlat, clat_ubound - rlat)
+    Δclat = rand(rng, Δclat_dist)
+    arg.logprob[] += logpdf(Δclat_dist, Δclat)
+    clat = rlat + Δclat
 
     ## Add recombination event to the graph ##
     @debug "Recombination event" redge cedge breakpoint rlat clat
