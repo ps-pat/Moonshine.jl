@@ -22,6 +22,7 @@ struct Arg <: AbstractGenealogy
     latitudes::Vector{Float64}
     breakpoints::Vector{Float64}
     rightdads::Vector{VertexType}
+    mrca::VertexType
     sequences::Vector{Sequence}
     ancestral_intervals::Dict{Edge{VertexType}, Set{Ω}}
     sample::Sample
@@ -33,6 +34,7 @@ Arg(tree::Tree) = Arg(
     latitudes(tree),
     Vector{Float64}(undef, 0),
     Vector{VertexType}(undef, 0),
+    mrca(tree),
     sequences(tree),
     Dict{Edge{VertexType}, Set{Ω}}(),
     sam(tree),
@@ -71,6 +73,10 @@ end
 
 nrecombinations(arg::Arg) = ne(arg) - nv(arg) + 1
 
+mrca(arg::Arg) = arg.mrca
+
+mrca(arg, ωs) = mrca(arg, leaves(arg), ωs)
+
 ###########################
 # AbstractGraph Interface #
 ###########################
@@ -87,23 +93,6 @@ function add_edge!(arg::Arg, e, ints::Set{Ω})
 end
 
 rem_edge!(arg::Arg, e) = rem_edge!(graph(arg), e)
-
-function mrca(arg::Arg, vs, ωs)
-    μ = mrca(arg, vs)
-    iszero(μ) && return μ
-
-    while true
-        @label beg
-        for c ∈ children(arg, μ, ωs)
-            vs ⊆ descendants(arg, c, ωs) || continue
-            μ = c
-            @goto beg
-        end
-        break
-    end
-
-    μ
-end
 
 ########################
 # Ancestrality Methods #
@@ -366,7 +355,9 @@ function recombine!(arg, redge, cedge, breakpoint, rlat, clat;
     add_edge!(arg, Edge(cvertex, rvertex), ωr_right)
     add_edge!(arg, Edge(cvertex, dst(cedge)), ωc)
     root_recombination = !rem_edge!(arg, cedge)
-    if !root_recombination
+    if root_recombination
+        arg.mrca = cvertex
+    else
         ωc_new = union(ωc, ωr_right, buffer = buffer)
         add_edge!(arg, Edge(src(cedge), cvertex), ωc_new)
     end

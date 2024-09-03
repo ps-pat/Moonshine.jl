@@ -45,7 +45,9 @@ nleaves(tree::Tree) = (length(sequences(tree)) + 1) ÷ 2
 
 describe(::Tree, long = true) = long ? "Coalescent Tree" : "Tree"
 
-mrca(tree::Tree, vs, ::Any) = mrca(tree, vs)
+mrca(tree::Tree) = nv(tree)
+
+mrca(tree::Tree, ::Any) = mrca(tree)
 
 ###########################
 # AbstractGraph Interface #

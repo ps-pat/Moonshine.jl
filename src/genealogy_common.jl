@@ -46,20 +46,14 @@ for G ∈ (:Tree, :Arg)
 
 # -- MRCA --------------------------------------------------------------
 
-    @eval function mrca($Gargname::$G)
-    any(iszero, latitudes($Gargname)) && return zero(VertexType)
-    isone(nv($Gargname)) && return one(VertexType)
-    argmax(latitudes($Gargname)) + nleaves($Gargname)
-    end
-
-    @eval function mrca($Gargname::$G, vs)
+    @eval function mrca($Gargname::$G, vs::AbstractVector, ωs)
         μ = mrca($Gargname)
         iszero(μ) && return μ
 
         while true
             @label beg
-            for c ∈ children($Gargname, μ)
-                vs ⊆ descendants($Gargname, c) || continue
+            for c ∈ children($Gargname, μ, ωs)
+                vs ⊆ descendants($Gargname, c, ωs) || continue
                 μ = c
                 @goto beg
             end
@@ -68,4 +62,7 @@ for G ∈ (:Tree, :Arg)
 
         μ
     end
+
+    @eval mrca($Gargname::$G, vs::AbstractVector) = mrca($Gargname, vs, -∞..∞)
 end
+
