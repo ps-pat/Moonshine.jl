@@ -494,7 +494,7 @@ end
 let funtransorder = Dict(:dads => (:ancestors, (x, y) -> (x, y)),
                          :children => (:descendants, (x, y) -> (y, x))),
 
-    typesandfun = ((:Real, in), (:AbstractInterval, !isdisjoint), (:(Set{<:AbstractInterval}), !isdisjoint))
+    typesandfun = ((:Real, in), (:AI, !isdisjoint), (:(Set{<:AI}), !isdisjoint))
     for (fun, (transfun, order)) ∈ funtransorder
         transfun! = Symbol(string(transfun) * '!')
 

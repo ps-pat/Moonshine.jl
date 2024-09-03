@@ -5,6 +5,7 @@ using PrecompileTools
 using StatsFuns: logtwo, log2π
 
 using IntervalSets
+const AI = AbstractInterval
 
 using LoopVectorization
 
