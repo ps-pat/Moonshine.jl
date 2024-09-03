@@ -551,9 +551,10 @@ function sample_recombination_constrained!(rng, arg, breakpoint, winwidth, live_
     news = src(cedge)
     newd = nv(arg)
     if news != src(live_edges[e2])
+        _dads = Vector{VertexType}(undef, 2)
         while sequence(arg, news)[breakpoint_idx]
             newd = news
-            news = (first ∘ dads)(arg, news, breakpoint)
+            news = (first ∘ dads!)(_dads, arg, news, breakpoint)
         end
     end
     replace_idx = findfirst(e -> src(e) == news, live_edges)
