@@ -683,20 +683,22 @@ struct EdgesInterval{T, I}
     buffer::CheapStack{Edge{VertexType}}
     funbuffer::Vector{VertexType}
     visited::BitVector
+    min_latitude::Float64
 end
 
-function EdgesInterval(genealogy, ωs, store)
+function EdgesInterval(genealogy, ωs, store,
+                       root = mrca(genealogy), min_latitude = zero(Float64))
     ##TODO: manage `visited` and `funbuffer` manually.
     eibuffer = CheapStack(store)
     funbuffer = Vector{VertexType}(undef, 2)
     visited = falses(nrecombinations(genealogy))
 
-    root = mrca(genealogy)
     for d ∈ children!(funbuffer, genealogy, root, ωs)
         push!(eibuffer, Edge(root => d))
     end
 
-    EdgesInterval(genealogy, ωs, eibuffer, funbuffer, visited)
+    EdgesInterval(genealogy, ωs, eibuffer, funbuffer, visited,
+                  convert(Float64, min_latitude))
 end
 
 IteratorSize(::EdgesInterval) = Base.SizeUnknown()
@@ -711,19 +713,22 @@ function iterate(iter::EdgesInterval, state = 1)
     ωs = iter.ωs
     funbuffer = iter.funbuffer
     visited = iter.visited
+    min_latitude = iter.min_latitude
     n = nleaves(genealogy)
 
     e = pop!(buffer)
     s = dst(e)
     if isrecombination(genealogy, s)
-        ridx = (s - 2(n - 1)) ÷ 2
+        ridx = recidx(genealogy, s)
         visited[ridx] && return e, state + 1
         visited[ridx] = true
     end
 
     resize!(funbuffer, 2)
-    for d ∈ children!(funbuffer, genealogy, s, ωs)
-        push!(buffer, Edge(s => d))
+    if latitude(genealogy, s) >= min_latitude
+        for d ∈ children!(funbuffer, genealogy, s, ωs)
+            push!(buffer, Edge(s => d))
+        end
     end
 
     e, state + 1
@@ -731,7 +736,9 @@ end
 
 export edges_interval
 
-edges_interval(genealogy, ωs, store) = EdgesInterval(genealogy, ωs, store)
+edges_interval(genealogy, ωs, store,
+               root = mrca(genealogy), min_latitude = zero(Float64)) =
+    EdgesInterval(genealogy, ωs, store, root, min_latitude)
 
 function edges_interval(genealogy, ωs)
     ωs_e = Set{Ω}()
@@ -751,3 +758,24 @@ Return a `Dict` that maps every edge of a genealogy to an integer in
 1:ne(genealogy).
 """
 edgesmap(genealogy) = Dict(reverse.(enumerate(edges(genealogy))))
+
+export nlive
+"""
+    nlive(genealogy, lat, ωs)
+
+Number of live edges w.r.t an interval for a given latitude.
+"""
+function nlive end
+
+function nlive(genealogy, lat, ωs = Ω(0, ∞); buffer = default_buffer())
+    ret = zero(Int)
+    @no_escape buffer begin
+        store = @alloc(Edge{VertexType}, nleaves(genealogy) + nrecombinations(genealogy))
+        for e ∈ edges_interval(genealogy, ωs, store, mrca(genealogy), lat)
+            latitude(genealogy, dst(e)) <= lat <= latitude(genealogy, src(e)) || continue
+            ret += 1
+        end
+    end
+
+    ret
+end
