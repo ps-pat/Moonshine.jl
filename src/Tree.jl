@@ -166,7 +166,7 @@ function build!(rng, tree::Tree;
                 Dist::Distance = Hamming{Int}(), bias0 = ∞, toilet_prop = 1)
     n = nleaves(tree)
     nv(tree) ≠ 2n - 1 || !iszero(ne(tree)) && error("Invalid tree")
-    μ = mut_rate(tree, true) * sam(tree).sequence_length
+    μ = mut_rate(tree, true)
     η0 = zeros(Sequence, nmarkers(tree))
 
     ## Compute the norm of the sequences. They are stored as
