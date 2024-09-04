@@ -451,7 +451,7 @@ function iterate(iter::EdgesIntervalRec, state = 1)
     e, state + 1
 end
 
-function _sample_cedge(rng, arg, lat, idx, window, live_edge::T, taboo, buffer) where T
+function _sample_cedge(rng, arg, lat, idx, window, live_edge::T, taboo, buffer, λ = 0.3) where T
     pos = idxtopos(arg, idx)
 
     @no_escape buffer begin
@@ -469,8 +469,19 @@ function _sample_cedge(rng, arg, lat, idx, window, live_edge::T, taboo, buffer) 
             cedges_ptr += 1
         end
 
-        ret = rand(rng, view(cedges, 1:(cedges_ptr-1)))
-        ret
+        mask = Sequence(falses(nmarkers(arg)))
+        mask.data[range(idx, min(idx + 10, nmarkers(arg)))] .= true
+        x = Sequence(undef, nmarkers(arg))
+        cedges_view = @view cedges[1:(cedges_ptr-1)]
+        ws = @alloc(Float64, length(cedges_view))
+        map!(ws, cedges_view) do e
+            x.data .⊻= x.data
+            x.data .⊻= sequence(arg, dst(taboo)).data .& sequence(arg, dst(e)).data
+            x.data .&= mask.data
+            λ * (1 - λ)^(1 - sum(x))
+        end
+
+        sample(rng, cedges_view, ProbabilityWeights(ws))
     end
 end
 
