@@ -508,7 +508,7 @@ function sample_recombination_constrained!(rng, arg, breakpoint, winwidth, live_
         e2 -= 1
     end
 
-    window = breakpoint ± winwidth
+    window = breakpoint ± winwidth / 2
 
     ## Sample recombination latitude ##
     rlat_lbound = latitude(arg, dst(redge))
