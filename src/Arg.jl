@@ -531,7 +531,7 @@ function sample_recombination_constrained!(rng, arg, breakpoint, winwidth, live_
     clat = rlat + Δclat
 
     ## Add recombination event to the graph ##
-    @debug "Recombination event" redge cedge breakpoint rlat clat
+    @debug "Constrained recombination event" redge cedge breakpoint rlat clat
     recombine!(arg, redge, cedge, breakpoint, rlat, clat, buffer = buffer)
 
     ## Compute new live edge ##
