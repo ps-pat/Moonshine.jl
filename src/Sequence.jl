@@ -9,7 +9,8 @@ import Base: empty,
              hash,
              zeros, ones,
              firstindex, lastindex,
-             copy!
+             copy!,
+             sum
 
 using Random
 
@@ -140,6 +141,15 @@ end
 function copy!(s1::Sequence, s2::Sequence)
     s1.data .⊻= s1.data .⊻ s2.data
     s1
+end
+
+function sum(s::Sequence)
+    ret = zero(Int)
+    @inbounds @simd for chunk ∈ s.data.chunks
+        ret += count_ones(chunk)
+    end
+
+    ret
 end
 
 #############
