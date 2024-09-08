@@ -610,9 +610,10 @@ function build!(rng, arg::Arg; winwidth = ∞, buffer = default_buffer())
                         buffer = buffer)
 
         meidx = findfirst(>(1) ∘ length, _mutation_edges)
+        nextidx = 0
 
         while !isnothing(meidx)
-            nextidx = meidx
+            nextidx += meidx
             live_edges = _mutation_edges[meidx]
             nbp = length(live_edges) - 1
 
@@ -631,9 +632,10 @@ function build!(rng, arg::Arg; winwidth = ∞, buffer = default_buffer())
                                                   buffer = buffer)
             end
 
-            mutation_edges!(_mutation_edges, arg, Ω(first(positions(arg)), ∞), buffer = buffer)
+            nextidx >= nmarkers(arg) && break
+            mutation_edges!(_mutation_edges, arg, Ω(idxtopos(arg, nextidx + 1), ∞),
+                            buffer = buffer)
             meidx = findfirst(>(1) ∘ length, _mutation_edges)
-
             isnothing(meidx) && break
         end
     end
