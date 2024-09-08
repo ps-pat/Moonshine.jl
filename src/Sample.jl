@@ -158,7 +158,8 @@ positions(sample::Sample) = sample.positions
 
 nmarkers(sample::Sample) = (length ∘ first)(sample.H)
 
-idxtopos(sample::Sample, idx) = getindex(positions(sample), idx)
+idxtopos(sample::Sample, idx) =
+    iszero(idx) ? zero(Float64) : getindex(positions(sample), idx)
 
 function postoidx(sample::Sample, pos)
     ret = 1

@@ -158,9 +158,10 @@ function recbreakpoint end
 export rightdad
 """
     rightdad(arg, v)
+    leftdad(arg, v)
 
 Returns the parent of recombination vertex `v` ancestral for material
-to the right of the breakpoint associated with `v`. If `v` is not a
+to the left/right of the breakpoint associated with `v`. If `v` is not a
 recombination vertex, returns 0.
 """
 function rightdad end
@@ -172,6 +173,17 @@ for (fun, (def, field)) ∈ Dict(:recbreakpoint => (:∞, Meta.quot(:breakpoints
         isrecombination(arg, v) || return ret
         getfield(arg, $field)[recidx(arg, v)]
     end
+end
+
+function leftdad(arg, v)
+    r = rightdad(arg, v)
+    iszero(r) && return r
+
+    for d ∈ dads(arg, v)
+        r != d && return d
+    end
+
+    r
 end
 
 #######
@@ -444,6 +456,13 @@ function iterate(iter::EdgesIntervalRec, state = 1)
                 sequence(arg, dst(newe))[breakpointidx] || continue
             end
 
+            if isrecombination(arg, d)
+                breakpoint < recbreakpoint(arg, d) && s == rightdad(arg, d) &&
+                continue
+                breakpoint >= recbreakpoint(arg, d) && s == leftdad(arg, d) &&
+                continue
+            end
+
             push!(buffer, newe)
         end
     end
@@ -485,17 +504,44 @@ function _sample_cedge(rng, arg, lat, idx, window, live_edge::T, taboo, buffer, 
     end
 end
 
+function sample_redge(rng, arg, e, breakpoint)
+    total_length = branchlength(arg, e)
+    s, d = src(e), dst(e)
+    nextidx = postoidx(arg, breakpoint)
+
+    ## Total length of valid branches ##
+    _children = children(arg, d, breakpoint)
+    filter!(v -> sequence(arg, v)[nextidx], _children)
+    while (isone ∘ length)(_children)
+        s = d
+        d = first(_children)
+        total_length += branchlength(arg, Edge(s => d))
+        children!(_children, arg, d, breakpoint)
+    end
+
+    ## Sample recombination location ##
+    rlat_dist = Uniform(0, total_length)
+    rlat = rand(rng, rlat_dist)
+    arg.logprob[] += logpdf(rlat_dist, rlat)
+
+    ## Compute recombination edge ##
+    rlat -= branchlength(arg, Edge(s => d))
+    while rlat > 0
+        rlat -= branchlength(arg, Edge(s => d))
+        rlat > 0 || break
+        d = s
+        s = (first ∘ dads)(arg, s, breakpoint)
+    end
+
+    Edge(s => d)
+end
+
 function sample_recombination_constrained!(rng, arg, breakpoint, winwidth, live_edges;
                                            buffer = default_buffer())
     n = length(live_edges)
 
     ## Sample recombination edge ##
-    @no_escape buffer begin
-        ws_data = @alloc(Float64, length(live_edges))
-        map!(e -> branchlength(arg, e), ws_data, live_edges)
-        ws = ProbabilityWeights(ws_data)
-        e1, e2 = sample(rng, eachindex(live_edges), ws, 2; replace = false)
-    end
+    e1, e2 = sample(rng, eachindex(live_edges), 2; replace = false)
     arg.logprob[] += log(2) - log(n) - log(n - 1)
 
     ## This ensures that there is a least one edge available for recoalescence.
@@ -503,7 +549,7 @@ function sample_recombination_constrained!(rng, arg, breakpoint, winwidth, live_
         e1, e2 = e2, e1
     end
 
-    redge = popat!(live_edges, e1)
+    redge = sample_redge(rng, arg, popat!(live_edges, e1), breakpoint)
     if e2 > e1
         e2 -= 1
     end
@@ -548,6 +594,7 @@ function sample_recombination_constrained!(rng, arg, breakpoint, winwidth, live_
     for (k, e) ∈ enumerate(live_edges)
         src(e) == news || continue
         live_edges[k] = Edge(news => newd)
+        break
     end
 
     breakpoint

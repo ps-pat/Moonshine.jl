@@ -1,5 +1,5 @@
 import Base:
-union,
+union, union!,
 intersect, intersect!,
 join,
 in,

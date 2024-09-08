@@ -607,6 +607,19 @@ function siblings(genealogy, v)
     ret
 end
 
+function siblings(genealogy, v, x)
+    ret = Vector{VertexType}(undef, 0)
+
+    for _dad ∈ dads(genealogy, v, x)
+        for _child ∈ children(genealogy, _dad, x)
+            _child == v && continue
+            push!(ret, _child)
+        end
+    end
+
+    ret
+end
+
 function sibling(genealogy, v)
     for _child ∈ children(genealogy, dad(genealogy, v))
         _child == v && continue
