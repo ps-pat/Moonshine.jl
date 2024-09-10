@@ -403,25 +403,24 @@ struct EdgesIntervalRec{I}
     visited::BitVector
     min_latitude::Float64
     breakpoint::Float64
-    breakpointidx::Int
+    nextidx::Int
 end
 
-function EdgesIntervalRec(arg, ωs, store, breakpoint,
+function EdgesIntervalRec(arg, ωs, store, breakpoint, nextidx,
                           root = mrca(arg), min_latitude = zero(Float64))
     ##TODO: manage `visited` and `funbuffer` manually.
     eibuffer = CheapStack(store)
     funbuffer = Vector{VertexType}(undef, 2)
     visited = falses(nrecombinations(arg))
 
-    breakpointidx = postoidx(arg, breakpoint)
     for d ∈ children!(funbuffer, arg, root, ωs)
         e = Edge(root => d)
-        (breakpoint ∈ ancestral_intervals(arg, e) && !sequence(arg, dst(e))[breakpointidx]) && continue
+        (breakpoint ∈ ancestral_intervals(arg, e) && !sequence(arg, dst(e))[nextidx]) && continue
         push!(eibuffer, e)
     end
 
     EdgesIntervalRec(arg, ωs, eibuffer, funbuffer, visited, min_latitude,
-                     breakpoint, breakpointidx)
+                     breakpoint, nextidx)
 end
 
 IteratorSize(::EdgesIntervalRec) = Base.SizeUnknown()
@@ -438,7 +437,7 @@ function iterate(iter::EdgesIntervalRec, state = 1)
     visited = iter.visited
     min_latitude = iter.min_latitude
     breakpoint = iter.breakpoint
-    breakpointidx = iter.breakpointidx
+    nextidx = iter.nextidx
 
     e = pop!(buffer)
     s = dst(e)
@@ -453,7 +452,7 @@ function iterate(iter::EdgesIntervalRec, state = 1)
         for d ∈ children!(funbuffer, arg, s, ωs)
             newe = Edge(s => d)
             if breakpoint ∈ ancestral_intervals(arg, newe)
-                sequence(arg, dst(newe))[breakpointidx] || continue
+                sequence(arg, dst(newe))[nextidx] || continue
             end
 
             if isrecombination(arg, d)
@@ -470,15 +469,15 @@ function iterate(iter::EdgesIntervalRec, state = 1)
     e, state + 1
 end
 
-function _sample_cedge(rng, arg, lat, idx, window, live_edge::T, taboo, buffer, λ = 0.3) where T
-    pos = idxtopos(arg, idx)
+function _sample_cedge(rng, arg, lat, nextidx, window, live_edge::T, taboo, buffer, λ = 0.3) where T
+    nextpos = idxtopos(arg, nextidx)
 
     @no_escape buffer begin
         cedges = @alloc(T, ne(arg))
         cedges_ptr = firstindex(cedges)
 
         store = @alloc(T, nv(arg))
-        @inbounds for e ∈ EdgesIntervalRec(arg, window, store, pos, src(live_edge), lat)
+        @inbounds for e ∈ EdgesIntervalRec(arg, window, store, nextpos, nextidx, src(live_edge), lat)
             ## Might happen if `src(live_edge) == src(taboo)`.
             src(e) == src(taboo) && continue
             ## Might happen if `dst(taboo)` is a recombination vertex.
@@ -489,7 +488,7 @@ function _sample_cedge(rng, arg, lat, idx, window, live_edge::T, taboo, buffer, 
         end
 
         mask = Sequence(falses(nmarkers(arg)))
-        mask.data[range(idx, min(idx + 10, nmarkers(arg)))] .= true
+        mask.data[range(nextidx + 1, min(nextidx + 11, nmarkers(arg)))] .= true
         x = Sequence(undef, nmarkers(arg))
         cedges_view = @view cedges[1:(cedges_ptr-1)]
         ws = @alloc(Float64, length(cedges_view))
@@ -504,10 +503,9 @@ function _sample_cedge(rng, arg, lat, idx, window, live_edge::T, taboo, buffer, 
     end
 end
 
-function sample_redge(rng, arg, e, breakpoint)
+function sample_redge(rng, arg, e, breakpoint, nextidx)
     total_length = branchlength(arg, e)
     s, d = src(e), dst(e)
-    nextidx = postoidx(arg, breakpoint)
 
     ## Total length of valid branches ##
     _children = children(arg, d, breakpoint)
@@ -539,6 +537,7 @@ end
 function sample_recombination_constrained!(rng, arg, breakpoint, winwidth, live_edges;
                                            buffer = default_buffer())
     n = length(live_edges)
+    nextidx = postoidx(arg, breakpoint)
 
     ## Sample recombination edge ##
     e1, e2 = sample(rng, eachindex(live_edges), 2; replace = false)
@@ -549,7 +548,7 @@ function sample_recombination_constrained!(rng, arg, breakpoint, winwidth, live_
         e1, e2 = e2, e1
     end
 
-    redge = sample_redge(rng, arg, popat!(live_edges, e1), breakpoint)
+    redge = sample_redge(rng, arg, popat!(live_edges, e1), breakpoint, nextidx)
     if e2 > e1
         e2 -= 1
     end
@@ -564,9 +563,8 @@ function sample_recombination_constrained!(rng, arg, breakpoint, winwidth, live_
     arg.logprob[] += logpdf(rlat_dist, rlat)
 
     ## Sample recoalescence edge ##
-    breakpoint_idx = postoidx(arg, breakpoint)
-    cedge = _sample_cedge(rng, arg, rlat, breakpoint_idx,
-                          window, live_edges[e2], redge, buffer)
+    cedge = _sample_cedge(rng, arg, rlat, nextidx, window, live_edges[e2],
+                          redge, buffer)
 
     ## Sample recoalescence latitude ##
     clat_lbound = max(rlat, latitude(arg, dst(cedge)))
@@ -585,7 +583,7 @@ function sample_recombination_constrained!(rng, arg, breakpoint, winwidth, live_
     newd = nv(arg)
     if news != src(live_edges[e2])
         _dads = Vector{VertexType}(undef, 2)
-        while sequence(arg, news)[breakpoint_idx]
+        while sequence(arg, news)[nextidx]
             newd = news
             news = (first ∘ dads!)(_dads, arg, news, breakpoint)
         end
