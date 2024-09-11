@@ -94,6 +94,18 @@ end
 
 rem_edge!(arg::Arg, e) = rem_edge!(graph(arg), e)
 
+function plot_layout(arg::Arg)
+    initxs = rand(1:nleaves(arg), nv(arg))
+    ys = vcat(zeros(nleaves(arg)), latitudes(arg))
+    Spring(
+        initialpos = (collect ∘ zip)(initxs, ys),
+        # initialpos = vcat(
+            # [(v, 0) for v ∈ leaves(arg)],
+            # [(1, 10) for _ ∈ ivertices(arg)]
+        # ),
+        pin = [(false, true) for _ ∈ vertices(arg)])
+end
+
 ########################
 # Ancestrality Methods #
 ########################

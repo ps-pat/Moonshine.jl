@@ -16,6 +16,8 @@ using DataStructures: DefaultDict
 
 import Base: IteratorSize, eltype
 
+using NetworkLayout
+
 abstract type AbstractGenealogy <: AbstractSimpleGraph{VertexType} end
 
 #############
@@ -194,6 +196,15 @@ function isrecombination end
 
 @generated isrecombination(::Any, ::Any) = false
 
+"""
+    plot_layout(genealogy)
+
+Layout function for genealogy plotting.
+"""
+function plot_layout end
+
+plot_layout(::AbstractGenealogy) = Spring()
+
 #############
 # Utilities #
 #############
@@ -336,28 +347,33 @@ function graphplot(genealogy::AbstractGenealogy, ω;
                    arrow_show = false,
                    edge_color = :gray,
                    edge_width = 3,
-                   layout = nothing,
+                   layout = plot_layout(genealogy),
                    attributes...)
-    if isnothing(layout)
-        lastlayer = maximum(v -> maxdepth(genealogy, v), leaves(genealogy)) + 1
-        layout = GenLayout(lastlayer, leaves(genealogy))
-    end
+    vlabels = string.(range(1, nv(genealogy)))
 
     ## Color of the vertices.
     mask = fill(ancestral_mask(genealogy, ω), nv(genealogy))
     node_color = ifelse.(any.(sequences(genealogy) .& mask),
                          derived_color, wild_color)
 
-    ## Hide non ancestral edges.
+    ## Hide non ancestral edges and vertices ##
     ewidth = DefaultDict{Edge{VertexType}, Int}(edge_width)
     for e ∈ edges(genealogy)
         isdisjoint(ancestral_intervals(genealogy, e), ω) || continue
         ewidth[e] = 0
     end
 
+    vsize = DefaultDict{VertexType, Any}(30)
+    for v ∈ ivertices(genealogy)
+        isdisjoint(ancestral_intervals(genealogy, v), ω) || continue
+        vsize[v] = 0
+        vlabels[v] = ""
+    end
+
     graphplot(graph(genealogy),
               layout = layout,
-              ilabels = string.(range(1, nv(genealogy))),
+              node_size = vsize,
+              ilabels = vlabels,
               ilabels_color = :white,
               edge_color = edge_color,
               edge_width = ewidth,
