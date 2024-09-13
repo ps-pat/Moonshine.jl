@@ -161,9 +161,9 @@ nmarkers(sample::Sample) = (length ∘ first)(sample.H)
 idxtopos(sample::Sample, idx) =
     iszero(idx) ? zero(Float64) : getindex(positions(sample), idx)
 
-function postoidx(sample::Sample, pos)
+function postoidx(sample::Sample, pos::Real)
     ret = 1
-    while idxtopos(sample, ret) < pos
+    @inbounds while idxtopos(sample, ret) < pos
         ret += 1
     end
 
