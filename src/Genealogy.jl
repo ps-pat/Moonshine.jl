@@ -437,10 +437,14 @@ sequence(genealogy, v::VertexType) = getindex(sequences(genealogy), v)
 export nmarkers
 """
     nmarkers(genealogy)
+    nmarkers(genealogy, x)
 
-Number of markers in the sequences of a genealogy.
+Number of markers in the sequences of a genealogy. If an interval `x` is
+specified, returns the number of markers contained in that interval.
 """
-nmarkers(genealogy) = (length ∘ first)(sequences(genealogy))
+nmarkers(genealogy) = nmarkers(sam(genealogy))
+
+nmarkers(genealogy, x) = nmarkers(sam(genealogy), x)
 
 export branchlength
 """
