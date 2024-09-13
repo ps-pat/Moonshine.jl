@@ -251,9 +251,38 @@ function mutation_edges!(mutations, arg, ω::Ω; buffer = default_buffer())
     mutations
 end
 
-function mutation_edges(arg, ω::Ω)
+function mutation_edges!(mutations, arg, idx::Int; buffer = default_buffer())
+    pos = idxtopos(arg, idx)
+    empty!(mutations)
+    _children = Vector{VertexType}(undef, 2)
+
+    @no_escape buffer begin
+        store = @alloc(VertexType, nleaves(arg))
+        vstack = CheapStack(store)
+
+        push!(vstack, mrca(arg))
+        while !isempty(vstack)
+            s = pop!(vstack)
+            for d ∈ children!(_children, arg, s, pos)
+                if sequence(arg, d)[idx]
+                    push!(mutations, Edge(s => d))
+                    continue
+                end
+
+                push!(vstack, d)
+            end
+        end
+    end
+
+    mutations
+end
+
+mutation_edges(arg, idx::Int; buffer = default_buffer()) =
+    mutation_edges!(Vector{Edge{VertexType}}(undef, 0), arg, idx, buffer = buffer)
+
+function mutation_edges(arg)
     ret = [Vector{Edge{VertexType}}(undef, 0) for _ ∈ 1:nmarkers(arg)]
-    mutation_edges!(ret, arg, ω)
+    mutation_edges!(ret, arg, Ω(0, ∞))
 end
 
 ##################
