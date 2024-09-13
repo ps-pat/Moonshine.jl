@@ -26,6 +26,16 @@ export Sequence
     data::BitVector
 end
 
+function hash(s::Sequence, h::UInt)
+   ## Assumes that all sequences are of equal length!
+
+    @inbounds @simd for chunk ∈ s.data.chunks
+        h = hash(chunk, h)
+    end
+
+   hash(:Sequence, h)
+end
+
 isempty(seq::Sequence) = isempty(seq.data)
 
 @generated empty(::Sequence) = Sequence()
