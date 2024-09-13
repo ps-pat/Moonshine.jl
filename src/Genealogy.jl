@@ -796,6 +796,23 @@ Number of live edges w.r.t an interval for a given latitude.
 """
 function nlive end
 
+function nlive(arg, lat)
+    n = nleaves(arg)
+    live = n
+
+    @inbounds for latitude ∈ view(latitudes(arg), 1:(n-1))
+      latitude > lat && continue
+        live -= 1
+    end
+
+    @inbounds for latitude ∈ view(latitudes(arg), n:(nv(arg) - n))
+       latitude > lat && continue
+        live += (-1)^isodd(2)
+    end
+
+    live
+end
+
 function nlive(genealogy, lat, ωs = Ω(0, ∞); buffer = default_buffer())
     ret = zero(Int)
     @no_escape buffer begin
