@@ -71,8 +71,8 @@ end
 
 function simplify!(xs::Set{T}; buffer = default_buffer()) where T
     @no_escape buffer begin
-        tmp = @alloc(T, length(xs))
-        tmpidx = firstindex(tmp)
+        tmp_ptr = convert(Ptr{T}, @alloc_ptr(length(xs) * sizeof(T)))
+        tmp_len = 0
 
         while !isempty(xs)
             x = pop!(xs)
@@ -87,13 +87,13 @@ function simplify!(xs::Set{T}; buffer = default_buffer()) where T
             end
 
             if !newint
-                tmp[tmpidx] = x
-                tmpidx += 1
+                tmp_len += 1
+                unsafe_store!(tmp_ptr, x, tmp_len)
             end
         end
 
-        for k ∈ 1:(tmpidx-1)
-            push!(xs, tmp[k])
+        for k ∈ 1:tmp_len
+            push!(xs, unsafe_load(tmp_ptr, k))
         end
     end
 
