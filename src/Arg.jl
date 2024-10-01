@@ -973,7 +973,7 @@ end
     _impedance_C(arg, p, edgesmap)
 
 Return the generator of the cycle space of an ancestral recombination graph
-expanded to include space for a pseudo edge. If `arg` has `r`recombinations and
+expanded to include space for a pseudo edge. If `arg` has `r` recombinations and
 `k` edges, a k x (r + p) matrix is returned. The generator is stored in
 the upper k x r block. Remaining entries are initialized to 0.
 """
