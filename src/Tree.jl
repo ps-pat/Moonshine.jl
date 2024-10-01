@@ -115,6 +115,38 @@ leaves_permutation(tree) = leaves_permutation(tree, leaves(tree))
 
 ## TODO: implement `mutation_edges!` for Tree.
 
+function descendants_leaves!(vertices, tree::Tree, v; buffer = default_buffer())
+    n = nleaves(tree)
+
+    vertices_len = 0
+    _children = sizehint!(Vector{VertexType}(undef, 2), 2)
+
+    @no_escape buffer begin
+        store = @alloc(VertexType, n)
+        stack = CheapStack(store)
+        push!(stack, v)
+
+        while !isempty(stack)
+            x = pop!(stack)
+            if isleaf(tree, x)
+                vertices_len += 1
+                vertices[vertices_len] = x
+                continue
+            end
+
+            for child ∈ children!(_children, tree, x)
+                push!(stack, child)
+            end
+        end
+    end
+
+    resize!(vertices, vertices_len)
+end
+
+descendants_leaves(tree::Tree, v; buffer = default_buffer()) =
+    descendants_leaves!(Vector{VertexType}(undef, nleaves(tree)), tree, v,
+                                           buffer = buffer)
+
 #################
 # Tree Building #
 #################

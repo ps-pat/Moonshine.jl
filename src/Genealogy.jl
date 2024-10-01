@@ -508,7 +508,23 @@ function children end, function children! end,
 function descendants end, function descendants! end
 
 for (fun, graph_method) ∈ Dict(:dads => :inneighbors, :children => :outneighbors)
-    @eval $fun(genealogy, v) = $graph_method(genealogy, v)
+    fun! = Symbol(string(fun) * '!')
+
+    @eval function $fun!(buf, genealogy, v)
+        nchildren = 0
+
+        for u ∈ $graph_method(genealogy, v)
+            nchildren += 1
+            buf[nchildren] = u
+        end
+
+        resize!(buf, nchildren)
+    end
+
+    @eval function $fun(genealogy, v)
+        buf = sizehint!(Vector{VertexType}(undef, 2), 2)
+        $fun!(buf, genealogy, v)
+    end
 end
 
 let funtransorder = Dict(:dads => (:ancestors, (x, y) -> (x, y)),
