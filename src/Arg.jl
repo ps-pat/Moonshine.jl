@@ -915,7 +915,7 @@ end
 function cbasis!(mat, arg::Arg; edgesid = edgesmap(arg))
     fill!(mat, 0)
 
-    r = nrecombinations(arg, dummy = true)
+    r = nrecombinations(arg)
     n = nleaves(arg)
 
     lk = Threads.ReentrantLock()
@@ -1148,7 +1148,7 @@ function _thevenin_impedance_helper!(tree, arg, v1_leaves, v2, C, Z2,
         vqueue = vqueue, visited = visited)
 end
 
-function thevenin!(rng, tree, arg::Arg)
+function thevenin!(tree, arg::Arg; ϵ = 1e-5)
     n = nleaves(arg)
     r = nrecombinations(arg)
 
@@ -1170,56 +1170,105 @@ function thevenin!(rng, tree, arg::Arg)
     vqueue = Queue{VertexType}(ceil(Int, log(nv(arg))))
     visited = Set{VertexType}()
 
-    # ## To limit allocations, we make `C` large enough to handle the worst case
-    # ## scenario. We can pass an appropriate `view` to `impedance!`.
+    ## To limit allocations, we make `C` large enough to handle the worst case
+    ## scenario. We can pass an appropriate `view` to `impedance!`.
     C = _impedance_C(arg, n - 1, edgesid)
     Z2 = _impedance_Z(arg, edgesid, true)
 
     live = collect(leaves(tree))
+
+    ## Distance matrix. Used for clustering
+    dists = impedance_matrix(arg, estack, edgesid)
+    for k ∈ 1:n
+        dists[k, k] = ∞
+    end
+
+    ## Descendant leaves of live vertices.
+    dleaves = Vector{Set{VertexType}}(undef, n)
+    for k ∈ eachindex(dleaves)
+        dleaves[k] = Set(k)
+    end
+
+    ## Impedance between live vertices and their descendant leaves
+    live_impedances = zeros(Float64, n)
+
     for nlive ∈ range(length(live), 2, step = -1)
-        ## Sample first vertex ##
-        v1_idx = sample(rng, 1:nlive)
-        tree.logprob[] -= log(nlive)
-        v1 = live[v1_idx]
-        live[v1_idx] = live[nlive]
-        nlive -= 1
-
-        ## Sample second vertex ##
-        v1_leaves = descendants(tree, v1) ∩ leaves(tree)
-        if isempty(v1_leaves)
-            push!(v1_leaves, v1)
+        ## Find the next coalescing pair ##
+        ii, jj = Tuple(findfirst(!isinf, dists))
+        @inbounds for ii_it ∈ 1:(nlive-1)
+            for jj_it ∈ (ii_it+1):nlive
+                dists[ii_it, jj_it] <= dists[ii, jj] || continue
+                ii, jj = ii_it, jj_it
+            end
         end
 
-        potential = function (v)
-            log(
-                _thevenin_impedance_helper!(tree, arg, v1_leaves, v, C, Z2,
-                    edgesid, estack, vqueue, visited))
+        ## Create coalescence event ##
+        i, j = live[ii], live[jj]
+        k = 2n + 1 - nlive
+
+        add_edge!(tree, k, i)
+        add_edge!(tree, k, j)
+
+        newlat = 0.5 * (dists[ii, jj] +
+            latitude(tree, i) - live_impedances[ii] +
+            latitude(tree, j) - live_impedances[jj])
+        Δlat = newlat - latitude(tree, k - 1)
+        if Δlat < ϵ
+            newlat = latitude(tree, k - 1) + ϵ
+        end
+        latitudes(tree)[k - n] = newlat
+
+        ## Compute descendant leaves ##
+        union!(dleaves[ii], dleaves[jj])
+
+        ## Update `live_impedances` ##
+        live_impedances[ii] = inv(
+            inv(live_impedances[ii] + branchlength(tree, k, i)) +
+            inv(live_impedances[jj] + branchlength(tree, k, j)))
+
+        ## Update live vertices and impedance matrix ##
+        ## Replace i by k.
+        live[ii] = k
+
+        ## Make the distance from any vertex to j infinite.
+        @inbounds for ii_it ∈ 1:(jj-1)
+            dists.data[jj, ii_it] = ∞
+        end
+        @inbounds for ii_it ∈ (jj+1):n
+            dists.data[ii_it, jj] = ∞
         end
 
-        v2_idx, (gumbel_x, gumbel_μ) = _sample_toilet(rng,
-            live[1:nlive], potential, 1)
-        v2 = live[v2_idx]
-        v = 2n - nlive
-        live[v2_idx] = v
-        tree.logprob[] += logpdf(Gumbel(gumbel_μ), gumbel_x)
+        ## Compute distances from k.
+        leaves_ii = dleaves[ii]
+        n_ii = length(leaves_ii)
 
-        ## Compute coalescence latitude ##
-        Δcoal_dist = Exponential(inv(nlive))
-        Δcoal = rand(rng, Δcoal_dist)
-        tree.logprob[] += logpdf(Δcoal_dist, Δcoal)
+        @inbounds for jj_it ∈ 1:(ii-1)
+            isinf(dists.data[ii, jj_it]) && continue
+            leaves_jj_it = dleaves[jj_it]
+            n_jj_it = length(leaves_jj_it)
 
-        ## Add event to tree ##
-        add_edge!(tree, v, v1)
-        add_edge!(tree, v, v2)
+            C_view = view(C, :, 1:(r + n_ii + n_jj_it - 1))
+            dists.data[ii, jj_it] = impedance!(arg, leaves_ii, leaves_jj_it, C_view, Z2,
+                                               edgesmap = edgesid, estack = estack,
+                                               vqueue = vqueue, visited = visited)
+        end
 
-        sequences(tree)[v] = sequence(tree, v1) & sequence(tree, v2)
-        latitudes(tree)[n - nlive] = latitude(tree, v - 1) + Δcoal
+        @inbounds for jj_it ∈ (ii+1):n
+            isinf(dists.data[jj_it, ii]) && continue
+            leaves_jj_it = dleaves[jj_it]
+            n_jj_it = length(leaves_jj_it)
+
+            C_view = view(C, :, 1:(r + n_ii + n_jj_it - 1))
+            dists.data[jj_it, ii] = impedance!(arg, leaves_jj_it, leaves_ii, C_view, Z2,
+                                               edgesmap = edgesid, estack = estack,
+                                               vqueue = vqueue, visited = visited)
+        end
     end
 
     tree
 end
 
-thevenin(rng, arg::Arg) = thevenin!(rng, Tree(sam(arg)), arg)
+thevenin(arg::Arg) = thevenin!(Tree(sam(arg)), arg)
 
 function validate(arg::Arg)
     flag = true
