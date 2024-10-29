@@ -513,37 +513,35 @@ function iterate(iter::EdgesIntervalRec, state = 1)
     e, state + 1
 end
 
-function _sample_cedge(rng, arg, lat, nextidx, window, live_edge::T, taboo, buffer, λ = 0.3) where T
+function _sample_cedge(rng, arg, lat, nextidx, window, live_edge::T, redge, buffer, λ = 0.3) where T
     nextpos = idxtopos(arg, nextidx)
 
     @no_escape buffer begin
-        cedges = @alloc(T, ne(arg))
-        cedges_ptr = firstindex(cedges)
-
-        store = @alloc(T, nv(arg))
-        @inbounds for e ∈ EdgesIntervalRec(arg, window, store, nextpos, nextidx, src(live_edge), lat)
-            ## Might happen if `src(live_edge) == src(taboo)`.
-            src(e) == src(taboo) && continue
-            ## Might happen if `dst(taboo)` is a recombination vertex.
-            dst(e) == dst(taboo) && continue
-
-            cedges[cedges_ptr] = e
-            cedges_ptr += 1
-        end
+        cedges_ptr = convert(Ptr{T}, @alloc_ptr(ne(arg) * sizeof(T)))
+        ws_ptr = convert(Ptr{Float64}, @alloc_ptr(ne(arg) * sizeof(Float64)))
+        len = 0
 
         mask = Sequence(falses(nmarkers(arg)))
         mask.data[range(nextidx + 1, min(nextidx + 11, nmarkers(arg)))] .= true
         x = Sequence(undef, nmarkers(arg))
-        cedges_view = @view cedges[1:(cedges_ptr-1)]
-        ws = @alloc(Float64, length(cedges_view))
-        map!(ws, cedges_view) do e
+
+        store = @alloc(T, nv(arg))
+        @inbounds for e ∈ EdgesIntervalRec(arg, window, store, nextpos, nextidx, src(live_edge), lat)
+            ## Compute distance & weight
             x.data .⊻= x.data
-            x.data .⊻= sequence(arg, dst(taboo)).data .& sequence(arg, dst(e)).data
+            x.data .⊻= sequence(arg, dst(redge)).data .& sequence(arg, dst(e)).data
             x.data .&= mask.data
-            λ * (1 - λ)^(1 - sum(x))
+            w = λ * (1 - λ)^(1 - sum(x))
+
+            ## Store edge and weight
+            len += 1
+            unsafe_store!(cedges_ptr, e, len)
+            unsafe_store!(ws_ptr, w, len)
         end
-        # @info "" lat nextidx window live_edge taboo
-        sample(rng, cedges_view, ProbabilityWeights(ws))
+
+        cedges = unsafe_wrap(Array, cedges_ptr, len)
+        ws = unsafe_wrap(Array, ws_ptr, len)
+        sample(rng, cedges, ProbabilityWeights(ws))
     end
 end
 
