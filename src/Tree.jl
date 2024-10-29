@@ -253,20 +253,6 @@ function build!(rng, tree::Tree;
         Δ = rand(rng, Δcoal_dist)
         tree.logprob[] += logpdf(Δcoal_dist, Δ)
 
-        ## Add some latitude to account for mutations.
-        d12 = distance(Dist, sequence(tree, v1), sequence(tree, v2))
-        if !iszero(d12)
-            Δmut = randexp(rng) / μ
-            for _ ∈ 2:d12
-                Δmut_new = randexp(rng) / μ
-                Δmut_new ≤ Δmut && continue
-                Δmut = Δmut_new
-            end
-            tree.logprob[] += log(μ) + log(d12) +
-                              (d12 - 1) * log(1 - exp(-μ * Δmut)) - μ * Δmut
-            Δ += Δmut
-        end
-
         ## Add coalescence event to tree
         add_edge!(tree, v, v1)
         add_edge!(tree, v, v2)
