@@ -657,30 +657,42 @@ function sample_recombination_unconstrained!(rng, arg, winwidth,
         end
         redges = unsafe_wrap(Array, redges_ptr, redges_len)
 
-        ws_redges = @alloc(Float64, length(redges))
-        map!(e -> branchlength(arg, e), ws_redges, redges)
-        redge = sample(rng, redges, ProbabilityWeights(ws_redges))
+        ws_redges_data = @alloc(Float64, length(redges))
+        map!(e -> branchlength(arg, e), ws_redges_data, redges)
+        ws_redges = ProbabilityWeights(ws_redges_data)
+
+        ## TODO: Maybe the loop is not necessary?
+        breakpoint = 0
+        rlat = 0
+        redge = Edge(0 => 0)
+        valid_redge = false
+        while !valid_redge
+            redge_idx = sample(rng, eachindex(redges), ws_redges)
+            ws_redges[redge_idx] = 0
+            redge = redges[redge_idx]
+
+            ## Sample a breakpoint ##
+            bp_int = (closure ∘ ancestral_intervals)(arg, redge) ∩
+                Ω(0, (last ∘ positions)(arg))
+
+            breakpoint_dist = Uniform(endpoints(bp_int)...)
+            breakpoint = rand(rng, breakpoint_dist)
+            arg.logprob[] += logpdf(breakpoint_dist, breakpoint)
+
+            ## Sample the recombination latitude ##
+            rlat_dist = Uniform(latitude(arg, dst(redge)), latitude(arg, src(redge)))
+            rlat = rand(rng, rlat_dist)
+            arg.logprob[] += logpdf(rlat_dist, rlat)
+
+            ## Cancel the recombination event if it occurs above the mrca of the
+            ## breakpoint.
+            if nlive(arg, rlat, breakpoint, buffer = buffer) > 1
+                valid_redge = true
+            end
+        end
     end
 
-    ## Sample a breakpoint ##
-    bp_int = (closure ∘ ancestral_intervals)(arg, redge) ∩
-        Ω(0, (last ∘ positions)(arg))
-
-    breakpoint_dist = Uniform(endpoints(bp_int)...)
-    breakpoint = rand(rng, breakpoint_dist)
-    arg.logprob[] += logpdf(breakpoint_dist, breakpoint)
-
     window = breakpoint ± winwidth / 2
-
-    ## Sample the recombination latitude ##
-    rlat_dist = Uniform(latitude(arg, dst(redge)), latitude(arg, src(redge)))
-    rlat = rand(rng, rlat_dist)
-    arg.logprob[] += logpdf(rlat_dist, rlat)
-
-    ## Cancel the recombination event if it occurs above the mrca of the
-    ## breakpoint.
-    nlive(arg, rlat, breakpoint, buffer = buffer) <= 1 &&
-    return breakpoint
 
     ## Sample the recoalescence latitude ##
     Δclat_dist = Exponential(inv(nlive(arg, rlat, window, buffer = buffer)))
