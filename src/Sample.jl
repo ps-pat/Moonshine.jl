@@ -23,6 +23,7 @@ struct Sample <: AbstractVector{Sequence}
     Ne::Float64
     sequence_length::Float64
     positions::Vector{Float64}
+    coefs::NTuple{2, Float64}
 end
 
 """
@@ -52,8 +53,17 @@ end
 
 function Sample(H::AbstractVector{Sequence};
                 μ = 0, ρ = 0, Ne = 0, sequence_length = 1, positions = [])
-    positions = _validate_positions(positions, (length ∘ first)(H))
-    Sample(H, μ, ρ, Ne, sequence_length, positions)
+    # positions = _validate_positions(positions, (length ∘ first)(H))
+
+    ## Compute coefficients.
+    n = length(positions)
+    sum_positions = sum(positions)
+
+    m = (12 * (1:n)' * positions) / ((n - 1) * n * (n + 1)) -
+        (6 * sum_positions) / ((n - 1) * n)
+    b = sum_positions / n - (n + 1) * m / 2
+
+    Sample(H, μ, ρ, Ne, sequence_length, positions, (b, m))
 end
 
 function Sample(ts::TreeSequence)
@@ -90,7 +100,8 @@ function Sample(ts::TreeSequence)
         end
     end
 
-    Sample(H, μ, ρ, Ne, sequence_length, positions)
+    Sample(H, μ = μ, ρ = ρ, Ne = Ne,
+           sequence_length = sequence_length, positions = positions)
 end
 
 function Sample(rng::AbstractRNG, n, μ, ρ, Ne, sequence_length)
@@ -163,13 +174,54 @@ nmarkers(sample::Sample, ω::Ω) = length(postoidx(sample, ω))
 idxtopos(sample::Sample, idx) =
     iszero(idx) ? zero(Float64) : getindex(positions(sample), idx)
 
-function postoidx(sample::Sample, pos::Real)
-    ret = 1
-    @inbounds while idxtopos(sample, ret) < pos
-        ret += 1
+function _postoidx_approx(sample, pos)
+    idx = floor(Int, (pos - first(sample.coefs)) / last(sample.coefs))
+    clamp(idx, 1, nmarkers(sample))
+end
+
+function postoidx(sample::Sample, pos::Float64)
+    lidx = (firstindex ∘ positions)(sample)
+    ridx = (lastindex ∘ positions)(sample)
+
+    pos <= (first ∘ positions)(sample) && return lidx
+    pos >= (last ∘ positions)(sample) && return ridx
+
+    ## Initial guess
+    idx = _postoidx_approx(sample, pos)
+
+    ## One iteration of ternary search
+
+    ## One iteration of binary search
+    if idxtopos(sample, idx)< pos
+        lidx = idx
+    elseif idxtopos(sample, idx) > pos
+        ridx = idx
+    else
+        return idx
     end
 
-    ret
+    ridx <= lidx + 1 && return ridx
+
+    ## Interpolation-sequential search
+    idx = lidx + floor(Int, ((pos - idxtopos(sample, lidx)) * (ridx - lidx)) /
+                (idxtopos(sample, ridx) - idxtopos(sample, lidx)))
+    if idxtopos(sample, idx) < pos
+        idx += 1
+        @inbounds while idxtopos(sample, idx) < pos
+            idx += 1
+        end
+    elseif idxtopos(sample, idx) > pos
+        idx -= 1
+       @inbounds while idxtopos(sample, idx) > pos
+            idx -= 1
+        end
+
+        if idxtopos(sample, idx) != pos
+            idx += 1
+        end
+    end
+
+    idx
 end
 
 function postoidx(sample::Sample, ω::Ω)
