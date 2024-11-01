@@ -303,15 +303,23 @@ function _compute_sequence!(arg, v, mask; ωs_buf = Set{Ω}())
     η
 end
 
-function _update_ai!(arg, e, ωs)
+function _update_ai!(vstack, arg, e, ωs, sequence_oldhash)
+    ωs_oldhash = (hash ∘ ancestral_intervals)(arg, e)
+
+    ## Update ancestral interval of e
     if haskey(arg.ancestral_intervals, e)
         empty!(arg.ancestral_intervals[e])
+        while !isempty(ωs)
+            push!(arg.ancestral_intervals[e], pop!(ωs))
+        end
     else
-        arg.ancestral_intervals[e] = Set{Ω}()
+        copy!(arg.ancestral_intervals[e], ωs)
     end
 
-    while !isempty(ωs)
-        push!(arg.ancestral_intervals[e], pop!(ωs))
+    ## Update vstack
+    if (hash ∘ ancestral_intervals)(arg, e) != ωs_oldhash ||
+        (hash ∘ sequence)(arg, dst(e)) != sequence_oldhash
+        push!(vstack, src(e))
     end
 
     ancestral_intervals(arg, e)
@@ -335,39 +343,28 @@ function update_upstream!(arg, v; buffer = default_buffer())
             iszero(dad(arg, v)) && continue
 
             ## Update ancestral intervals of parental edges ##
-            ancestral_intervals!(ωsv, arg, v)
+            ancestral_intervals!(ωsv, arg, v, buffer = buffer)
 
             if isrecombination(arg, v)
                 ## If `v` is a recombination vertex, the ancestral interval of
                 ## one of its parental edge is the intersection of the
                 ## appropriate interval associated with the breakpoint with ωv.
                 bp = recbreakpoint(arg, v)
-                _dads = dads(arg, v)
 
-                for _dad ∈ _dads
-                    e = Edge(_dad => v)
-                    ωs_oldhash = (hash ∘ ancestral_intervals)(arg, e)
+                ## Left dad
+                e = Edge(leftdad(arg, v) => v)
+                _update_ai!(vstack, arg, e, ωsv ∩ Ω(0, bp), sequence_oldhash)
 
-                    ωbp = _dad == rightdad(arg, v) ? Ω(bp, ∞) : Ω(0, bp)
-                    ωs = ωsv ∩ ωbp
-                    _update_ai!(arg, e, ωs)
-                    if (hash ∘ ancestral_intervals)(arg, e) != ωs_oldhash ||
-                        (hash ∘ sequence)(arg, v) != sequence_oldhash
-                        push!(vstack, _dad)
-                    end
-                end
+                ## Right dad
+                e = Edge(rightdad(arg, v) => v)
+                intersect!(ωsv, Ω(bp, ∞))
+                _update_ai!(vstack, arg, e, ωsv, sequence_oldhash)
             else
                 ## If `v` is a coalescence vertex the ancestral interval of its
                 ## parental edges is simply ωv.
-                _dad = dad(arg, v)
-                e = Edge(_dad => v)
-                ωs_oldhash = (hash ∘ ancestral_intervals)(arg, e)
+                e = Edge(dad(arg, v) => v)
 
-                _update_ai!(arg, e, ωsv)
-                if (hash ∘ ancestral_intervals)(arg, e) != ωs_oldhash ||
-                    (hash ∘ sequence)(arg, v) != sequence_oldhash
-                    push!(vstack, _dad)
-                end
+                _update_ai!(vstack, arg, e, ωsv, sequence_oldhash)
             end
         end
     end
