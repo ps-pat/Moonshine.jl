@@ -128,18 +128,13 @@ end
 ancestral_intervals(arg::Arg, e::Edge) =
     get!(() -> Set{Ω}((Ω(0, ∞),)), arg.ancestral_intervals, e)
 
-ancestral_intervals!(ωs, arg::Arg, s::VertexType, d; wipe = true) =
-    ancestral_intervals!(ωs, arg, Edge(s, d); wipe = wipe)
-
-ancestral_intervals(arg::Arg, s::VertexType, d) =
-    ancestral_intervals(arg, Edge(s, d))
-
-function ancestral_intervals!(ωs, arg::Arg, v::VertexType; wipe = true)
+function ancestral_intervals!(ωs, arg::Arg, v::VertexType;
+                              wipe = true, buffer = default_buffer())
     wipe && empty!(ωs)
     isleaf(arg, v) && return push!(ωs, Ω(0, ∞))
 
     for child ∈ children(arg, v)
-        ancestral_intervals!(ωs, arg, v, child, wipe = false)
+        ancestral_intervals!(ωs, arg, Edge(v => child), wipe = false)
     end
 
     simplify!(ωs)
