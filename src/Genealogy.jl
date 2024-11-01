@@ -480,19 +480,17 @@ end
 
 tmrca(genealogy, vs) = latitude(genealogy, mrca(genealogy, vs))
 
-export dads, dads!, children, children!
+export dads, children
 export descendants!, descendants, ancestors!, ancestors
 """
-    dads!(buf, genealogy, v, ω)
     dads(genealogy, v[, ω])
+    children(genealogy, v[, ω])
     ancestors!(buf, genealogy, v[, ω])
     ancestors(genealogy, v[, ω])
-    children!(buf, genealogy, v, ω)
-    children(genealogy, v[, ω])
     descendants!(buf, genealogy, v[, ω])
     descendants(genealogy, v[, ω])
 
-Parents/children/descendants of a vertex. ω can be either
+Parents/children/descendants/ancestors of a vertex. ω can be either
 - a number in [0, 1] representing a position;
 - an Ω representing an interval of positions;
 - a set of Ωs representing multiple interval of positions.
@@ -501,35 +499,21 @@ The following rules are used to decide if an edge `e` is ancestral:
 - If ω is a number, the ancestral interval of `e` must cover ω.
 - If ω is an Ω or a set of Ωs, the intersection of the ancestral
   interval of `e` with ω must be non-empty.
+
+Methods for `children` and `dads` return **references** to the underlying
+adjacency lists. No touchy!
 """
-function dads end, function dads! end,
+function dads end, function children end,
 function ancestors end, function ancestors! end,
-function children end, function children! end,
 function descendants end, function descendants! end
 
-for (fun, graph_method) ∈ Dict(:dads => :inneighbors, :children => :outneighbors)
-    fun! = Symbol(string(fun) * '!')
-
-    @eval function $fun!(buf, genealogy, v)
-        nchildren = 0
-
-        for u ∈ $graph_method(genealogy, v)
-            nchildren += 1
-            buf[nchildren] = u
-        end
-
-        resize!(buf, nchildren)
-    end
-
-    @eval function $fun(genealogy, v)
-        buf = sizehint!(Vector{VertexType}(undef, 2), 2)
-        $fun!(buf, genealogy, v)
-    end
+for (fun, list) ∈ Dict(:dads => Meta.quot(:badjlist),
+                         :children => Meta.quot(:fadjlist))
+    @eval $fun(genealogy, v) = getfield(graph(genealogy), $list)[v]
 end
 
 let funtransorder = Dict(:dads => (:ancestors, (x, y) -> (x, y)),
                          :children => (:descendants, (x, y) -> (y, x))),
-
     typesandfun = ((:Real, in), (:AI, !isdisjoint), (:(Set{<:AI}), !isdisjoint))
     for (fun, (transfun, order)) ∈ funtransorder
         transfun! = Symbol(string(transfun) * '!')
@@ -563,31 +547,26 @@ let funtransorder = Dict(:dads => (:ancestors, (x, y) -> (x, y)),
 
         for (Argtype, testfun) ∈ typesandfun
             ## Parents & children
-            fun! = Symbol(string(fun) * '!')
-
-            @eval function $fun!(buf, genealogy, v, ω::$Argtype)
-                resize!(buf, 2)
-                ptr = firstindex(buf)
-
-                @inbounds for u ∈ $fun(genealogy, v)
+            @eval function $fun(genealogy, v, ω::$Argtype)
+                mask = 0x01
+                neig = $fun(genealogy, v)
+                @inbounds for (k, u) ∈ enumerate(neig)
                     ωs = ancestral_intervals(genealogy, Edge($order(u, v)))
                     $testfun(ω, ωs) || continue
-
-                    buf[ptr] = u
-                    ptr += 1
+                    mask ⊻= UInt8(k)
                 end
 
-                resize!(buf, ptr - 1)
+                a, b = 0x01, 0x01
+                a <<= mask & 0x01
+                mask >>= 0x01
+                b <<= mask & 0x01
+                view(neig, a:b)
             end
-
-            @eval $fun(genealogy, v::T, ω::$Argtype) where T =
-                $fun!(sizehint!(Vector{T}(undef, 2), 2), genealogy, v, ω)
 
             ## Ancestors & descendants
             @eval function $transfun!(buf, genealogy, v, ω::$Argtype)
-                funbuf = sizehint!(Vector{VertexType}(undef, 2), 2)
                 writeptr = readptr = firstindex(buf)
-                @inbounds for u ∈ $fun!(funbuf, genealogy, v, ω)
+                @inbounds for u ∈ $fun(genealogy, v, ω)
                     buf[writeptr] = u
                     writeptr += 1
                 end
@@ -598,7 +577,7 @@ let funtransorder = Dict(:dads => (:ancestors, (x, y) -> (x, y)),
                     (isleaf(genealogy, v) || isroot(genealogy, v)) && continue
 
                     resize!(funbuf, 2)
-                    for u ∈ $fun!(funbuf, genealogy, v, ω)
+                    for u ∈ $fun(genealogy, v, ω)
                         u ∈ view(buf, 1:(writeptr-1)) && continue
                         buf[writeptr] = u
                         writeptr += 1
@@ -730,24 +709,21 @@ struct EdgesInterval{T, I}
     genealogy::T
     ωs::I
     buffer::CheapStack{Edge{VertexType}}
-    funbuffer::Vector{VertexType}
     visited::BitVector
     min_latitude::Float64
 end
 
 function EdgesInterval(genealogy, ωs, store,
                        root = mrca(genealogy), min_latitude = zero(Float64))
-    ##TODO: manage `visited` and `funbuffer` manually.
+    ## TODO: manage `visited` manually.
     eibuffer = CheapStack(store)
-    funbuffer = Vector{VertexType}(undef, 2)
     visited = falses(nrecombinations(genealogy))
 
-    for d ∈ children!(funbuffer, genealogy, root, ωs)
+    for d ∈ children(genealogy, root, ωs)
         push!(eibuffer, Edge(root => d))
     end
 
-    EdgesInterval(genealogy, ωs, eibuffer, funbuffer, visited,
-                  convert(Float64, min_latitude))
+    EdgesInterval(genealogy, ωs, eibuffer, visited, convert(Float64, min_latitude))
 end
 
 IteratorSize(::EdgesInterval) = Base.SizeUnknown()
@@ -760,7 +736,6 @@ function iterate(iter::EdgesInterval, state = 1)
 
     genealogy = iter.genealogy
     ωs = iter.ωs
-    funbuffer = iter.funbuffer
     visited = iter.visited
     min_latitude = iter.min_latitude
     n = nleaves(genealogy)
@@ -773,9 +748,8 @@ function iterate(iter::EdgesInterval, state = 1)
         visited[ridx] = true
     end
 
-    resize!(funbuffer, 2)
     if latitude(genealogy, s) >= min_latitude
-        for d ∈ children!(funbuffer, genealogy, s, ωs)
+        for d ∈ children(genealogy, s, ωs)
             push!(buffer, Edge(s => d))
         end
     end

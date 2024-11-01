@@ -254,7 +254,6 @@ end
 function mutation_edges!(mutations, arg, idx::Int; buffer = default_buffer())
     pos = idxtopos(arg, idx)
     empty!(mutations)
-    _children = Vector{VertexType}(undef, 2)
 
     @no_escape buffer begin
         store = @alloc(VertexType, nleaves(arg))
@@ -263,7 +262,7 @@ function mutation_edges!(mutations, arg, idx::Int; buffer = default_buffer())
         push!(vstack, mrca(arg))
         while !isempty(vstack)
             s = pop!(vstack)
-            for d ∈ children!(_children, arg, s, pos)
+            for d ∈ children(arg, s, pos)
                 if sequence(arg, d)[idx]
                     push!(mutations, Edge(s => d))
                     continue
@@ -441,7 +440,6 @@ struct EdgesIntervalRec{I}
     genealogy::Arg
     ωs::I
     buffer::CheapStack{Edge{VertexType}}
-    funbuffer::Vector{VertexType}
     visited::BitVector
     min_latitude::Float64
     breakpoint::Float64
@@ -452,17 +450,15 @@ function EdgesIntervalRec(arg, ωs, store, breakpoint, nextidx,
                           root = mrca(arg), min_latitude = zero(Float64))
     ##TODO: manage `visited` and `funbuffer` manually.
     eibuffer = CheapStack(store)
-    funbuffer = Vector{VertexType}(undef, 2)
     visited = falses(nrecombinations(arg))
 
-    for d ∈ children!(funbuffer, arg, root, ωs)
+    for d ∈ children(arg, root, ωs)
         e = Edge(root => d)
         (breakpoint ∈ ancestral_intervals(arg, e) && !sequence(arg, dst(e))[nextidx]) && continue
         push!(eibuffer, e)
     end
 
-    EdgesIntervalRec(arg, ωs, eibuffer, funbuffer, visited, min_latitude,
-                     breakpoint, nextidx)
+    EdgesIntervalRec(arg, ωs, eibuffer, visited, min_latitude, breakpoint, nextidx)
 end
 
 IteratorSize(::EdgesIntervalRec) = Base.SizeUnknown()
@@ -475,7 +471,6 @@ function iterate(iter::EdgesIntervalRec, state = 1)
 
     arg = iter.genealogy
     ωs = iter.ωs
-    funbuffer = iter.funbuffer
     visited = iter.visited
     min_latitude = iter.min_latitude
     breakpoint = iter.breakpoint
@@ -489,9 +484,8 @@ function iterate(iter::EdgesIntervalRec, state = 1)
         visited[ridx] = true
     end
 
-    resize!(funbuffer, 2)
     if latitude(arg, s) >= min_latitude
-        for d ∈ children!(funbuffer, arg, s, ωs)
+        for d ∈ children(arg, s, ωs)
             newe = Edge(s => d)
             if breakpoint ∈ ancestral_intervals(arg, newe)
                 sequence(arg, dst(newe))[nextidx] || continue
@@ -555,7 +549,7 @@ function sample_redge(rng, arg, e, nextidx)
         s = d
         d = first(_children)
         total_length += branchlength(arg, Edge(s => d))
-        children!(_children, arg, d, nextpos)
+        _children = children(arg, d, nextpos)
     end
 
     ## Sample recombination location ##
@@ -627,10 +621,9 @@ function sample_recombination_constrained!(rng, arg, breakpoint, winwidth, live_
     news = src(cedge)
     newd = nv(arg)
     if news != src(live_edges[e2])
-        _dads = Vector{VertexType}(undef, 2)
         while sequence(arg, news)[nextidx]
             newd = news
-            news = (first ∘ dads!)(_dads, arg, news, nextpos)
+            news = (first ∘ dads)(arg, news, nextpos)
         end
     end
 

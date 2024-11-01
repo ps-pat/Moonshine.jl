@@ -119,7 +119,6 @@ function descendants_leaves!(vertices, tree::Tree, v; buffer = default_buffer())
     n = nleaves(tree)
 
     vertices_len = 0
-    _children = sizehint!(Vector{VertexType}(undef, 2), 2)
 
     @no_escape buffer begin
         store = @alloc(VertexType, n)
@@ -134,7 +133,7 @@ function descendants_leaves!(vertices, tree::Tree, v; buffer = default_buffer())
                 continue
             end
 
-            for child ∈ children!(_children, tree, x)
+            for child ∈ children(tree, x)
                 push!(stack, child)
             end
         end
