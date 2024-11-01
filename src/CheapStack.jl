@@ -18,7 +18,7 @@ struct CheapStack{T}
 end
 
 CheapStack(store::UnsafeArray{T, 1}) where T =
-    CheapStack{T}(store, Ref(0))
+    CheapStack{T}(store, Ref{Int}(0))
 
 isempty(s::CheapStack) = iszero(s.ptr[])
 
