@@ -535,13 +535,27 @@ function sample_redge(rng, arg, e, nextidx)
     s, d = src(e), dst(e)
 
     ## Total length of valid branches ##
+    valid_child = 0
     _children = children(arg, d, nextpos)
-    filter!(v -> sequence(arg, v)[nextidx], _children)
-    while (isone ∘ length)(_children)
+    @inbounds for child ∈ _children
+        sequence(arg, child)[nextidx] || continue
+        if iszero(valid_child)
+            valid_child = child
+        else
+            valid_child = 0
+        end
+    end
+
+    @inbounds while !iszero(valid_child)
         s = d
-        d = first(_children)
+        d = valid_child
         total_length += branchlength(arg, Edge(s => d))
         _children = children(arg, d, nextpos)
+        if (isone ∘ length)(_children)
+            valid_child = first(_children)
+        else
+            valid_child = 0
+        end
     end
 
     ## Sample recombination location ##
