@@ -738,6 +738,8 @@ function sample_recombination_unconstrained!(rng, arg, winwidth,
 end
 
 function build!(rng, arg::Arg; winwidth = ∞, buffer = default_buffer())
+    pbar = ProgressBar(total = nmarkers(arg), printing_delay = 1, unit = " markers")
+
     ## Unconstrained recombinations ##
     ρ = rec_rate(arg, true)
     nrecs_dist = Poisson(ρ)
@@ -771,7 +773,6 @@ function build!(rng, arg::Arg; winwidth = ∞, buffer = default_buffer())
                 zero(eltype(positions(arg))) : idxtopos(arg, nextidx - 1)
             bp_ubound = idxtopos(arg, nextidx)
 
-
             ## Constrained recombinations ##
             nbp = length(live_edges) - 1
             if nbp > 0
@@ -787,12 +788,15 @@ function build!(rng, arg::Arg; winwidth = ∞, buffer = default_buffer())
                 end
             end
 
+            update(pbar, meidx)
+
             nextidx >= nmarkers(arg) && break
             mutation_edges!(_mutation_edges, arg, Ω(idxtopos(arg, nextidx + 1), ∞),
                             buffer = buffer)
             meidx = findfirst(>(1) ∘ length, _mutation_edges)
             isnothing(meidx) && break
         end
+        update(pbar, nmarkers(arg) - nextidx)
     end
 
     arg
