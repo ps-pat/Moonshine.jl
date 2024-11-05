@@ -559,9 +559,10 @@ function sample_redge(rng, arg, e, nextidx)
     end
 
     ## Sample recombination location ##
-    rlat_dist = Uniform(0, total_length)
+    rlat_dist = Beta(2)
     rlat = rand(rng, rlat_dist)
     arg.logprob[] += logpdf(rlat_dist, rlat)
+    rlat *= total_length
 
     ## Compute recombination edge ##
     rlat -= branchlength(arg, Edge(s => d))
@@ -603,9 +604,12 @@ function sample_recombination_constrained!(rng, arg, breakpoint, winwidth, live_
     ## Sample recombination latitude ##
     rlat_lbound = latitude(arg, dst(redge))
     rlat_ubound = min(latitude(arg, src(redge)), latitude(arg, src(live_edges[e2])))
-    rlat_dist = Uniform(rlat_lbound, rlat_ubound)
+    rlat_span = rlat_ubound - rlat_lbound
+    rlat_dist = Beta(2)
     rlat = rand(rng, rlat_dist)
     arg.logprob[] += logpdf(rlat_dist, rlat)
+    rlat *= rlat_span
+    rlat += rlat_lbound
 
     ## Sample recoalescence edge ##
     cedge = _sample_cedge(rng, arg, rlat, nextidx, window, live_edges[e2],
@@ -614,10 +618,12 @@ function sample_recombination_constrained!(rng, arg, breakpoint, winwidth, live_
     ## Sample recoalescence latitude ##
     clat_lbound = max(rlat, latitude(arg, dst(cedge)))
     clat_ubound = latitude(arg, src(cedge))
-    Δclat_dist = Uniform(clat_lbound - rlat, clat_ubound - rlat)
-    Δclat = rand(rng, Δclat_dist)
-    arg.logprob[] += logpdf(Δclat_dist, Δclat)
-    clat = rlat + Δclat
+    clat_span = clat_ubound - clat_lbound
+    clat_dist = Beta(2)
+    clat = rand(rng, clat_dist)
+    arg.logprob[] += logpdf(clat_dist, clat)
+    clat *= clat_span
+    clat += clat_lbound
 
     ## Add recombination event to the graph ##
     @debug "Constrained recombination event" redge cedge breakpoint rlat clat
@@ -660,7 +666,6 @@ function sample_recombination_unconstrained!(rng, arg, winwidth,
         map!(e -> branchlength(arg, e), ws_redges_data, redges)
         ws_redges = ProbabilityWeights(ws_redges_data)
 
-        ## TODO: Maybe the loop is not necessary?
         breakpoint = 0
         rlat = 0
         redge = Edge(0 => 0)
@@ -679,9 +684,11 @@ function sample_recombination_unconstrained!(rng, arg, winwidth,
             arg.logprob[] += logpdf(breakpoint_dist, breakpoint)
 
             ## Sample the recombination latitude ##
-            rlat_dist = Uniform(latitude(arg, dst(redge)), latitude(arg, src(redge)))
+            rlat_dist = Beta(2)
             rlat = rand(rng, rlat_dist)
             arg.logprob[] += logpdf(rlat_dist, rlat)
+            rlat *= branchlength(arg, redge)
+            rlat += latitude(arg, dst(redge))
 
             ## Cancel the recombination event if it occurs above the mrca of the
             ## breakpoint.
