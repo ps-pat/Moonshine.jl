@@ -143,9 +143,9 @@ union(As::Set{<:AI}, B::Set{<:AI}; buffer = default_buffer()) =
 
 # -- Intersection ------------------------------------------------------
 
-function intersect!(As::Set{<:AI}, B::T; buffer = default_buffer()) where T<:AI
+function intersect!(As::Set{Ta}, B::Tb; buffer = default_buffer()) where {Ta<:AI, Tb<:AI}
     @no_escape buffer begin
-        tmp = @alloc(T, length(As))
+        tmp = @alloc(Ta, length(As))
 
         @inbounds for k ∈ 1:length(As)
             tmp[k] = pop!(As) ∩ B

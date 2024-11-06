@@ -189,8 +189,6 @@ function postoidx(sample::Sample, pos::Float64)
     ## Initial guess
     idx = _postoidx_approx(sample, pos)
 
-    ## One iteration of ternary search
-
     ## One iteration of binary search
     if idxtopos(sample, idx)< pos
         lidx = idx
@@ -228,9 +226,9 @@ function postoidx(sample::Sample, ω::Ω)
     lpos, rpos = endpoints(ω)
 
     lidx = postoidx(sample, lpos)
+    ridx = postoidx(sample, rpos)
 
-    ridx = nmarkers(sample)
-    while ridx > 0 && idxtopos(sample, ridx) >= rpos
+    if idxtopos(sample, ridx) >= rpos
         ridx -= 1
     end
 

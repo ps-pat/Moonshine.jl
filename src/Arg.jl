@@ -12,6 +12,8 @@ using Combinatorics: combinations
 
 using Distributions
 
+using StaticArrays: @SVector
+
 ##################
 # Arg Definition #
 ##################
@@ -277,6 +279,71 @@ mutation_edges(arg, idx::Int; buffer = default_buffer()) =
 function mutation_edges(arg)
     ret = [Vector{Edge{VertexType}}(undef, 0) for _ ∈ 1:nmarkers(arg)]
     mutation_edges!(ret, arg, Ω(0, ∞))
+end
+
+function next_inconsistent_idx(arg, idx;
+                               edges_buffer = SVector{64}([Edge{VertexType}[] for _ ∈ 1:64]),
+                               buffer = default_buffer())
+    empty!.(edges_buffer)
+
+    ωs = Set{Ω}()
+
+    ## The mask restricts search to markers in (original) `idx` and
+    ## `nmarkers(arg)` inclusively.
+    mask = typemax(UInt64)
+    mask <<= idxinchunk(Sequence, idx) - 1
+
+    @inbounds while idx <= nmarkers(arg)
+        ωlbound = idxtopos(arg, idx)
+
+        idx_chunk = chunkidx(Sequence, idx)
+        idx = 64idx_chunk + 1 # idx is now the first marker of the next chunk
+        if idx > nmarkers(arg)
+            mask >>>= 64 - idxinchunk(Sequence, nmarkers(arg))
+            ωubound = ∞
+        else
+            ωubound = idxtopos(arg, idx)
+        end
+
+        base_ω = Ω(ωlbound, ωubound)
+
+        @no_escape buffer begin
+            store = @alloc(Edge{VertexType}, nleaves(arg) + nrecombinations(arg))
+            for e ∈ edges_interval(arg, base_ω, store)
+                h1, h2 = sequences(arg, e)
+                mutations = h1.data.chunks[idx_chunk] ⊻ h2.data.chunks[idx_chunk]
+                mutations &= mask
+
+                ## Avoid unnecessary calls to `simplify!`.
+                empty!(ωs)
+                invoke(union!, NTuple{2, Set}, ωs, ancestral_intervals(arg, e))
+                intersect!(ωs, base_ω, buffer = buffer)
+                for ω ∈ ωs
+                    ω_idx = postoidx(arg, ω)
+                    i = one(UInt64)
+                    i <<= idxinchunk(Sequence, first(ω_idx)) - 1
+                    for _ ∈ ω_idx
+                        if mutations & i > 0
+                            push!(edges_buffer[64 - leading_zeros(i)], e)
+                        end
+                        i <<= 1
+                    end
+                end
+            end
+        end
+
+        idx_mutation_chunk = findfirst(>(1) ∘ length, edges_buffer)
+        if !isnothing(idx_mutation_chunk)
+            mutation_idx = 64(idx_chunk - 1) + idx_mutation_chunk
+            mutation_edges = edges_buffer[idx_mutation_chunk]
+            return mutation_idx, mutation_edges
+        end
+
+        empty!.(edges_buffer)
+        mask = typemax(UInt64)
+    end
+
+    0, Edge{VertexType}[]
 end
 
 ##################
@@ -754,19 +821,12 @@ function build!(rng, arg::Arg; winwidth = ∞, buffer = default_buffer())
 
     ## Constrained recombinations ##
     @no_escape buffer begin
-        _mutation_edges = [
-            sizehint!(Vector{Edge{VertexType}}(undef, 0), nv(arg) ÷ 2) for
-            _ ∈ 1:nmarkers(arg)
-        ]
-        mutation_edges!(_mutation_edges, arg, Ω(first(positions(arg)), ∞),
-                        buffer = buffer)
+        mutation_edges_buffer = @SVector [Edge{VertexType}[] for _ ∈ 1:64]
+        nextidx, live_edges = next_inconsistent_idx(arg, 1,
+                                                    edges_buffer = mutation_edges_buffer,
+                                                    buffer = buffer)
 
-        meidx = findfirst(>(1) ∘ length, _mutation_edges)
-        nextidx = 0
-
-        while !isnothing(meidx)
-            nextidx += meidx
-            live_edges = _mutation_edges[meidx]
+        while !iszero(nextidx)
             nbp = length(live_edges) - 1
 
             bp_lbound = isone(nextidx) ?
@@ -788,16 +848,17 @@ function build!(rng, arg::Arg; winwidth = ∞, buffer = default_buffer())
                 end
             end
 
-            update(pbar, meidx)
-
-            nextidx >= nmarkers(arg) && break
-            mutation_edges!(_mutation_edges, arg, Ω(idxtopos(arg, nextidx + 1), ∞),
-                            buffer = buffer)
-            meidx = findfirst(>(1) ∘ length, _mutation_edges)
-            isnothing(meidx) && break
+            previdx = nextidx
+            nextidx, live_edges = next_inconsistent_idx(arg, nextidx + 1,
+                                                        edges_buffer = mutation_edges_buffer,
+                                                        buffer = buffer)
+            update(pbar, nextidx - previdx)
         end
-        update(pbar, nmarkers(arg) - nextidx)
+
     end
+
+    pbar.current = pbar.total
+    update(pbar, 0, force_print = true)
 
     arg
 end
