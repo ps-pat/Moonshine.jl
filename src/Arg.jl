@@ -394,6 +394,7 @@ function update_upstream!(arg, v; buffer = default_buffer())
 
         mask = Sequence(undef, nmarkers(arg))
         ωsv = Set{Ω}()
+        ωsv2 = Set{Ω}()
 
         while !isempty(vstack)
             v = pop!(vstack)
@@ -407,6 +408,8 @@ function update_upstream!(arg, v; buffer = default_buffer())
             ancestral_intervals!(ωsv, arg, v, buffer = buffer)
 
             if isrecombination(arg, v)
+                invoke(union!, NTuple{2, Set}, ωsv2, ωsv)
+
                 ## If `v` is a recombination vertex, the ancestral interval of
                 ## one of its parental edge is the intersection of the
                 ## appropriate interval associated with the breakpoint with ωv.
@@ -414,12 +417,13 @@ function update_upstream!(arg, v; buffer = default_buffer())
 
                 ## Left dad
                 e = Edge(leftdad(arg, v) => v)
-                _update_ai!(vstack, arg, e, ωsv ∩ Ω(0, bp), sequence_oldhash)
+                intersect!(ωsv, Ω(0, bp), buffer = buffer)
+                _update_ai!(vstack, arg, e, ωsv, sequence_oldhash)
 
                 ## Right dad
                 e = Edge(rightdad(arg, v) => v)
-                intersect!(ωsv, Ω(bp, ∞))
-                _update_ai!(vstack, arg, e, ωsv, sequence_oldhash)
+                intersect!(ωsv2, Ω(bp, ∞), buffer = buffer)
+                _update_ai!(vstack, arg, e, ωsv2, sequence_oldhash)
             else
                 ## If `v` is a coalescence vertex the ancestral interval of its
                 ## parental edges is simply ωv.
