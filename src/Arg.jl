@@ -31,17 +31,22 @@ struct Arg <: AbstractGenealogy
     logprob::Base.RefValue{Float64x2}
 end
 
-Arg(tree::Tree) = Arg(
-    graph(tree),
-    latitudes(tree),
-    Vector{Float64}(undef, 0),
-    Vector{VertexType}(undef, 0),
-    Ref(mrca(tree)),
-    sequences(tree),
-    Dict{Edge{VertexType}, Set{Ω}}(),
-    sam(tree),
-    Ref(prob(tree, logscale = true))
-)
+function Arg(tree::Tree)
+    ancestral_intervals = Dict{Edge{VertexType}, Set{Ω}}()
+    for e ∈ edges(tree)
+        ancestral_intervals[e] = Set((Ω(0, ∞),))
+    end
+
+    Arg(graph(tree),
+        latitudes(tree),
+        Vector{Float64}(undef, 0),
+        Vector{VertexType}(undef, 0),
+        Ref(mrca(tree)),
+        sequences(tree),
+        ancestral_intervals,
+        sam(tree),
+        Ref(prob(tree, logscale = true)))
+end
 
 ###############################
 # AbstractGenealogy Interface #
@@ -117,9 +122,7 @@ end
 function ancestral_intervals!(ωs, arg::Arg, e::Edge; wipe = true)
     wipe && empty!(ωs)
 
-    haskey(arg.ancestral_intervals, e) || return push!(ωs, Ω(0, ∞))
-
-    @inline for ω ∈ arg.ancestral_intervals[e]
+    for ω ∈ arg.ancestral_intervals[e]
         push!(ωs, ω)
     end
 
@@ -369,13 +372,9 @@ function _update_ai!(vstack, arg, e, ωs, sequence_oldhash)
     ωs_oldhash = (hash ∘ ancestral_intervals)(arg, e)
 
     ## Update ancestral interval of e
-    if haskey(arg.ancestral_intervals, e)
-        empty!(arg.ancestral_intervals[e])
-        while !isempty(ωs)
-            push!(arg.ancestral_intervals[e], pop!(ωs))
-        end
-    else
-        copy!(arg.ancestral_intervals[e], ωs)
+    empty!(arg.ancestral_intervals[e])
+    while !isempty(ωs)
+        push!(arg.ancestral_intervals[e], pop!(ωs))
     end
 
     ## Update vstack
