@@ -250,10 +250,10 @@ for (fun, op) ∈ Dict(:leftendpoint => :<, :rightendpoint => :>)
 end
 
 function endpoints(As::Set{<:AI})
-    ω, ωs = Iterators.peel(As)
+    ω = pop!(As)
     left, right = endpoints(ω)
 
-    for ω ∈ ωs
+    for ω ∈ As
         newleft, newright = endpoints(ω)
 
         if newleft < left
@@ -266,6 +266,7 @@ function endpoints(As::Set{<:AI})
 
     end
 
+    push!(As, ω)
     left, right
 end
 
