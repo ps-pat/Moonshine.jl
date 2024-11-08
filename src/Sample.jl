@@ -52,7 +52,9 @@ function _validate_positions(positions, nmarkers)
 end
 
 function Sample(H::AbstractVector{Sequence};
-                μ = 0, ρ = 0, Ne = 0, sequence_length = 1, positions = [])
+                μ = 1e-8, ρ = 0, Ne = 10_000,
+                sequence_length = length(H) + 1,
+                positions = 1:length(H))
     # positions = _validate_positions(positions, (length ∘ first)(H))
 
     ## Compute coefficients.
