@@ -14,6 +14,8 @@ using Distributions
 
 using StaticArrays: @SVector
 
+import Term
+
 ##################
 # Arg Definition #
 ##################
@@ -808,7 +810,15 @@ function sample_recombination_unconstrained!(rng, arg, winwidth,
 end
 
 function build!(rng, arg::Arg; winwidth = ∞, buffer = default_buffer())
-    pbar = ProgressBar(total = nmarkers(arg), printing_delay = 1, unit = " markers")
+    pbar = Progress.ProgressBar(expand = true,
+                                columns = [Progress.DescriptionColumn,
+                                Progress.SeparatorColumn,
+                                Progress.ProgressColumn,
+                                Progress.SeparatorColumn,
+                                Progress.CompletedColumn,
+                                MarkerColumn,
+                                Progress.ElapsedColumn,
+                                Progress.ETAColumn])
 
     ## Unconstrained recombinations ##
     ρ = rec_rate(arg, true)
@@ -816,54 +826,78 @@ function build!(rng, arg::Arg; winwidth = ∞, buffer = default_buffer())
     nrecs = rand(rng, nrecs_dist)
     arg.logprob[] += logpdf(nrecs_dist, nrecs)
 
-    @no_escape buffer begin
-        for _ ∈ 1:nrecs
-            sample_recombination_unconstrained!(rng, arg, winwidth, buffer)
-        end
-    end
+    Progress.with(pbar) do
+        job = Progress.addjob!(pbar,
+                               N = nrecs + nmarkers(arg),
+                               description = "Building ARG")
+        @no_escape buffer begin
+            for k ∈ 1:nrecs
+                sample_recombination_unconstrained!(rng, arg, winwidth, buffer)
 
-    ## Constrained recombinations ##
-    @no_escape buffer begin
-        mutation_edges_buffer = @SVector [Edge{VertexType}[] for _ ∈ 1:64]
-        nextidx, live_edges = next_inconsistent_idx(arg, 1,
-                                                    edges_buffer = mutation_edges_buffer,
-                                                    buffer = buffer)
-
-        while !iszero(nextidx)
-            nbp = length(live_edges) - 1
-
-            bp_lbound = isone(nextidx) ?
-                zero(eltype(positions(arg))) : idxtopos(arg, nextidx - 1)
-            bp_ubound = idxtopos(arg, nextidx)
-
-            ## Constrained recombinations ##
-            nbp = length(live_edges) - 1
-            if nbp > 0
-                bp_dist = Uniform(bp_lbound, bp_ubound)
-                ## TODO: call to `sort` is not optimized for some reason.
-                breakpoints = (sort ∘ rand)(rng, bp_dist, nbp)
-                arg.logprob[] -= nbp * log(bp_ubound - bp_lbound)
-
-                for breakpoint ∈ breakpoints
-                    sample_recombination_constrained!(rng, arg, breakpoint,
-                                                      winwidth, live_edges,
-                                                      buffer = buffer)
-                end
+                iszero(k % 10) && yield()
+                Progress.update!(job)
             end
+        end
 
-            previdx = nextidx
-            nextidx, live_edges = next_inconsistent_idx(arg, nextidx + 1,
+        ## Constrained recombinations ##
+        @no_escape buffer begin
+            mutation_edges_buffer = @SVector [Edge{VertexType}[] for _ ∈ 1:64]
+            nextidx, live_edges = next_inconsistent_idx(arg, 1,
                                                         edges_buffer = mutation_edges_buffer,
                                                         buffer = buffer)
-            update(pbar, nextidx - previdx)
-        end
 
+            while !iszero(nextidx)
+                nbp = length(live_edges) - 1
+
+                bp_lbound = isone(nextidx) ?
+                    zero(eltype(positions(arg))) : idxtopos(arg, nextidx - 1)
+                bp_ubound = idxtopos(arg, nextidx)
+
+                nbp = length(live_edges) - 1
+                if nbp > 0
+                    bp_dist = Uniform(bp_lbound, bp_ubound)
+                    ## TODO: call to `sort` is not optimized for some reason.
+                    breakpoints = (sort ∘ rand)(rng, bp_dist, nbp)
+                    arg.logprob[] -= nbp * log(bp_ubound - bp_lbound)
+
+                    for breakpoint ∈ breakpoints
+                        sample_recombination_constrained!(rng, arg, breakpoint,
+                                                          winwidth, live_edges,
+                                                          buffer = buffer)
+                    end
+                end
+
+                previdx = nextidx
+                nextidx, live_edges = next_inconsistent_idx(arg, nextidx + 1,
+                                                            edges_buffer = mutation_edges_buffer,
+                                                            buffer = buffer)
+                yield()
+                Progress.update!(job, i = nextidx - previdx)
+            end
+        end
     end
 
-    pbar.current = pbar.total
-    update(pbar, 0, force_print = true)
-
     arg
+end
+
+#          +----------------------------------------------------------+
+#          |                     Pretty printing                      |
+#          +-----------------------------------------------------------+
+
+# -- Progress Bar ------------------------------------------------------
+struct MarkerColumn <: Progress.AbstractColumn
+    measure::Term.Measure
+    segment::Term.Segment
+
+    function MarkerColumn(job::Progress.ProgressJob;
+                          style::String = Term.TERM_THEME[].text_accent)
+        segment = Term.Segment("markers", style)
+        new(segment.measure, segment)
+    end
+end
+
+function Progress.update!(col::MarkerColumn, color::String, args...)::String
+    col.segment.text
 end
 
 ###########

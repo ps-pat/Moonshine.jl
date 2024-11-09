@@ -17,7 +17,7 @@ using Bumper
 
 using AutoHashEquals
 
-using ProgressBars
+import Term.Progress
 
 ## Some constants.
 const VertexType = Int
