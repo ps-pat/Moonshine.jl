@@ -50,6 +50,12 @@ function Arg(tree::Tree)
         Ref(prob(tree, logscale = true)))
 end
 
+function Arg(rng::AbstractRNG, n, μ, ρ, Ne, sequence_length)
+    tree = Tree(rng, n, μ, ρ, Ne, sequence_length)
+    build!(rng, tree)
+    Arg(tree)
+end
+
 ###############################
 # AbstractGenealogy Interface #
 ###############################
