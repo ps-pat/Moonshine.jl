@@ -37,6 +37,11 @@ function Tree(sample::Sample)
          sample, Ref(zero(Float64x2)))
 end
 
+function Tree(rng::AbstractRNG, n, μ, ρ, Ne, sequence_length)
+    sample = Sample(rng, n, μ, ρ, Ne, sequence_length)
+    Tree(sample)
+end
+
 ###############################
 # AbstractGenealogy Interface #
 ###############################

@@ -1,12 +1,6 @@
 for G ∈ (:Tree, :Arg)
     Gargname = Symbol(lowercase(string(G)))
 
-    ## Random constructors.
-    @eval function $G(rng::AbstractRNG, n, μ, ρ, Ne, sequence_length)
-        sample = Sample(rng, n, μ, ρ, Ne, sequence_length)
-        $G(sample)
-    end
-
     ## Methods required by AbstractGenealogy interface that are only
     ## getters.
     for field ∈ (:(:graph), :(:latitudes), :(:sequences))
