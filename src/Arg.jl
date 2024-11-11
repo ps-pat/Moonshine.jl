@@ -360,9 +360,8 @@ end
 ##################
 
 function _compute_sequence!(arg, v, mask; ωs_buf = Set{Ω}())
+    ## This function assumes that every marker is set to 1!
     η = sequence(arg, v)
-    ## Set every markers to 1 ##
-    η.data.chunks .⊻= .~η.data.chunks
 
     @inbounds for child ∈ children(arg, v)
         ancestral_mask!(mask, arg, Edge(v, child), ωs_buf = ωs_buf)
@@ -406,7 +405,9 @@ function update_upstream!(arg, v; buffer = default_buffer())
             v = pop!(vstack)
 
             ## Update sequence of `v` ##
-            sequence_oldhash = (hash ∘ sequence)(arg, v)
+            h = sequence(arg, v)
+            sequence_oldhash = hash(h)
+            h.data.chunks .⊻= .~h.data.chunks
             _compute_sequence!(arg, v, mask, ωs_buf = ωsv)
             iszero(dad(arg, v)) && continue
 
