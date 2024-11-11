@@ -373,8 +373,8 @@ function _compute_sequence!(arg, v, mask; ωs_buf = Set{Ω}())
     η
 end
 
-function _update_ai!(vstack, arg, e, ωs, sequence_oldhash)
-    ωs_oldhash = (hash ∘ ancestral_intervals)(arg, e)
+function _update_ai!(vstack, arg, e, ωs, oldhash)
+    oldhash = hash(oldhash, (hash ∘ ancestral_intervals)(arg, e))
 
     ## Update ancestral interval of e
     empty!(arg.ancestral_intervals[e])
@@ -383,8 +383,9 @@ function _update_ai!(vstack, arg, e, ωs, sequence_oldhash)
     end
 
     ## Update vstack
-    if (hash ∘ ancestral_intervals)(arg, e) != ωs_oldhash ||
-        (hash ∘ sequence)(arg, dst(e)) != sequence_oldhash
+    newhash = hash((hash ∘ sequence)(arg, dst(e)),
+                   (hash ∘ ancestral_intervals)(arg ,e))
+    if (oldhash) != newhash
         push!(vstack, src(e))
     end
 
@@ -406,7 +407,7 @@ function update_upstream!(arg, v; buffer = default_buffer())
 
             ## Update sequence of `v` ##
             h = sequence(arg, v)
-            sequence_oldhash = hash(h)
+            oldhash = hash(h)
             h.data.chunks .⊻= .~h.data.chunks
             _compute_sequence!(arg, v, mask, ωs_buf = ωsv)
             iszero(dad(arg, v)) && continue
@@ -425,18 +426,18 @@ function update_upstream!(arg, v; buffer = default_buffer())
                 ## Left dad
                 e = Edge(leftdad(arg, v) => v)
                 intersect!(ωsv, Ω(0, bp), buffer = buffer)
-                _update_ai!(vstack, arg, e, ωsv, sequence_oldhash)
+                _update_ai!(vstack, arg, e, ωsv, oldhash)
 
                 ## Right dad
                 e = Edge(rightdad(arg, v) => v)
                 intersect!(ωsv2, Ω(bp, ∞), buffer = buffer)
-                _update_ai!(vstack, arg, e, ωsv2, sequence_oldhash)
+                _update_ai!(vstack, arg, e, ωsv2, oldhash)
             else
                 ## If `v` is a coalescence vertex the ancestral interval of its
                 ## parental edges is simply ωv.
                 e = Edge(dad(arg, v) => v)
 
-                _update_ai!(vstack, arg, e, ωsv, sequence_oldhash)
+                _update_ai!(vstack, arg, e, ωsv, oldhash)
             end
         end
     end
