@@ -462,8 +462,9 @@ function recombine!(arg, redge, cedge, breakpoint, rlat, clat;
 
     ## Replace recombination edge ##
     ωr = ancestral_intervals(arg, redge)
-    ωr_left = intersect(ωr, Ω(0, breakpoint), buffer = buffer)
-    ωr_right = intersect(ωr, Ω(breakpoint, ∞), buffer = buffer)
+    ωr_left, ωr_right = copy(ωr), copy(ωr)
+    intersect!(ωr_left, Ω(0, breakpoint), buffer = buffer)
+    intersect!(ωr_right, Ω(breakpoint, ∞), buffer = buffer)
 
     add_edge!(arg, Edge(rvertex, dst(redge)), ωr)
     add_edge!(arg, Edge(src(redge), rvertex), ωr_left)
