@@ -845,7 +845,6 @@ function build!(rng, arg::Arg; winwidth = ∞, buffer = default_buffer())
             nbp = length(live_edges) - 1
             if nbp > 0
                 bp_dist = Uniform(bp_lbound, bp_ubound)
-                ## TODO: call to `sort` is not optimized for some reason.
                 breakpoints = (sort ∘ rand)(rng, bp_dist, nbp)
                 arg.logprob[] -= nbp * log(bp_ubound - bp_lbound)
 
