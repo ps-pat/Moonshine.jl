@@ -17,8 +17,6 @@ using Bumper
 
 using AutoHashEquals
 
-using ProgressLogging
-
 ## Some constants.
 const VertexType = Int
 const ∞ = Inf
