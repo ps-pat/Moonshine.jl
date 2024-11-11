@@ -820,15 +820,14 @@ function build!(rng, arg::Arg; winwidth = ∞, buffer = default_buffer())
     nrecs = rand(rng, nrecs_dist)
     arg.logprob[] += logpdf(nrecs_dist, nrecs)
 
-    @withprogress name = "unconstrained recombinations" @no_escape buffer begin
+    @no_escape buffer begin
         for k ∈ 1:nrecs
             sample_recombination_unconstrained!(rng, arg, winwidth, buffer)
-            @logprogress k / nrecs
         end
     end
 
     ## Constrained recombinations ##
-    @withprogress name = "constrained recombinations" @no_escape buffer begin
+    @no_escape buffer begin
         mutation_edges_buffer = @SVector [Edge{VertexType}[] for _ ∈ 1:64]
         nextidx, live_edges = next_inconsistent_idx(arg, 1,
                                                     edges_buffer = mutation_edges_buffer,
@@ -859,7 +858,6 @@ function build!(rng, arg::Arg; winwidth = ∞, buffer = default_buffer())
             nextidx, live_edges = next_inconsistent_idx(arg, nextidx + 1,
                                                         edges_buffer = mutation_edges_buffer,
                                                         buffer = buffer)
-            @logprogress nextidx / nmarkers(arg)
         end
     end
 
