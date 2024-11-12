@@ -497,7 +497,6 @@ function recombine!(arg, redge, cedge, breakpoint, rlat, clat;
 
     ## Update sequences and ancetral intervals ##
     update_upstream!(arg, src(redge), buffer = buffer)
-    # root_recombination || update_upstream!(arg, src(cedge), buffer = buffer)
     update_upstream!(arg, src(cedge), buffer = buffer)
 
     push!(arg.rightdads, cvertex)
