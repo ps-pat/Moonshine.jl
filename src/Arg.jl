@@ -841,17 +841,14 @@ function build!(rng, arg::Arg, ρ; winwidth = ∞, buffer = default_buffer())
                 zero(eltype(positions(arg))) : idxtopos(arg, nextidx - 1)
             bp_ubound = idxtopos(arg, nextidx)
 
-            nbp = length(live_edges) - 1
-            if nbp > 0
-                bp_dist = Uniform(bp_lbound, bp_ubound)
-                breakpoints = (sort ∘ rand)(rng, bp_dist, nbp)
-                arg.logprob[] -= nbp * log(bp_ubound - bp_lbound)
+            bp_dist = Uniform(bp_lbound, bp_ubound)
+            breakpoints = (sort ∘ rand)(rng, bp_dist, nbp)
+            arg.logprob[] -= nbp * log(bp_ubound - bp_lbound)
 
-                for breakpoint ∈ breakpoints
-                    sample_recombination_constrained!(rng, arg, breakpoint,
-                                                      winwidth, live_edges,
-                                                      buffer = buffer)
-                end
+            for breakpoint ∈ breakpoints
+                sample_recombination_constrained!(rng, arg, breakpoint,
+                                                  winwidth, live_edges,
+                                                  buffer = buffer)
             end
 
             previdx = nextidx
