@@ -22,7 +22,6 @@ export Arg
 struct Arg <: AbstractGenealogy
     graph::SimpleDiGraph{VertexType}
     latitudes::Vector{Float64}
-    breakpoints::Vector{Float64}
     rightdads::Vector{VertexType}
     recombination_mask::Vector{Set{Ω}}
     mrca::Base.RefValue{VertexType}
@@ -40,7 +39,6 @@ function Arg(tree::Tree)
 
     Arg(graph(tree),
         latitudes(tree),
-        Vector{Float64}(undef, 0),
         Vector{VertexType}(undef, 0),
         Vector{Set{Ω}}(undef, 0),
         Ref(mrca(tree)),
@@ -72,18 +70,12 @@ end
 
 isrecombination(arg::Arg, v) = isrecombination(arg, v, nleaves(arg))
 
-function recombinations(arg::Arg; dummy = false)
-    isempty(arg.breakpoints) && return StepRange{Int, Int}(0, 1, 0)
+function recombinations(arg::Arg)
+    isempty(arg.rightdads) && return StepRange{Int, Int}(0, 1, 0)
 
     start = 2nleaves(arg)
     step = 2
     stop = nv(arg)
-
-    if !dummy
-        while isinf(recbreakpoint(arg, start))
-            start += step
-        end
-    end
 
     StepRange{Int, Int}(start, step, stop)
 end
@@ -166,15 +158,6 @@ ancestral_mask(arg::Arg, x::Union{VertexType, Edge{VertexType}};
 
 recidx(arg, v) = (v - 2(nleaves(arg) - 1)) ÷ 2
 
-export recbreakpoint
-"""
-    recbreakpoint(arg, v)
-
-Returns the breakpoint associated with vertex `v`. If `v` is not a
-recombination vertex, returns ∞.
-"""
-function recbreakpoint end
-
 export rightdad
 """
     rightdad(arg, v)
@@ -184,15 +167,10 @@ Returns the parent of recombination vertex `v` ancestral for material
 to the left/right of the breakpoint associated with `v`. If `v` is not a
 recombination vertex, returns 0.
 """
-function rightdad end
-
-for (fun, (def, field)) ∈ Dict(:recbreakpoint => (:∞, Meta.quot(:breakpoints)),
-                                 :rightdad => (:(zero(VertexType)), Meta.quot(:rightdads)))
-    @eval function $fun(arg::Arg, v)
-        ret = $def
-        isrecombination(arg, v) || return ret
-        getfield(arg, $field)[recidx(arg, v)]
-    end
+function rightdad(arg::Arg, v)
+    ret = zero(VertexType)
+    isrecombination(arg, v) || return ret
+    arg.rightdads[recidx(arg, v)]
 end
 
 function leftdad(arg, v)
@@ -507,7 +485,6 @@ function recombine!(arg, redge, cedge, breakpoint, rlat, clat;
     push!(arg.recombination_mask, Set((Ω(0, breakpoint),)))
     push!(arg.recombination_mask, Set((Ω(breakpoint, ∞),)))
     push!(arg.rightdads, cvertex)
-    push!(arg.breakpoints, breakpoint)
     arg
 end
 
