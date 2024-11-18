@@ -815,9 +815,8 @@ function sample_recombination_unconstrained!(rng, arg, winwidth,
     breakpoint
 end
 
-function build!(rng, arg::Arg; winwidth = ∞, buffer = default_buffer())
+function build!(rng, arg::Arg, ρ; winwidth = ∞, buffer = default_buffer())
     ## Unconstrained recombinations ##
-    ρ = rec_rate(arg, true)
     nrecs_dist = Poisson(ρ)
     nrecs = rand(rng, nrecs_dist)
     arg.logprob[] += logpdf(nrecs_dist, nrecs)
