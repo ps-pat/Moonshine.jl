@@ -24,6 +24,7 @@ struct Arg <: AbstractGenealogy
     latitudes::Vector{Float64}
     breakpoints::Vector{Float64}
     rightdads::Vector{VertexType}
+    recombination_mask::Vector{Set{Ω}}
     mrca::Base.RefValue{VertexType}
     sequences::Vector{Sequence}
     ancestral_intervals::Dict{Edge{VertexType}, Set{Ω}}
@@ -41,6 +42,7 @@ function Arg(tree::Tree)
         latitudes(tree),
         Vector{Float64}(undef, 0),
         Vector{VertexType}(undef, 0),
+        Vector{Set{Ω}}(undef, 0),
         Ref(mrca(tree)),
         sequences(tree),
         ancestral_intervals,
@@ -202,6 +204,15 @@ function leftdad(arg, v)
     end
 
     r
+end
+
+function ancestral_mask(e::Edge, arg)
+    s, d = src(e), dst(e)
+    isrecombination(arg, d) || return Set((Ω(0, ∞),))
+
+    inc = s == rightdad(arg, d)
+    idx = 2recidx(arg, d) - 1 + inc
+    arg.recombination_mask[idx]
 end
 
 #######
@@ -399,8 +410,7 @@ function update_upstream!(arg, v; buffer = default_buffer())
         push!(vstack, v)
 
         mask = Sequence(undef, nmarkers(arg))
-        ωsv = Set{Ω}()
-        ωsv2 = Set{Ω}()
+        ωsv = (Set{Ω}(), Set{Ω}())
 
         while !isempty(vstack)
             v = pop!(vstack)
@@ -409,35 +419,30 @@ function update_upstream!(arg, v; buffer = default_buffer())
             h = sequence(arg, v)
             oldhash = hash(h)
             h.data.chunks .⊻= .~h.data.chunks
-            _compute_sequence!(arg, v, mask, ωs_buf = ωsv)
+            _compute_sequence!(arg, v, mask, ωs_buf = first(ωsv))
             iszero(dad(arg, v)) && continue
 
             ## Update ancestral intervals of parental edges ##
-            ancestral_intervals!(ωsv, arg, v, buffer = buffer)
+            ancestral_intervals!(first(ωsv), arg, v, buffer = buffer)
 
             if isrecombination(arg, v)
-                invoke(union!, NTuple{2, Set}, ωsv2, ωsv)
+                invoke(union!, NTuple{2, Set}, last(ωsv), first(ωsv))
 
                 ## If `v` is a recombination vertex, the ancestral interval of
                 ## one of its parental edge is the intersection of the
                 ## appropriate interval associated with the breakpoint with ωv.
-                bp = recbreakpoint(arg, v)
 
-                ## Left dad
-                e = Edge(leftdad(arg, v) => v)
-                intersect!(ωsv, Ω(0, bp), buffer = buffer)
-                _update_ai!(vstack, arg, e, ωsv, oldhash)
-
-                ## Right dad
-                e = Edge(rightdad(arg, v) => v)
-                intersect!(ωsv2, Ω(bp, ∞), buffer = buffer)
-                _update_ai!(vstack, arg, e, ωsv2, oldhash)
+                @inbounds for (k, dad) ∈ enumerate(dads(arg, v))
+                    e = Edge(dad => v)
+                    intersect!(ωsv[k], ancestral_mask(e, arg), buffer = buffer)
+                    _update_ai!(vstack, arg, e, ωsv[k], oldhash)
+                end
             else
                 ## If `v` is a coalescence vertex the ancestral interval of its
                 ## parental edges is simply ωv.
                 e = Edge(dad(arg, v) => v)
 
-                _update_ai!(vstack, arg, e, ωsv, oldhash)
+                _update_ai!(vstack, arg, e, first(ωsv), oldhash)
             end
         end
     end
@@ -499,6 +504,8 @@ function recombine!(arg, redge, cedge, breakpoint, rlat, clat;
     update_upstream!(arg, src(redge), buffer = buffer)
     update_upstream!(arg, src(cedge), buffer = buffer)
 
+    push!(arg.recombination_mask, Set((Ω(0, breakpoint),)))
+    push!(arg.recombination_mask, Set((Ω(breakpoint, ∞),)))
     push!(arg.rightdads, cvertex)
     push!(arg.breakpoints, breakpoint)
     arg
@@ -562,10 +569,7 @@ function iterate(iter::EdgesIntervalRec, state = 1)
             end
 
             if isrecombination(arg, d)
-                breakpoint < recbreakpoint(arg, d) && s == rightdad(arg, d) &&
-                continue
-                breakpoint >= recbreakpoint(arg, d) && s == leftdad(arg, d) &&
-                continue
+                breakpoint ∈ ancestral_mask(Edge(s => d), arg) || continue
             end
 
             push!(buffer, newe)
@@ -1413,8 +1417,7 @@ function validate(arg::Arg)
 
         ai_child = ancestral_intervals(arg, Edge(v => child(arg, v)))
         ai_right = ancestral_intervals(arg, Edge(rightdad(arg, v) => v))
-        leftparent = dads(arg, v)[findfirst(!=(rightdad(arg, v)), dads(arg, v))]
-        ai_left = ancestral_intervals(arg, Edge(leftparent => v))
+        ai_left = ancestral_intervals(arg, Edge(leftdad(arg ,v) => v))
         if ai_child != ai_left ∪ ai_right
             msg = "Recombination vertex whose children edge's ancestral" *
                 " interval is not equal to the union of it parental edges's" *
