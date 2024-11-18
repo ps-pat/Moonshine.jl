@@ -268,6 +268,6 @@ for (f, symb) ∈ Dict(:mut_rate => :(:μ), :rec_rate => :(:ρ))
     @eval function $f(sample::Sample, scaled = true)
         ret = getfield(sample, $symb)
         scaled || return ret
-        ret * sample.Ne * sample.sequence_length
+        4 * ret * sample.Ne * sample.sequence_length
     end
 end
