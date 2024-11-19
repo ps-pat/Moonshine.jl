@@ -488,6 +488,17 @@ function recombine!(arg, redge, cedge, breakpoint, rlat, clat;
     arg
 end
 
+function extend_recombination!(arg, edge, otherdad, breakpoint; buffer = default_buffer())
+    s, d = src(edge), dst(edge)
+
+    union!(ancestral_mask(edge, arg), Ω(breakpoint, ∞), buffer = buffer)
+
+    edge = Edge(otherdad => d)
+    intersect!(ancestral_mask(edge, arg), Ω(0, breakpoint), buffer = buffer)
+
+    update_upstream!(arg, d, buffer = buffer)
+end
+
 # -- Edges Iterator ----------------------------------------------------
 
 struct EdgesIntervalRec{I}
@@ -674,23 +685,31 @@ function sample_recombination_constrained!(rng, arg, breakpoint, winwidth, live_
     cedge = _sample_cedge(rng, arg, rlat, nextidx, window, live_edges[e2],
                           redge, buffer)
 
-    ## Sample recoalescence latitude ##
-    clat_lbound = max(rlat, latitude(arg, dst(cedge)))
-    clat_ubound = latitude(arg, src(cedge))
-    clat_span = clat_ubound - clat_lbound
-    clat_dist = Beta(2)
-    clat = rand(rng, clat_dist)
-    arg.logprob[] += logpdf(clat_dist, clat)
-    clat *= clat_span
-    clat += clat_lbound
+    if  src(cedge) ∈ dads(arg, dst(redge)) && isrecombination(arg, dst(redge))
+        extend_recombination!(arg, Edge(src(cedge) => dst(redge)), src(redge),
+                              breakpoint, buffer = buffer)
 
-    ## Add recombination event to the graph ##
-    @debug "Constrained recombination event" redge cedge breakpoint rlat clat
-    recombine!(arg, redge, cedge, breakpoint, rlat, clat, buffer = buffer)
+        newd = dst(cedge)
+    else
+        ## Sample recoalescence latitude ##
+        clat_lbound = max(rlat, latitude(arg, dst(cedge)))
+        clat_ubound = latitude(arg, src(cedge))
+        clat_span = clat_ubound - clat_lbound
+        clat_dist = Beta(2)
+        clat = rand(rng, clat_dist)
+        arg.logprob[] += logpdf(clat_dist, clat)
+        clat *= clat_span
+        clat += clat_lbound
+
+        ## Add recombination event to the graph ##
+        @debug "Constrained recombination event" redge cedge breakpoint rlat clat
+        recombine!(arg, redge, cedge, breakpoint, rlat, clat, buffer = buffer)
+
+        newd = nv(arg)
+    end
 
     ## Compute new live edge ##
     news = src(cedge)
-    newd = nv(arg)
     if news != src(live_edges[e2])
         while sequence(arg, news)[nextidx]
             newd = news
