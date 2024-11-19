@@ -129,12 +129,9 @@ function ancestral_intervals!(ωs, arg::Arg, e::Edge; wipe = true)
     ωs
 end
 
-## Use this `get!` method so the interval doesn't get constructed every call.
-ancestral_intervals(arg::Arg, e::Edge) =
-    get!(() -> Set{Ω}((Ω(0, ∞),)), arg.ancestral_intervals, e)
+ancestral_intervals(arg::Arg, e::Edge) = arg.ancestral_intervals[e]
 
-function ancestral_intervals!(ωs, arg::Arg, v::VertexType;
-                              wipe = true, buffer = default_buffer())
+function ancestral_intervals!(ωs, arg::Arg, v::VertexType; wipe = true)
     wipe && empty!(ωs)
     isleaf(arg, v) && return push!(ωs, Ω(0, ∞))
 
@@ -147,14 +144,34 @@ end
 
 ancestral_intervals(arg::Arg, v::VertexType) = ancestral_intervals!(Set{Ω}(), arg, v)
 
-ancestral_mask!(η, arg::Arg, x::Union{VertexType, Edge{VertexType}};
-                ωs_buf = Set{Ω}(), wipe = true) =
-    ancestral_mask!(η, sam(arg), ancestral_intervals!(ωs_buf, arg, x), wipe = wipe)
+ancestral_mask!(η, arg::Arg, e::Edge{VertexType}; wipe = true) =
+    ancestral_mask!(η, sam(arg), ancestral_intervals(arg, e), wipe = wipe)
 
-ancestral_mask(arg::Arg, x::Union{VertexType, Edge{VertexType}};
-               ωs_buf = Set{Ω}()) =
-    ancestral_mask!(Sequence(falses(nmarkers(arg))), arg, x,
-                    ωs_buf = ωs_buf, wipe = false)
+function ancestral_mask!(h, arg::Arg, v::VertexType;
+                         buffer = default_buffer(), wipe = true)
+    ## Compute number of Ωs
+    len = sum(c -> (length ∘ ancestral_intervals)(arg, Edge(v => c)),
+              children(arg, v))
+
+    ## Allocate memory for ancestral intervals.
+    @no_escape buffer begin
+        ωs_ptr = convert(Ptr{Ω}, @alloc_ptr(len * sizeof(Ω)))
+        k = 1
+        for c ∈ children(arg, v)
+            for ω ∈ ancestral_intervals(arg, Edge(v, c))
+                unsafe_store!(ωs_ptr, ω, k)
+                k += 1
+            end
+        end
+        ωs = unsafe_wrap(Array, ωs_ptr, k)
+        mask = ancestral_mask!(h, sam(arg), ωs, wipe = wipe)
+    end
+
+    mask
+end
+
+ancestral_mask(arg::Arg, x::Union{VertexType, Edge{VertexType}}) =
+    ancestral_mask!(Sequence(falses(nmarkers(arg))), arg, x)
 
 recidx(arg, v) = (v - 2(nleaves(arg) - 1)) ÷ 2
 
@@ -353,11 +370,11 @@ function _compute_sequence!(arg, v, mask; ωs_buf = Set{Ω}())
     η = sequence(arg, v)
 
     @inbounds for child ∈ children(arg, v)
-        ancestral_mask!(mask, arg, Edge(v, child), ωs_buf = ωs_buf)
+        ancestral_mask!(mask, arg, Edge(v, child))
         η.data.chunks .&= sequence(arg, child).data.chunks .| .~mask.data.chunks
     end
 
-    ancestral_mask!(mask, arg, v, ωs_buf = ωs_buf)
+    ancestral_mask!(mask, arg, v)
     η.data.chunks .&= mask.data.chunks
     η
 end
@@ -401,7 +418,7 @@ function update_upstream!(arg, v; buffer = default_buffer())
             iszero(dad(arg, v)) && continue
 
             ## Update ancestral intervals of parental edges ##
-            ancestral_intervals!(first(ωsv), arg, v, buffer = buffer)
+            ancestral_intervals!(first(ωsv), arg, v)
 
             if isrecombination(arg, v)
                 invoke(union!, NTuple{2, Set}, last(ωsv), first(ωsv))
