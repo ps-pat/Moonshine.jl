@@ -152,7 +152,6 @@ function ancestral_mask!(h, arg::Arg, v::VertexType;
     len = sum(c -> (length ∘ ancestral_intervals)(arg, Edge(v => c)),
               children(arg, v))
 
-    ## Allocate memory for ancestral intervals.
     @no_escape buffer begin
         ωs_ptr = convert(Ptr{Ω}, @alloc_ptr(len * sizeof(Ω)))
         k = 1
@@ -162,7 +161,7 @@ function ancestral_mask!(h, arg::Arg, v::VertexType;
                 k += 1
             end
         end
-        ωs = unsafe_wrap(Array, ωs_ptr, k)
+        ωs = unsafe_wrap(Array, ωs_ptr, len)
         mask = ancestral_mask!(h, sam(arg), ωs, wipe = wipe)
     end
 
