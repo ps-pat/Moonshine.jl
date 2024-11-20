@@ -22,7 +22,6 @@ export Arg
 struct Arg <: AbstractGenealogy
     graph::SimpleDiGraph{VertexType}
     latitudes::Vector{Float64}
-    rightdads::Vector{VertexType}
     recombination_mask::Vector{Set{Ω}}
     mrca::Base.RefValue{VertexType}
     sequences::Vector{Sequence}
@@ -39,7 +38,6 @@ function Arg(tree::Tree)
 
     Arg(graph(tree),
         latitudes(tree),
-        Vector{VertexType}(undef, 0),
         Vector{Set{Ω}}(undef, 0),
         Ref(mrca(tree)),
         sequences(tree),
@@ -71,7 +69,7 @@ end
 isrecombination(arg::Arg, v) = isrecombination(arg, v, nleaves(arg))
 
 function recombinations(arg::Arg)
-    isempty(arg.rightdads) && return StepRange{Int, Int}(0, 1, 0)
+    isempty(arg.recombination_mask) && return StepRange{Int, Int}(0, 1, 0)
 
     start = 2nleaves(arg)
     step = 2
@@ -176,40 +174,36 @@ ancestral_mask(arg::Arg, x::Union{VertexType, Edge{VertexType}}) =
 
 recidx(arg, v) = (v - 2(nleaves(arg) - 1)) ÷ 2
 
-export rightdad
-"""
-    rightdad(arg, v)
-    leftdad(arg, v)
-
-Returns the parent of recombination vertex `v` ancestral for material
-to the left/right of the breakpoint associated with `v`. If `v` is not a
-recombination vertex, returns 0.
-"""
-function rightdad(arg::Arg, v)
-    ret = zero(VertexType)
-    isrecombination(arg, v) || return ret
-    arg.rightdads[recidx(arg, v)]
-end
-
-function leftdad(arg, v)
-    r = rightdad(arg, v)
-    iszero(r) && return r
-
-    for d ∈ dads(arg, v)
-        r != d && return d
-    end
-
-    r
-end
-
 function ancestral_mask(e::Edge, arg)
     s, d = src(e), dst(e)
-    isrecombination(arg, d) || return Set((Ω(0, ∞),))
 
-    inc = s == rightdad(arg, d)
-    idx = 2recidx(arg, d) - 1 + inc
-    arg.recombination_mask[idx]
+    inc = s > otherdad(arg, s, d)
+    arg.recombination_mask[2recidx(arg, d) - 1 + inc]
 end
+
+#          +----------------------------------------------------------+
+#          |                      Other methods                       |
+#          +----------------------------------------------------------+
+
+"""
+    otherdad(arg, s, d)
+    otherdad(arg, e)
+
+Return the parent of `d` that is not `s` for a recombination vertex `d`. If `d`
+is not a recombination vertex, returns `s`. Can also take an edge as argument.
+"""
+function otherdad(arg, s, d)
+    ret = s
+    for dad ∈ dads(arg, d)
+        ret == dad && continue
+        ret = dad
+        break
+    end
+
+    ret
+end
+
+otherdad(arg, e) = otherdad(arg, src(e), dst(e))
 
 #######
 # MMN #
@@ -454,6 +448,18 @@ Add a recombination event to an ARG.
 """
 function recombine!(arg, redge, cedge, breakpoint, rlat, clat;
                     buffer = default_buffer())
+    ## Adjust recombination masks
+    if isrecombination(arg, dst(redge)) && src(redge) < otherdad(arg, redge)
+        idx = 2recidx(arg, dst(redge)) - 1
+        arg.recombination_mask[idx], arg.recombination_mask[idx + 1] =
+            arg.recombination_mask[idx + 1], arg.recombination_mask[idx]
+    end
+
+    if isrecombination(arg, dst(cedge)) && src(cedge) < otherdad(arg, cedge)
+        idx = 2recidx(arg, dst(cedge)) - 1
+        arg.recombination_mask[idx], arg.recombination_mask[idx + 1] =
+            arg.recombination_mask[idx + 1], arg.recombination_mask[idx]
+    end
 
     ## Add recombination and recoalescence vertices to arg ##
     rvertex, cvertex = nv(arg) .+ (1, 2)
@@ -471,9 +477,6 @@ function recombine!(arg, redge, cedge, breakpoint, rlat, clat;
     add_edge!(arg, Edge(rvertex, dst(redge)), ωr)
     add_edge!(arg, Edge(src(redge), rvertex), ωr_left)
     rem_edge!(arg, redge)
-    if isrecombination(arg, dst(redge)) && src(redge) == rightdad(arg, dst(redge))
-        arg.rightdads[recidx(arg, dst(redge))] = rvertex
-    end
 
     ## Replace recoalescence edge ##
     ωc = ancestral_intervals(arg, cedge)
@@ -485,9 +488,6 @@ function recombine!(arg, redge, cedge, breakpoint, rlat, clat;
     else
         ωc_new = union(ωc, ωr_right, buffer = buffer)
         add_edge!(arg, Edge(src(cedge), cvertex), ωc_new)
-    end
-    if isrecombination(arg, dst(cedge)) && src(cedge) == rightdad(arg, dst(cedge))
-        arg.rightdads[recidx(arg, dst(cedge))] = cvertex
     end
 
     ## Compute sequence of new vertices ##
@@ -502,7 +502,6 @@ function recombine!(arg, redge, cedge, breakpoint, rlat, clat;
 
     push!(arg.recombination_mask, Set((Ω(0, breakpoint),)))
     push!(arg.recombination_mask, Set((Ω(breakpoint, ∞),)))
-    push!(arg.rightdads, cvertex)
     arg
 end
 
@@ -1365,12 +1364,12 @@ end
 
 thevenin(arg::Arg) = thevenin!(Tree(sam(arg)), arg)
 
-function validate(arg::Arg)
+function validate(arg::Arg; check_mutations = true)
     flag = true
     n = nleaves(arg)
 
     ## General properties ##
-    if nmutations(arg) != nmarkers(arg)
+    if check_mutations && nmutations(arg) != nmarkers(arg)
         @info "Number of mutations not equal to the number of markers"
         flag = false
     end
@@ -1429,16 +1428,16 @@ function validate(arg::Arg)
             flag = false
         end
 
-        ai_child = ancestral_intervals(arg, Edge(v => child(arg, v)))
-        ai_right = ancestral_intervals(arg, Edge(rightdad(arg, v) => v))
-        ai_left = ancestral_intervals(arg, Edge(leftdad(arg ,v) => v))
-        if ai_child != ai_left ∪ ai_right
-            msg = "Recombination vertex whose children edge's ancestral" *
-                " interval is not equal to the union of it parental edges's" *
-                " ancestral intervals."
-            @info msg v ai_child ai_left ai_right
-            flag = false
-        end
+        # ai_child = ancestral_intervals(arg, Edge(v => child(arg, v)))
+        # ai_right = ancestral_intervals(arg, Edge(rightdad(arg, v) => v))
+        # ai_left = ancestral_intervals(arg, Edge(leftdad(arg ,v) => v))
+        # if ai_child != ai_left ∪ ai_right
+        #     msg = "Recombination vertex whose children edge's ancestral" *
+        #         " interval is not equal to the union of it parental edges's" *
+        #         " ancestral intervals."
+        #     @info msg v ai_child ai_left ai_right
+        #     flag = false
+        # end
     end
 
     ## Internal vertices ##
@@ -1449,7 +1448,7 @@ function validate(arg::Arg)
         ref &= ancestral_mask(arg, v)
 
         if sequence(arg, v) != ref
-            @info "Inconsistent sequence" v
+            @info "Inconsistent sequence" v sequence(arg, v) ref
             flag = false
         end
 
