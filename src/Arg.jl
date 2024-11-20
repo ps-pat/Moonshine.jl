@@ -218,7 +218,7 @@ end
 function mutationsidx!(res, mask, arg, e, firstchunk, firstidx, lastchunk;
                        ωs_buf = Set{Ω}())
     η1, η2 = sequences(arg, e)
-    ancestral_mask!(mask, arg, e, ωs_buf = ωs_buf)
+    ancestral_mask!(mask, arg, e)
     marker_mask = one(UInt64) << (firstidx - 1)
     idx = one(Int)
 

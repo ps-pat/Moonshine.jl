@@ -673,7 +673,7 @@ function nmutations end
 
 function nmutations!(mask, genealogy, e; ωs_buf = Set{Ω}())
     ret = zero(Int)
-    ancestral_mask!(mask, genealogy, e, ωs_buf = ωs_buf)
+    ancestral_mask!(mask, genealogy, e)
 
     nchunks = (length(positions(genealogy)) - 1) ÷ blocksize(Sequence) + 1
     η1, η2 = sequences(genealogy, e)
