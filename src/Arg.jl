@@ -295,8 +295,6 @@ function next_inconsistent_idx(arg, idx;
                                buffer = default_buffer())
     empty!.(edges_buffer)
 
-    ωs = Set{Ω}()
-
     ## The mask restricts search to markers in (original) `idx` and
     ## `nmarkers(arg)` inclusively.
     mask = typemax(UInt64)
@@ -323,20 +321,16 @@ function next_inconsistent_idx(arg, idx;
                 mutations = h1.data.chunks[idx_chunk] ⊻ h2.data.chunks[idx_chunk]
                 mutations &= mask
 
-                ## Avoid unnecessary calls to `simplify!`.
-                empty!(ωs)
-                invoke(union!, NTuple{2, Set}, ωs, ancestral_intervals(arg, e))
-                intersect!(ωs, base_ω, buffer = buffer)
-                for ω ∈ ωs
-                    ω_idx = postoidx(arg, ω)
-                    i = one(UInt64)
-                    i <<= idxinchunk(Sequence, first(ω_idx)) - 1
-                    for _ ∈ ω_idx
-                        if mutations & i > 0
-                            push!(edges_buffer[64 - leading_zeros(i)], e)
-                        end
-                        i <<= 1
+                acc = 0
+                while mutations > 0
+                    i = trailing_zeros(mutations) + 1
+                    i > 64 && break
+                    pos = idxtopos(arg, 64(idx_chunk - 1) + acc + i)
+                    if pos ∈ ancestral_intervals(arg, e) && pos ∈ base_ω
+                        push!(edges_buffer[acc + i], e)
                     end
+                    mutations >>>= i
+                    acc += i
                 end
             end
         end
