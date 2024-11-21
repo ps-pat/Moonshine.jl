@@ -26,6 +26,8 @@ include("Sequence.jl")
 include("tools.jl")
 include("foreign.jl")
 include("CheapStack.jl")
+include("AncestralIntervals.jl")
+const AIsType = AIs{Vector{Ω}}
 include("Sample.jl")
 include("Genealogy.jl")
 include("Tree.jl")
