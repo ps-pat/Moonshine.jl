@@ -22,23 +22,23 @@ export Arg
 struct Arg <: AbstractGenealogy
     graph::SimpleDiGraph{VertexType}
     latitudes::Vector{Float64}
-    recombination_mask::Vector{Set{Ω}}
+    recombination_mask::Vector{AIsType}
     mrca::Base.RefValue{VertexType}
     sequences::Vector{Sequence}
-    ancestral_intervals::Dict{Edge{VertexType}, Set{Ω}}
+    ancestral_intervals::Dict{Edge{VertexType}, AIsType}
     sample::Sample
     logprob::Base.RefValue{Float64x2}
 end
 
 function Arg(tree::Tree)
-    ancestral_intervals = Dict{Edge{VertexType}, Set{Ω}}()
+    ancestral_intervals = Dict{Edge{VertexType}, AIsType}()
     for e ∈ edges(tree)
-        ancestral_intervals[e] = Set((Ω(0, ∞),))
+        ancestral_intervals[e] = AIsType([Ω(0, ∞)])
     end
 
     Arg(graph(tree),
         latitudes(tree),
-        Vector{Set{Ω}}(undef, 0),
+        Vector{AIsType}(undef, 0),
         Ref(mrca(tree)),
         sequences(tree),
         ancestral_intervals,
@@ -94,7 +94,7 @@ function add_vertices!(arg::Arg, H, lats)
     add_vertices!(graph(arg), length(H))
 end
 
-function add_edge!(arg::Arg, e, ints::Set{Ω})
+function add_edge!(arg::Arg, e, ints::AIsType)
     arg.ancestral_intervals[e] = ints
     add_edge!(graph(arg), e)
 end
@@ -117,31 +117,29 @@ end
 # Ancestrality Methods #
 ########################
 
-function ancestral_intervals!(ωs, arg::Arg, e::Edge; wipe = true)
+function ancestral_intervals!(ωs, arg::Arg, e::Edge; wipe = true, simplify = true)
     wipe && empty!(ωs)
 
-    for ω ∈ arg.ancestral_intervals[e]
-        push!(ωs, ω)
-    end
+    union!(ωs, ancestral_intervals(arg, e), simplify = simplify)
 
     ωs
 end
 
 ancestral_intervals(arg::Arg, e::Edge) =
-    get!(() -> Set{Ω}((Ω(0, ∞),)), arg.ancestral_intervals, e)
+    get!(() -> AIsType([Ω(0, ∞)]), arg.ancestral_intervals, e)
 
 function ancestral_intervals!(ωs, arg::Arg, v::VertexType; wipe = true)
     wipe && empty!(ωs)
     isleaf(arg, v) && return push!(ωs, Ω(0, ∞))
 
     for child ∈ children(arg, v)
-        ancestral_intervals!(ωs, arg, Edge(v => child), wipe = false)
+        ancestral_intervals!(ωs, arg, Edge(v => child), wipe = false, simplify = false)
     end
 
     simplify!(ωs)
 end
 
-ancestral_intervals(arg::Arg, v::VertexType) = ancestral_intervals!(Set{Ω}(), arg, v)
+ancestral_intervals(arg::Arg, v::VertexType) = ancestral_intervals!(AIsType(), arg, v)
 
 ancestral_mask!(η, arg::Arg, e::Edge{VertexType}; wipe = true) =
     ancestral_mask!(η, sam(arg), ancestral_intervals(arg, e), wipe = wipe)
@@ -209,7 +207,7 @@ otherdad(arg, e) = otherdad(arg, src(e), dst(e))
 #######
 
 function mutationsidx!(res, mask, arg, e, firstchunk, firstidx, lastchunk;
-                       ωs_buf = Set{Ω}())
+                       ωs_buf = AIsType())
     η1, η2 = sequences(arg, e)
     ancestral_mask!(mask, arg, e)
     marker_mask = one(UInt64) << (firstidx - 1)
@@ -245,7 +243,7 @@ function mutation_edges!(mutations, arg, ω::Ω; buffer = default_buffer())
     end
 
     mask = Sequence(undef, nmarkers(arg))
-    ωs_buf = Set{Ω}()
+    ωs_buf = AIsType()
     @no_escape buffer begin
         store = @alloc(Edge{VertexType}, nleaves(arg) + nrecombinations(arg))
         @inbounds for e ∈ edges_interval(arg, ω, store)
@@ -322,7 +320,7 @@ function next_inconsistent_idx(arg, idx;
                 mutations &= mask
 
                 acc = 0
-                while mutations > 0
+                while true
                     i = trailing_zeros(mutations) + 1
                     i > 64 && break
                     pos = idxtopos(arg, 64(idx_chunk - 1) + acc + i)
@@ -353,7 +351,7 @@ end
 # Recombinations #
 ##################
 
-function _compute_sequence!(arg, v, mask; ωs_buf = Set{Ω}())
+function _compute_sequence!(arg, v, mask; ωs_buf = AIsType())
     ## This function assumes that every marker is set to 1!
     η = sequence(arg, v)
 
@@ -371,10 +369,8 @@ function _update_ai!(vstack, arg, e, ωs, oldhash)
     oldhash = hash(oldhash, (hash ∘ ancestral_intervals)(arg, e))
 
     ## Update ancestral interval of e
-    empty!(arg.ancestral_intervals[e])
-    while !isempty(ωs)
-        push!(arg.ancestral_intervals[e], pop!(ωs))
-    end
+    copy!(ancestral_intervals(arg, e), ωs)
+    empty!(ωs)
 
     ## Update vstack
     newhash = hash((hash ∘ sequence)(arg, dst(e)),
@@ -393,7 +389,7 @@ function update_upstream!(arg, v; buffer = default_buffer())
         push!(vstack, v)
 
         mask = Sequence(undef, nmarkers(arg))
-        ωsv = (Set{Ω}(), Set{Ω}())
+        ωsv = (AIsType(), AIsType())
 
         while !isempty(vstack)
             v = pop!(vstack)
@@ -409,7 +405,7 @@ function update_upstream!(arg, v; buffer = default_buffer())
             ancestral_intervals!(first(ωsv), arg, v)
 
             if isrecombination(arg, v)
-                invoke(union!, NTuple{2, Set}, last(ωsv), first(ωsv))
+                copy!(last(ωsv), first(ωsv))
 
                 ## If `v` is a recombination vertex, the ancestral interval of
                 ## one of its parental edge is the intersection of the
@@ -464,8 +460,8 @@ function recombine!(arg, redge, cedge, breakpoint, rlat, clat;
     ## Replace recombination edge ##
     ωr = ancestral_intervals(arg, redge)
     ωr_left, ωr_right = copy(ωr), copy(ωr)
-    intersect!(ωr_left, Ω(0, breakpoint), buffer = buffer)
-    intersect!(ωr_right, Ω(breakpoint, ∞), buffer = buffer)
+    intersect!(ωr_left, Ω(0, breakpoint))
+    intersect!(ωr_right, Ω(breakpoint, ∞))
 
     add_edge!(arg, Edge(rvertex, dst(redge)), ωr)
     add_edge!(arg, Edge(src(redge), rvertex), ωr_left)
@@ -479,12 +475,12 @@ function recombine!(arg, redge, cedge, breakpoint, rlat, clat;
     if root_recombination
         arg.mrca[] = cvertex
     else
-        ωc_new = union(ωc, ωr_right, buffer = buffer)
+        ωc_new = union(ωc, ωr_right)
         add_edge!(arg, Edge(src(cedge), cvertex), ωc_new)
     end
 
     ## Compute sequence of new vertices ##
-    let mask = Sequence(undef, nmarkers(arg)), ωs_buf = Set{Ω}()
+    let mask = Sequence(undef, nmarkers(arg)), ωs_buf = AIsType()
         _compute_sequence!(arg, rvertex, mask, ωs_buf = ωs_buf)
         _compute_sequence!(arg, cvertex, mask, ωs_buf = ωs_buf)
     end
@@ -493,18 +489,18 @@ function recombine!(arg, redge, cedge, breakpoint, rlat, clat;
     update_upstream!(arg, src(redge), buffer = buffer)
     update_upstream!(arg, src(cedge), buffer = buffer)
 
-    push!(arg.recombination_mask, Set((Ω(0, breakpoint),)))
-    push!(arg.recombination_mask, Set((Ω(breakpoint, ∞),)))
+    push!(arg.recombination_mask, AIsType([Ω(0, breakpoint)]))
+    push!(arg.recombination_mask, AIsType([Ω(breakpoint, ∞)]))
     arg
 end
 
 function extend_recombination!(arg, edge, otherdad, breakpoint; buffer = default_buffer())
     s, d = src(edge), dst(edge)
 
-    union!(ancestral_mask(edge, arg), Ω(breakpoint, ∞), buffer = buffer)
+    union!(ancestral_mask(edge, arg), Ω(breakpoint, ∞))
 
     edge = Edge(otherdad => d)
-    intersect!(ancestral_mask(edge, arg), Ω(0, breakpoint), buffer = buffer)
+    intersect!(ancestral_mask(edge, arg), Ω(0, breakpoint))
 
     update_upstream!(arg, d, buffer = buffer)
 end
@@ -1379,7 +1375,7 @@ function validate(arg::Arg; check_mutations = true)
             flag = false
         end
 
-        if ancestral_intervals(arg, v) != Set([Ω(0, ∞)])
+        if ancestral_intervals(arg, v) != AIsType([Ω(0, ∞)])
             @info "Ancestral interval of leaf's parental edge not equal to [0, ∞)" v
             flag = false
         end

@@ -156,7 +156,7 @@ function ancestral_intervals!(ωs, ::Any, ::Any)
 end
 
 @generated ancestral_intervals(genealogy::Any, x::Any) =
-    ancestral_intervals!(Set{Ω}(), genealogy, x)
+    ancestral_intervals!(AIsType(), genealogy, x)
 
 ## Recombinations ##
 
@@ -514,7 +514,7 @@ end
 
 let funtransorder = Dict(:dads => (:ancestors, (x, y) -> (x, y)),
                          :children => (:descendants, (x, y) -> (y, x))),
-    typesandfun = ((:Real, in), (:AI, !isdisjoint), (:(Set{<:AI}), !isdisjoint))
+    typesandfun = ((:Real, in), (:AI, !isdisjoint), (:(AIs{<:AbstractVector{<:AI}}), !isdisjoint))
     for (fun, (transfun, order)) ∈ funtransorder
         transfun! = Symbol(string(transfun) * '!')
 
@@ -671,7 +671,7 @@ number of mutations on that edge.
 """
 function nmutations end
 
-function nmutations!(mask, genealogy, e; ωs_buf = Set{Ω}())
+function nmutations!(mask, genealogy, e)
     ret = zero(Int)
     ancestral_mask!(mask, genealogy, e)
 
@@ -686,15 +686,13 @@ end
 
 function nmutations(genealogy)
     mask = Sequence(undef, nmarkers(genealogy))
-    ωs_buf = Set{Ω}()
-    mapreduce(e -> nmutations!(mask, genealogy, e, ωs_buf = ωs_buf), +, edges(genealogy),
+    mapreduce(e -> nmutations!(mask, genealogy, e), +, edges(genealogy),
               init = zero(Int))
 end
 
 function nmutations(genealogy, e)
     mask = Sequence(undef, nmarkers(genealogy))
-    ωs_buf = Set{Ω}()
-    nmutations!(mask, genealogy, e, ωs_buf)
+    nmutations!(mask, genealogy, e)
 end
 
 ## Edge functions.
@@ -764,7 +762,7 @@ edges_interval(genealogy, ωs, store,
     EdgesInterval(genealogy, ωs, store, root, min_latitude)
 
 function edges_interval(genealogy, ωs)
-    ωs_e = Set{Ω}()
+    ωs_e = AIsType()
     flt = function(e)
         ancestral_intervals!(ωs_e, genealogy, e)
         !isdisjoint(ωs_e, ωs)
