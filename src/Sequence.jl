@@ -1,6 +1,6 @@
 import Base: empty,
              similar,
-             ~, &, |, xor, >>>, >>, <<,
+             ~, &, |, xor, >>>, >>, <<, *,
              ==,
              show,
              isempty,
@@ -84,6 +84,26 @@ end
 
 bitcount(η::Sequence; init::T = 0) where T =
     bitcount(η.data.chunks, init = init)
+
+function *(h::Sequence, v::AbstractVector{T}) where T
+    acc = zero(T)
+    k = 1
+    @inbounds @simd for chunk ∈ h.data.chunks
+        Δ = trailing_zeros(chunk)
+        k += Δ
+        while Δ < blocksize(h)
+            acc += v[k]
+            chunk >>>= Δ + 1
+
+            Δ = trailing_zeros(chunk)
+            k += Δ
+        end
+    end
+
+    acc
+end
+
+*(v::AbstractVector, h::Sequence) = h * v
 
 """
     Sequence(undef, n)
