@@ -608,6 +608,14 @@ function iterate(iter::EdgesIntervalRec, state = 1)
     e, state + 1
 end
 
+function _weight_edge(arg, e_ref, e, mask, h_buf, f)
+    h_buf.data .⊻= h_buf.data
+    h_buf.data .⊻= sequence(arg, dst(e_ref)).data .& sequence(arg, dst(e)).data
+    h_buf.data .&= mask.data
+
+    f(h_buf)
+end
+
 function _sample_cedge(rng, arg, lat, nextidx, window, live_edge::T, redge, buffer, λ = 0.3) where T
     nextpos = idxtopos(arg, nextidx)
 
@@ -618,15 +626,13 @@ function _sample_cedge(rng, arg, lat, nextidx, window, live_edge::T, redge, buff
 
         mask = Sequence(falses(nmarkers(arg)))
         mask.data[range(nextidx + 1, min(nextidx + 11, nmarkers(arg)))] .= true
+        ## TODO: Do that without allocating.
         x = Sequence(undef, nmarkers(arg))
 
         store = @alloc(T, nv(arg))
         @inbounds for e ∈ EdgesIntervalRec(arg, window, store, nextpos, nextidx, src(live_edge), lat)
             ## Compute distance & weight
-            x.data .⊻= x.data
-            x.data .⊻= sequence(arg, dst(redge)).data .& sequence(arg, dst(e)).data
-            x.data .&= mask.data
-            w = λ * (1 - λ)^(1 - sum(x))
+            w = _weight_edge(arg, redge, e, mask, x, h -> λ * (1 - λ)^(1 - sum(h)))
 
             ## Store edge and weight
             len += 1
