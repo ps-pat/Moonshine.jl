@@ -168,8 +168,8 @@ in(x, ωs::AIs) = any(ω -> x ∈ ω, ωs)
 
 issubset(x, ωs::AIs) = any(ω -> x ⊆ ω, ωs)
 
-@polly function isdisjoint(x, ωs::AIs)
-    @inbounds @simd ivdep for ω ∈ ωs
+function isdisjoint(x, ωs::AIs)
+    @inbounds for ω ∈ ωs
         isdisjoint(x, ω) || return false
     end
 
