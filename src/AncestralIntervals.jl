@@ -200,7 +200,7 @@ end
 #          +----------------------------------------------------------+
 
 leftendpoint(ωs::AIs) = (leftendpoint ∘ first)(ωs)
-rightendpoint(ωs::AIs) = (rightendpoint ∘ last)(ωs)
+rightendpoint(ωs::AIs) = maximum(rightendpoint, ωs)
 
 endpoints(ωs::AIs) = leftendpoint(ωs), rightendpoint(ωs)
 
