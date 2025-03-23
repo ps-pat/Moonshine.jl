@@ -176,10 +176,7 @@ function isdisjoint(x, ωs::AIs)
     true
 end
 
-# = all(ω -> isdisjoint(ω, x), ωs)
-
-for (f, check) ∈ Dict(:issubset => :any, :isdisjoint => :all)
-    # @eval $f(x, ωs::AIs) = $f($check(ω -> $f(x, ω), ωs))
+for f ∈ (:issubset, :isdisjoint)
     @eval $f(ωs::AIs, x) = $f(x, ωs)
     @eval $f(ωs1::AIs, ωs2::AIs) = all(ω -> $f(ωs2, ω), ωs1)
 end
