@@ -151,15 +151,14 @@ function ancestral_mask!(h, arg::Arg, v::VertexType;
               children(arg, v))
 
     @no_escape buffer begin
-        ωs_ptr = convert(Ptr{Ω}, @alloc_ptr(len * sizeof(Ω)))
+        ωs = @alloc(Ω, len)
         k = 1
         for c ∈ children(arg, v)
             for ω ∈ ancestral_intervals(arg, Edge(v, c))
-                unsafe_store!(ωs_ptr, ω, k)
+                ωs[k] = ω
                 k += 1
             end
         end
-        ωs = unsafe_wrap(Array, ωs_ptr, len)
         mask = ancestral_mask!(h, sam(arg), ωs, wipe = wipe)
     end
 
@@ -315,8 +314,8 @@ function next_inconsistent_idx(arg, idx;
         @no_escape buffer begin
             store = @alloc(Edge{VertexType}, nleaves(arg) + nrecombinations(arg))
             for e ∈ edges_interval(arg, base_ω, store)
-                h1, h2 = sequences(arg, e)
-                mutations = h1.data.chunks[idx_chunk] ⊻ h2.data.chunks[idx_chunk]
+                mutations = sequence(arg, src(e)).data.chunks[idx_chunk]
+                mutations ⊻= sequence(arg, dst(e)).data.chunks[idx_chunk]
                 mutations &= mask
 
                 acc = 0
@@ -599,8 +598,8 @@ function _sample_cedge(rng, arg, lat, nextidx, window, live_edge::T, redge, buff
             unsafe_store!(ws_ptr, w, len)
         end
 
-        cedges = unsafe_wrap(Array, cedges_ptr, len)
-        ws = unsafe_wrap(Array, ws_ptr, len)
+        cedges = UnsafeArray{T, 1}(cedges_ptr, (len,))
+        ws = UnsafeArray{Float64, 1}(ws_ptr, (len,))
         sample(rng, cedges, ProbabilityWeights(ws))
     end
 end
@@ -744,7 +743,7 @@ function sample_recombination_unconstrained!(rng, arg, winwidth,
             redges_len += 1
             unsafe_store!(redges_ptr, e, redges_len)
         end
-        redges = unsafe_wrap(Array, redges_ptr, redges_len)
+        redges = UnsafeArray{Edge{VertexType}, 1}(redges_ptr, (redges_len,))
 
         ws_redges_data = @alloc(Float64, length(redges))
         map!(e -> branchlength(arg, e), ws_redges_data, redges)
