@@ -741,13 +741,17 @@ function iterate(iter::EdgesInterval, state = 1)
 
     e = pop!(buffer)
     s = dst(e)
+    latok = latitude(genealogy, s) >= min_latitude
+
     if isrecombination(genealogy, s)
         ridx = recidx(genealogy, s)
         visited[ridx] && return e, state + 1
         visited[ridx] = true
-    end
 
-    if latitude(genealogy, s) >= min_latitude
+        ## Recombination vertex, no need to check ancestrality of downstream
+        ## edge
+        latok && push!(buffer, Edge(s => child(genealogy, s)))
+    elseif latok
         for d ∈ children(genealogy, s, ωs)
             push!(buffer, Edge(s => d))
         end
