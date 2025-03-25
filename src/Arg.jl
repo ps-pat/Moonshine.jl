@@ -652,51 +652,59 @@ function _sample_cedge(rng, arg, lat, nextidx, window, live_edge::T, redge, buff
     end
 end
 
-function sample_redge(rng, arg, e, nextidx)
+"""
+    sample_redge(rng, arg, e, nextidx, rlat_ubound)
+
+Sample a recombination edge conditional on a given edge.
+
+The graph is traversed downstream starting from `dst(e)` as long as there is
+only one derived child.
+"""
+function sample_redge(rng, arg, e, nextidx, rlat_ubound)
     nextpos = idxtopos(arg, nextidx)
-    total_length = branchlength(arg, e)
+
+    ## Compute the total length of valid branches
     s, d = src(e), dst(e)
+    refstate = sequence(arg, d)[nextidx]
 
-    ## Total length of valid branches ##
-    valid_child = 0
-    _children = children(arg, d, nextpos)
-    @inbounds for child ∈ _children
-        sequence(arg, child)[nextidx] || continue
-        if iszero(valid_child)
-            valid_child = child
-        else
-            valid_child = 0
-        end
-    end
-
+    valid_child = d
+    total_length = rlat_ubound - latitude(arg, s)
     @inbounds while !iszero(valid_child)
-        s = d
-        d = valid_child
         total_length += branchlength(arg, Edge(s => d))
-        _children = children(arg, d, nextpos)
-        if (isone ∘ length)(_children)
-            valid_child = first(_children)
-        else
-            valid_child = 0
+
+        valid_child = 0
+        for c ∈ children(arg, d, nextpos)
+            sequence(arg, c)[nextidx] == refstate || continue
+            if iszero(valid_child)
+                valid_child = c
+            else
+                valid_child = 0
+            end
+        end
+
+        if !iszero(valid_child)
+            s = d
+            d = valid_child
         end
     end
 
-    ## Sample recombination location ##
-    rlat_dist = Beta(2)
-    rlat = rand(rng, rlat_dist)
-    arg.logprob[] += logpdf(rlat_dist, rlat)
-    rlat *= total_length
+    ## Sample recombination location
+    ## The larger α - β is, the stronger the bias towards ancient branches.
+    Δlat_dist = Beta(3, 2)
+    Δlat = rand(rng, Δlat_dist)
+    arg.logprob[] += logpdf(Δlat_dist, Δlat)
+    Δlat *= total_length
+    lat = latitude(arg, d) + Δlat
 
     ## Compute recombination edge ##
-    rlat -= branchlength(arg, Edge(s => d))
-    while rlat > 0
-        rlat -= branchlength(arg, Edge(s => d))
-        rlat > 0 || break
+    while Δlat > 0
+        Δlat -= branchlength(arg, Edge(s => d))
+        Δlat > 0 || break
         d = s
         s = (first ∘ dads)(arg, s, nextpos)
     end
 
-    Edge(s => d)
+    Edge(s => d), lat
 end
 
 # -- Constrained recombinations ----------------------------------------
@@ -720,24 +728,14 @@ function sample_derived_recombination!(rng, arg, e1, e2,
         e1, e2 = e2, e1
     end
 
-    redge = sample_redge(rng, arg, popat!(live_edges, e1), nextidx)
-    if e2 > e1 # Accounts for length reduction of ̀`live_edges`
+    ## Sample recombination edge and latitude
+    rlat_ubound = min(latitude(arg, src(live_edges[e1])),
+                      latitude(arg, src(live_edges[e2])))
+    redge, rlat = sample_redge(rng, arg, popat!(live_edges, e1), nextidx, rlat_ubound)
+    if e2 > e1
+        ## Accounts for length reduction of ̀`live_edges` following `popat!`
         e2 -= 1
     end
-
-    ## Sample recombination latitude ##
-    rlat_lbound = latitude(arg, dst(redge))
-    rlat_ubound = min(latitude(arg, src(redge)), latitude(arg, src(live_edges[e2])))
-    rlat_span = rlat_ubound - rlat_lbound
-
-    ## We use a Beta(α, α) distribution with α > 1 instead of the theoretically
-    ## correct α = 1 to avoid sampling recombination locations near branches'
-    ## ends, which causes numerical problems.
-    rlat_dist = Beta(2)
-    rlat = rand(rng, rlat_dist)
-    arg.logprob[] += logpdf(rlat_dist, rlat)
-    rlat *= rlat_span
-    rlat += rlat_lbound
 
     ## Sample recoalescence edge ##
     cedge = _sample_cedge(rng, arg, rlat, nextidx, window, live_edges[e2],
