@@ -290,14 +290,13 @@ end
 function next_inconsistent_idx(arg, idx;
                                edges_buffer = SVector{64}([Edge{VertexType}[] for _ ∈ 1:64]),
                                buffer = default_buffer())
-    empty!.(edges_buffer)
-
     ## The mask restricts search to markers in (original) `idx` and
     ## `nmarkers(arg)` inclusively.
     mask = typemax(UInt64)
     mask <<= idxinchunk(Sequence, idx) - 1
 
     @inbounds while idx <= nmarkers(arg)
+        empty!.(edges_buffer)
         ωlbound = idxtopos(arg, idx)
 
         idx_chunk = chunkidx(Sequence, idx)
