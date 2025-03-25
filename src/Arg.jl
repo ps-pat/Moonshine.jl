@@ -529,6 +529,16 @@ function recombine!(arg, redge, cedge, breakpoint, rlat, clat;
     arg
 end
 
+"""
+    extend_recombination!(arg, edge, otherdad, breakpoint; buffer = default_buffer())
+
+Extend ancestral interval of a recombination vertex upstream edges:
+* `edge` new interval is [`breakpoint`, ∞);
+* the other branch's interval is intersected with [0, `breakpoint`).
+
+This is mainly intended to be used within
+[`sample_recombination_constrained!`](@ref).
+"""
 function extend_recombination!(arg, edge, otherdad, breakpoint; buffer = default_buffer())
     s, d = src(edge), dst(edge)
 
