@@ -693,35 +693,40 @@ function sample_redge(rng, arg, e, nextidx)
     Edge(s => d)
 end
 
-function sample_recombination_constrained!(rng, arg, breakpoint, winwidth, live_edges;
-                                           buffer = default_buffer())
-    n = length(live_edges)
-    nextidx = postoidx(arg, breakpoint)
-    nextpos = idxtopos(arg, nextidx)
+# -- Constrained recombinations ----------------------------------------
 
-    ## Sample recombination edge ##
-    e1, e2 = sample(rng, eachindex(live_edges), 2; replace = false)
-    arg.logprob[] += log(2) - log(n) - log(n - 1)
+"""
+    sample_derived_recombination!(rng, arg, e1, e2, breakpoint, window, nextidx, nextpos, live_edges; buffer = default_buffer())
 
+Sample a recombination & recoalescence event between two derived edges
+constrained to eliminate one mutation.
+
+Under certain conditions, it is not necessary to actually sample such an event.
+This is the case when the recombination and recoalescence event are incident.
+In this case, the recombination edge's ancestral interval is extended (see
+[`extend_recombination!`](@ref).
+"""
+function sample_derived_recombination!(rng, arg, e1, e2,
+                                       breakpoint, window, nextidx, nextpos,
+                                       live_edges; buffer = default_buffer())
     ## This ensures that there is a least one edge available for recoalescence.
     if latitude(arg, dst(live_edges[e1])) > latitude(arg, dst(live_edges[e2]))
         e1, e2 = e2, e1
     end
 
     redge = sample_redge(rng, arg, popat!(live_edges, e1), nextidx)
-    if e2 > e1
+    if e2 > e1 # Accounts for length reduction of ̀`live_edges`
         e2 -= 1
     end
-
-    ## It is necessary to extend the window as below when simulating type II
-    ## recombination events.
-    window = breakpoint ± winwidth / 2 ∪
-        ClosedInterval(idxtopos(arg, nextidx - 1), nextpos)
 
     ## Sample recombination latitude ##
     rlat_lbound = latitude(arg, dst(redge))
     rlat_ubound = min(latitude(arg, src(redge)), latitude(arg, src(live_edges[e2])))
     rlat_span = rlat_ubound - rlat_lbound
+
+    ## We use a Beta(α, α) distribution with α > 1 instead of the theoretically
+    ## correct α = 1 to avoid sampling recombination locations near branches'
+    ## ends, which causes numerical problems.
     rlat_dist = Beta(2)
     rlat = rand(rng, rlat_dist)
     arg.logprob[] += logpdf(rlat_dist, rlat)
@@ -733,6 +738,9 @@ function sample_recombination_constrained!(rng, arg, breakpoint, winwidth, live_
                           redge, buffer)
 
     if  src(cedge) ∈ dads(arg, dst(redge)) && isrecombination(arg, dst(redge))
+        ## In this situation, there is acutaly no need for a new recombination
+        ## event. A mutation can be eliminated simply by extending `redge`'s
+        ## ancestral interval.
         extend_recombination!(arg, Edge(src(cedge) => dst(redge)), src(redge),
                               breakpoint, buffer = buffer)
 
@@ -742,6 +750,8 @@ function sample_recombination_constrained!(rng, arg, breakpoint, winwidth, live_
         clat_lbound = max(rlat, latitude(arg, dst(cedge)))
         clat_ubound = latitude(arg, src(cedge))
         clat_span = clat_ubound - clat_lbound
+
+        ## Same strategy as for `rlat_dist` (see above).
         clat_dist = Beta(2)
         clat = rand(rng, clat_dist)
         arg.logprob[] += logpdf(clat_dist, clat)
@@ -769,6 +779,28 @@ function sample_recombination_constrained!(rng, arg, breakpoint, winwidth, live_
         live_edges[k] = Edge(news => newd)
         break
     end
+
+    live_edges
+end
+
+function sample_recombination_constrained!(rng, arg, breakpoint, winwidth, live_edges;
+                                           buffer = default_buffer())
+    n = length(live_edges)
+    nextidx = postoidx(arg, breakpoint)
+    nextpos = idxtopos(arg, nextidx)
+
+    ## It is necessary to extend the window as below when simulating type II
+    ## recombination events.
+    window = breakpoint ± winwidth / 2 ∪
+        ClosedInterval(idxtopos(arg, nextidx - 1), nextpos)
+
+    ## Sample recombination edge ##
+    e1, e2 = sample(rng, eachindex(live_edges), 2; replace = false)
+    arg.logprob[] += log(2) - log(n) - log(n - 1)
+
+    sample_derived_recombination!(rng, arg, e1, e2,
+                                  breakpoint, window, nextidx, nextpos,
+                                  live_edges, buffer = buffer)
 
     breakpoint
 end
