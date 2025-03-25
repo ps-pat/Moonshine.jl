@@ -60,11 +60,7 @@ nleaves(arg::Arg) = length(sam(arg).H)
 
 describe(::Arg, long = true) = long ? "Ancestral Recombination Graph" : "ARG"
 
-function isrecombination(::Arg, v, n)
-    v < 2n && return false
-    isodd(v) && return false
-    true
-end
+isrecombination(::Arg, v, n) = iseven(v) && v >= 2n
 
 isrecombination(arg::Arg, v) = isrecombination(arg, v, nleaves(arg))
 
