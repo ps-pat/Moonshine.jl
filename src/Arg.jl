@@ -540,7 +540,7 @@ This is mainly intended to be used within
 [`sample_recombination_constrained!`](@ref).
 """
 function extend_recombination!(arg, edge, otherdad, breakpoint; buffer = default_buffer())
-    s, d = src(edge), dst(edge)
+    d = dst(edge)
 
     union!(ancestral_mask(edge, arg), Ω(breakpoint, ∞))
 
