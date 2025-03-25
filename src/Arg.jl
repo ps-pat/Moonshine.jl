@@ -793,6 +793,12 @@ function sample_derived_recombination!(rng, arg, e1, e2,
     live_edges
 end
 
+"""
+    sample_recombination_constrained!(rng, arg, breakpoint, winwidth, live_edges; buffer = default_buffer())
+
+Sample a recombination event constrained so as to reduce the number of
+mutations for a given marker by one.
+"""
 function sample_recombination_constrained!(rng, arg, breakpoint, winwidth, live_edges;
                                            buffer = default_buffer())
     n = length(live_edges)
