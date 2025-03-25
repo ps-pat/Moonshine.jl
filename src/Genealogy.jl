@@ -14,7 +14,7 @@ using GeometryBasics: Point
 
 using DataStructures: DefaultDict
 
-import Base: IteratorSize, eltype
+import Base: IteratorSize, eltype, length
 
 using NetworkLayout
 
@@ -724,7 +724,8 @@ function EdgesInterval(genealogy, ωs, store,
     EdgesInterval(genealogy, ωs, eibuffer, visited, convert(Float64, min_latitude))
 end
 
-IteratorSize(::EdgesInterval) = Base.SizeUnknown()
+IteratorSize(::T) where T<:EdgesInterval = Base.SizeUnknown()
+IteratorSize(::Type{<:EdgesInterval}) = Base.SizeUnknown()
 
 eltype(::EdgesInterval) = Edge{VertexType}
 
