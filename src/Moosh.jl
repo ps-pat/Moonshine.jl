@@ -17,6 +17,8 @@ using Bumper
 
 using AutoHashEquals
 
+using Base.Libc: malloc, free
+
 ## Some constants.
 const VertexType = Int
 const ∞ = Inf

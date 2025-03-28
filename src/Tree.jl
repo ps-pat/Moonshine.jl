@@ -54,6 +54,10 @@ mrca(tree::Tree) = nv(tree)
 
 mrca(tree::Tree, ::Any) = mrca(tree)
 
+@generated maxdads(::Type{Tree}) = 1
+
+@generated maxchildren(::Type{Tree}) = 2
+
 ###########################
 # AbstractGraph Interface #
 ###########################

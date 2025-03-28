@@ -205,6 +205,18 @@ function plot_layout end
 
 plot_layout(::AbstractGenealogy) = Spring()
 
+"""
+    maxdads(Genealogy)
+    maxchildren(Genealogy)
+
+Maximum possible number of parents/children in a genealogy.
+
+# Implementation
+Must be a generated function.
+"""
+function maxdads end,
+function maxchildren end
+
 #############
 # Utilities #
 #############
@@ -641,6 +653,52 @@ function sibling(genealogy, v)
         return _child
     end
     zero(VertexType)
+end
+
+## TODO: clean and generalize
+export cousins
+"""
+    cousins(buf, genealogy, v, args...)
+
+Return the cousins of a vertex, that is vertices sharing the same grandparents.
+
+`args` is splatted into internal calls to `dads` and `children`. It can be used
+to constraint search to an interval.
+
+The maximum number of cousins is ``p^2 \\times c \\times (c - 1)`` where ``p``
+and ``c`` are the maximum number of parents and children respectively.
+"""
+function cousins(buf, genealogy::T, v, args...) where T
+    head_buf = firstindex(buf)
+    dads_v = zeros(MVector{maxdads(T), VertexType})
+
+    @inbounds for (i, d) ∈ (enumerate ∘ dads)(genealogy, v, args...)
+        dads_v[i] = d
+
+        for gd ∈ dads(genealogy, d, args...)
+            for u ∈ children(genealogy, gd, args...)
+                ## Ensure that were dealing with a true uncle rather than a
+                ## previously visited dad
+                flag = zero(Int8)
+                @simd ivdep for dad_v ∈ dads_v
+                    ## Race condition is not an issue here. The ramainder of the
+                    ## loop is skiped as soon as flag != 0.
+                    flag += u == dad_v
+                end
+
+                if iszero(flag)
+                    for c ∈ children(genealogy, u, args...)
+                        c == v && continue
+
+                        buf[head_buf] = c
+                        head_buf += 1
+                    end
+                end
+            end
+        end
+    end
+
+    resize!(buf, head_buf - 1)
 end
 
 export dad, child

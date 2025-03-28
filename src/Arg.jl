@@ -80,6 +80,10 @@ mrca(arg::Arg) = arg.mrca[]
 
 mrca(arg, ωs) = mrca(arg, leaves(arg), ωs)
 
+@generated maxdads(::Type{Arg}) = 2
+
+@generated maxchildren(::Type{Arg}) = 2
+
 ###########################
 # AbstractGraph Interface #
 ###########################
