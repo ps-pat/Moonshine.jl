@@ -159,10 +159,11 @@ function ancestral_mask!(h, arg::Arg, v::VertexType;
                 k += 1
             end
         end
-        mask = ancestral_mask!(h, sam(arg), ωs, wipe = wipe)
+        ancestral_mask!(h, sam(arg), ωs, wipe = wipe)
+        nothing # Workaround, see Bumper.jl's issue #49
     end
 
-    mask
+    h
 end
 
 ancestral_mask(arg::Arg, x::Union{VertexType, Edge{VertexType}}) =
@@ -384,18 +385,17 @@ end
 ##################
 # Recombinations #
 ##################
-
-function _compute_sequence!(arg, v, mask; ωs_buf = AIsType())
+function _compute_sequence!(arg, v, mask)
     ## This function assumes that every marker is set to 1!
     η = sequence(arg, v)
 
     @inbounds for child ∈ children(arg, v)
         ancestral_mask!(mask, arg, Edge(v, child))
-        η.data.chunks .&= sequence(arg, child).data.chunks .| .~mask.data.chunks
+        η.data.chunks .&= sequence(arg, child).data.chunks .| .~mask
     end
 
     ancestral_mask!(mask, arg, v)
-    η.data.chunks .&= mask.data.chunks
+    η.data.chunks .&= mask
     η
 end
 
@@ -422,7 +422,7 @@ function update_upstream!(arg, v; buffer = default_buffer())
         vstack = CheapStack(store)
         push!(vstack, v)
 
-        mask = Sequence(undef, nmarkers(arg))
+        mask = @alloc(UInt, div(nmarkers(arg), blocksize(Sequence), RoundUp))
         ωsv = (AIsType(), AIsType())
 
         while !isempty(vstack)
@@ -432,7 +432,7 @@ function update_upstream!(arg, v; buffer = default_buffer())
             h = sequence(arg, v)
             oldhash = hash(h)
             h.data.chunks .⊻= .~h.data.chunks
-            _compute_sequence!(arg, v, mask, ωs_buf = first(ωsv))
+            _compute_sequence!(arg, v, mask)
             iszero(dad(arg, v)) && continue
 
             ## Update ancestral intervals of parental edges ##
@@ -514,9 +514,10 @@ function recombine!(arg, redge, cedge, breakpoint, rlat, clat;
     end
 
     ## Compute sequence of new vertices ##
-    let mask = Sequence(undef, nmarkers(arg)), ωs_buf = AIsType()
-        _compute_sequence!(arg, rvertex, mask, ωs_buf = ωs_buf)
-        _compute_sequence!(arg, cvertex, mask, ωs_buf = ωs_buf)
+    @no_escape begin
+        mask = @alloc(UInt, div(nmarkers(arg), blocksize(Sequence), RoundUp))
+        _compute_sequence!(arg, rvertex, mask)
+        _compute_sequence!(arg, cvertex, mask)
     end
 
     ## Update sequences and ancetral intervals ##

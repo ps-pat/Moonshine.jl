@@ -237,7 +237,50 @@ function postoidx(sample::Sample, ω::Ω)
     lidx:ridx
 end
 
-function ancestral_mask!(η, sample::Sample, ω::Ω; wipe = true)
+function ancestral_mask!(v::AbstractVector{UInt64}, sample::Sample, ω::Ω;
+                         wipe = true)
+    wipe && _wipe!(v)
+
+    idx = postoidx(sample, ω)
+    iszero(length(idx)) && return v
+
+    chunks_idx = chunkidx(Sequence, idx.start), chunkidx(Sequence, idx.stop)
+
+    ## Evrything is in reverse in line with the way data is stored in
+    ## BitVectors.
+
+    ## First chunk
+    let nleading0 = idxinchunk(Sequence, idx.start) - 1,
+        ntrailing0 = blocksize(Sequence) - (first(chunks_idx) == last(chunks_idx) ?
+            idxinchunk(Sequence, idx.stop) : blocksize(Sequence))
+
+        mask = typemax(UInt)
+        mask >>>= ntrailing0
+        mask &= typemax(UInt) << nleading0
+
+        v[first(chunks_idx)] |= mask
+    end
+
+    ## Early termination in case only one chunk needs to be modified
+    first(chunks_idx) == last(chunks_idx) && return v
+
+    ## Middle chunks
+    @turbo for k ∈ range(first(chunks_idx) + 1, last(chunks_idx) - 1)
+        v[k] |= typemax(UInt)
+    end
+
+    ## Last chunk
+    let ntrailing0 = blocksize(Sequence) - idxinchunk(Sequence, idx.stop)
+        mask = typemax(UInt)
+        mask >>>= ntrailing0
+
+        v[last(chunks_idx)] |= mask
+    end
+
+    v
+end
+
+function ancestral_mask!(η::Sequence, sample::Sample, ω::Ω; wipe = true)
     wipe && _wipe!(η)
     η.data[postoidx(sample, ω)] .= true
     η
@@ -262,7 +305,9 @@ function ancestral_mask!(η, sample::Sample, pos::AbstractFloat; wipe = true)
     η
 end
 
-_wipe!(η) = η.data.chunks .⊻= η.data.chunks
+_wipe!(η::Sequence) = η.data.chunks .⊻= η.data.chunks
+
+_wipe!(h) = fill!(h, 0)
 
 for (f, symb) ∈ Dict(:mut_rate => :(:μ), :rec_rate => :(:ρ))
     @eval function $f(sample::Sample, scaled = true)
