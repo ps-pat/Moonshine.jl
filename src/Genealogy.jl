@@ -667,6 +667,8 @@ to constraint search to an interval.
 
 The maximum number of cousins is ``p^2 \\times c \\times (c - 1)`` where ``p``
 and ``c`` are the maximum number of parents and children respectively.
+
+See also [`iscousin`](@ref)
 """
 function cousins(buf, genealogy::T, v, args...) where T
     head_buf = firstindex(buf)
@@ -699,6 +701,35 @@ function cousins(buf, genealogy::T, v, args...) where T
     end
 
     resize!(buf, head_buf - 1)
+end
+
+"""
+    iscousin(genealogy, u, v, args...)
+
+Determines if two vertices are cousins.
+
+`args` is splatted into internal calls to `dads` and `children`. It can be used
+to constraint search to an interval.
+
+See also: [`cousins`](@ref)
+"""
+function iscousin(genealogy, u, v, args...)
+    @inbounds for d ∈ dads(genealogy, u, args...)
+        for gd ∈ dads(genealogy, d, args...)
+            for uu ∈ children(genealogy, gd, args...)
+                flag = zero(Int8)
+                @simd ivdep for c ∈ children(genealogy, uu, args...)
+                    ## Race condition is not an issue here. We return `true`
+                    ## if flag != 0.
+                    flag += c == v
+                end
+
+                iszero(flag) || return true
+            end
+        end
+    end
+
+    false
 end
 
 export dad, child
