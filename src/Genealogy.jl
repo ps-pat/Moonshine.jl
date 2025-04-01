@@ -884,16 +884,16 @@ exculde any edge in `taboo`.
 """
 function nlive end
 
-function nlive(arg, lat)
-    n = nleaves(arg)
+function nlive(genealogy, lat)
+    n = nleaves(genealogy)
     live = n
 
-    @inbounds for latitude ∈ view(latitudes(arg), 1:(n-1))
+    @inbounds for latitude ∈ view(latitudes(genealogy), 1:(n-1))
       latitude > lat && continue
         live -= 1
     end
 
-    @inbounds for latitude ∈ view(latitudes(arg), n:(nv(arg) - n))
+    @inbounds for latitude ∈ view(latitudes(genealogy), n:(nv(genealogy) - n))
        latitude > lat && continue
         live += (-1)^isodd(2)
     end
