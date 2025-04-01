@@ -876,9 +876,11 @@ edgesmap(genealogy) = Dict(reverse.(enumerate(edges(genealogy))))
 
 export nlive
 """
-    nlive(genealogy, lat, ωs)
+    nlive(genealogy, lat)
+    nlive(genealogy, lat[, taboo], ωs; buffer = default_buffer())
 
-Number of live edges w.r.t an interval for a given latitude.
+Number of live edges w.r.t an interval for a given latitude. Optionally,
+exculde any edge in `taboo`.
 """
 function nlive end
 
@@ -899,16 +901,21 @@ function nlive(arg, lat)
     live
 end
 
-function nlive(genealogy, lat, ωs = Ω(0, ∞); buffer = default_buffer())
-    ret = zero(Int)
-    @no_escape buffer begin
-        store = @alloc(Edge{VertexType}, nleaves(genealogy) + nrecombinations(genealogy))
-        visited = @alloc(Bool, nrecombinations(genealogy))
-        for e ∈ edges_interval(genealogy, ωs, store, visited, mrca(genealogy), lat)
-            latitude(genealogy, dst(e)) <= lat <= latitude(genealogy, src(e)) || continue
-            ret += 1
+for (signature, test) ∈ Dict(
+    :(nlive(genealogy, lat, ωs; buffer = default_buffer())) => :true,
+    :(nlive(genealogy, lat, predicate, ωs; buffer = default_buffer())) => :(predicate(e)))
+    @eval $(signature) = begin
+        ret = zero(Int)
+        @no_escape buffer begin
+            store = @alloc(Edge{VertexType}, nleaves(genealogy) + nrecombinations(genealogy))
+            visited = @alloc(Bool, nrecombinations(genealogy))
+            for e ∈ edges_interval(genealogy, ωs, store, visited, mrca(genealogy), lat)
+                latitude(genealogy, dst(e)) <= lat <= latitude(genealogy, src(e)) || continue
+                $test || continue
+                ret += 1
+            end
         end
-    end
 
-    ret
+        ret
+    end
 end
