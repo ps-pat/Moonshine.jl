@@ -475,8 +475,9 @@ branchlength(genealogy) = mapreduce(e -> branchlength(genealogy, e), +, edges(ge
 function branchlength(genealogy, ωs; buffer = buffer)
     @no_escape buffer begin
         store = @alloc(Edge{VertexType}, nleaves(genealogy))
+        visited = @alloc(Bool, nrecombinations(arg))
         ret = sum(e -> branchlength(genealogy, e),
-                  edges_interval(genealogy, ωs, store))
+                  edges_interval(genealogy, ωs, store, visited))
     end
 
     ret
@@ -796,15 +797,14 @@ struct EdgesInterval{T, I}
     genealogy::T
     ωs::I
     buffer::CheapStack{Edge{VertexType}}
-    visited::BitVector
+    visited::UnsafeArray{Bool, 1}
     min_latitude::Float64
 end
 
-function EdgesInterval(genealogy, ωs, store,
+function EdgesInterval(genealogy, ωs, store::AbstractArray, visited,
                        root = mrca(genealogy), min_latitude = zero(Float64))
-    ## TODO: manage `visited` manually.
     eibuffer = CheapStack(store)
-    visited = falses(nrecombinations(genealogy))
+    fill!(visited, false)
 
     for d ∈ children(genealogy, root, ωs)
         push!(eibuffer, Edge(root => d))
@@ -851,9 +851,9 @@ end
 
 export edges_interval
 
-edges_interval(genealogy, ωs, store,
+edges_interval(genealogy, ωs, store, visited,
                root = mrca(genealogy), min_latitude = zero(Float64)) =
-    EdgesInterval(genealogy, ωs, store, root, min_latitude)
+    EdgesInterval(genealogy, ωs, store, visited, root, min_latitude)
 
 function edges_interval(genealogy, ωs)
     ωs_e = AIsType()
@@ -903,7 +903,8 @@ function nlive(genealogy, lat, ωs = Ω(0, ∞); buffer = default_buffer())
     ret = zero(Int)
     @no_escape buffer begin
         store = @alloc(Edge{VertexType}, nleaves(genealogy) + nrecombinations(genealogy))
-        for e ∈ edges_interval(genealogy, ωs, store, mrca(genealogy), lat)
+        visited = @alloc(Bool, nrecombinations(genealogy))
+        for e ∈ edges_interval(genealogy, ωs, store, visited, mrca(genealogy), lat)
             latitude(genealogy, dst(e)) <= lat <= latitude(genealogy, src(e)) || continue
             ret += 1
         end

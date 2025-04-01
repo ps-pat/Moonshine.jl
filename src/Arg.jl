@@ -246,7 +246,8 @@ function mutation_edges!(mutations, arg, ω::Ω; buffer = default_buffer())
     ωs_buf = AIsType()
     @no_escape buffer begin
         store = @alloc(Edge{VertexType}, nleaves(arg) + nrecombinations(arg))
-        @inbounds for e ∈ edges_interval(arg, ω, store)
+        visited = @alloc(Bool, nrecombinations(arg))
+        @inbounds for e ∈ edges_interval(arg, ω, store, visited)
             mutationsidx!(mutations, mask, arg, e, firstchunk, firstidx, lastchunk,
                           ωs_buf = ωs_buf)
         end
@@ -323,13 +324,14 @@ function next_inconsistent_idx(arg, idx;
 
         @no_escape buffer begin
             store = @alloc(Edge{VertexType}, nleaves(arg) + nrecombinations(arg))
+            visited = @alloc(Bool, nrecombinations(arg))
             ei_ptr = convert(Ptr{Edge{VertexType}}, @alloc_ptr(ne(arg) * sizeof(Edge{VertexType})))
             mutations_sequences_ptr = convert(Ptr{UInt}, @alloc_ptr((ne(arg)) * sizeof(UInt)))
             c_buffer_ptr = convert(Ptr{UInt}, @alloc_ptr((ne(arg)) * sizeof(UInt)))
 
             ## Traverse marginal graph and fill containers
             ne_interval = 0
-            for e ∈ edges_interval(arg, base_ω, store)
+            for e ∈ edges_interval(arg, base_ω, store, visited)
                 ne_interval += 1
 
                 unsafe_store!(ei_ptr, e, ne_interval)
@@ -880,9 +882,10 @@ function sample_recombination_unconstrained!(rng, arg, winwidth,
     ## Sample the recoalescence edge ##
     @no_escape buffer begin
         store = @alloc(Edge{VertexType}, ne(arg))
+        visited = @alloc(Bool, nrecombinations(arg))
         cedges_data = @alloc(Edge{VertexType}, ne(arg))
         cedges_ptr = firstindex(cedges_data)
-        for e ∈ edges_interval(arg, window, store, mrca(arg), clat)
+        for e ∈ edges_interval(arg, window, store, visited, mrca(arg), clat)
             e == redge && continue
             cedges_data[cedges_ptr] = e
             cedges_ptr += 1
