@@ -610,11 +610,14 @@ end
 
 export siblings, sibling
 """
-    siblings(genealogy, v)
+    siblings(genealogy, v, args...)
     sibling(genealogy, v)
 
 Return the siblings of a vertex, that is the other vertices in the genealogy
 that have the same parents.
+
+`args` is splatted into internal calls to `dads` and `children`. It can be used
+to constraint search to an interval.
 
 If you are certain that `v` only has one sibling, you can use the `sibling`
 method to avoid allocation.
@@ -622,24 +625,11 @@ method to avoid allocation.
 function siblings end,
 function sibling end
 
-function siblings(genealogy, v)
+function siblings(genealogy, v, args...)
     ret = Vector{VertexType}(undef, 0)
 
-    for _dad ∈ dads(genealogy, v)
-        for _child ∈ children(genealogy, _dad)
-            _child == v && continue
-            push!(ret, _child)
-        end
-    end
-
-    ret
-end
-
-function siblings(genealogy, v, x)
-    ret = Vector{VertexType}(undef, 0)
-
-    for _dad ∈ dads(genealogy, v, x)
-        for _child ∈ children(genealogy, _dad, x)
+    for _dad ∈ dads(genealogy, v, args...)
+        for _child ∈ children(genealogy, _dad, args...)
             _child == v && continue
             push!(ret, _child)
         end
