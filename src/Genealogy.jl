@@ -893,7 +893,7 @@ end
 
 for (signature, test) ∈ Dict(
     :(nlive(genealogy, lat, ωs; buffer = default_buffer())) => :true,
-    :(nlive(genealogy, lat, predicate, ωs; buffer = default_buffer())) => :(predicate(e)))
+    :(nlive(predicate, genealogy, lat, ωs; buffer = default_buffer())) => :(predicate(e)))
     @eval $(signature) = begin
         ret = zero(Int)
         @no_escape buffer begin
