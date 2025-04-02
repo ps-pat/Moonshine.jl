@@ -866,29 +866,37 @@ edgesmap(genealogy) = Dict(reverse.(enumerate(edges(genealogy))))
 
 export nlive
 """
-    nlive(genealogy, lat)
-    nlive(genealogy, lat[, taboo], ωs; buffer = default_buffer())
+    nlive([predicate,]genealogy, lat)
+    nlive([predicate,]genealogy, lat, ωs; buffer = default_buffer())
 
-Number of live edges w.r.t an interval for a given latitude. Optionally,
-exculde any edge in `taboo`.
+Number of live edges at a given latitude. Search can be restricted to an
+interval. If a pedicate is passed as first argument, only edged satisfying it
+will be counted.
 """
 function nlive end
 
-function nlive(genealogy, lat)
-    n = nleaves(genealogy)
-    live = n
+for (signature, test) ∈ Dict(
+    :(nlive(genealogy, lat)) => :true,
+    :(nlive(predicate, genealogy, lat)) => :(predicate(e)))
+    @eval $signature = begin
+        live = zero(Int)
 
-    @inbounds for latitude ∈ view(latitudes(genealogy), 1:(n-1))
-      latitude > lat && continue
-        live -= 1
+        ## The grand MRCA is live forever
+        if lat > tmrca(genealogy)
+            if ($test)
+                live += 1
+            end
+            return live
+        end
+
+        @inbounds for e ∈ edges(genealogy)
+            latitude(genealogy, dst(e)) <= lat <= latitude(genealogy, src(e)) || continue
+            $test || continue
+            live += 1
+        end
+
+        live
     end
-
-    @inbounds for latitude ∈ view(latitudes(genealogy), n:(nv(genealogy) - n))
-       latitude > lat && continue
-        live += (-1)^isodd(2)
-    end
-
-    live
 end
 
 for (signature, test) ∈ Dict(
