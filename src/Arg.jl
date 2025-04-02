@@ -516,7 +516,7 @@ function recombine!(arg, redge, cedge, breakpoint, rlat, clat;
     end
 
     ## Compute sequence of new vertices ##
-    @no_escape begin
+    @no_escape buffer begin
         mask = @alloc(UInt, div(nmarkers(arg), blocksize(Sequence), RoundUp))
         _compute_sequence!(arg, rvertex, mask)
         _compute_sequence!(arg, cvertex, mask)
