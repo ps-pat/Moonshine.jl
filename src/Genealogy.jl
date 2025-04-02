@@ -879,15 +879,10 @@ for (signature, test) ∈ Dict(
     :(nlive(genealogy, lat)) => :true,
     :(nlive(predicate, genealogy, lat)) => :(predicate(e)))
     @eval $signature = begin
-        live = zero(Int)
-
         ## The grand MRCA is live forever
-        if lat > tmrca(genealogy)
-            if ($test)
-                live += 1
-            end
-            return live
-        end
+        lat > tmrca(genealogy) && return one(Int)
+
+        live = zero(Int)
 
         @inbounds for e ∈ edges(genealogy)
             latitude(genealogy, dst(e)) <= lat <= latitude(genealogy, src(e)) || continue
@@ -903,17 +898,21 @@ for (signature, test) ∈ Dict(
     :(nlive(genealogy, lat, ωs; buffer = default_buffer())) => :true,
     :(nlive(predicate, genealogy, lat, ωs; buffer = default_buffer())) => :(predicate(e)))
     @eval $(signature) = begin
-        ret = zero(Int)
+        ## The grand MRCA is live forever
+        lat > tmrca(genealogy) && return one(Int)
+
+        live = zero(Int)
+
         @no_escape buffer begin
             store = @alloc(Edge{VertexType}, nleaves(genealogy) + nrecombinations(genealogy))
             visited = @alloc(Bool, nrecombinations(genealogy))
             for e ∈ edges_interval(genealogy, ωs, store, visited, mrca(genealogy), lat)
                 latitude(genealogy, dst(e)) <= lat <= latitude(genealogy, src(e)) || continue
                 $test || continue
-                ret += 1
+                live += 1
             end
         end
 
-        ret
+        live
     end
 end
