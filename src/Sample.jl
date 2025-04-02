@@ -237,12 +237,13 @@ function postoidx(sample::Sample, ω::Ω)
     lidx:ridx
 end
 
-function ancestral_mask!(v::AbstractVector{UInt64}, sample::Sample, ω::Ω;
+#          +----------------------------------------------------------+
+#          |                          Masks                           |
+#          +----------------------------------------------------------+
+
+function mask!(v::AbstractVector{UInt64}, sample::Sample, idx::AbstractUnitRange;
                          wipe = true)
     wipe && _wipe!(v)
-
-    idx = postoidx(sample, ω)
-    iszero(length(idx)) && return v
 
     chunks_idx = chunkidx(Sequence, idx.start), chunkidx(Sequence, idx.stop)
 
@@ -278,6 +279,16 @@ function ancestral_mask!(v::AbstractVector{UInt64}, sample::Sample, ω::Ω;
     end
 
     v
+end
+
+function ancestral_mask!(v::AbstractVector{UInt64}, sample::Sample, ω::Ω;
+                         wipe = true)
+    wipe && _wipe!(v)
+
+    idx = postoidx(sample, ω)
+    (iszero ∘ length)(idx) && return v
+
+    mask!(v, sample, idx, wipe = false)
 end
 
 function ancestral_mask!(η::Sequence, sample::Sample, ω::Ω; wipe = true)

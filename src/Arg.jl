@@ -621,9 +621,16 @@ function iterate(iter::EdgesIntervalRec, state = 1)
 end
 
 function _weight_edge(arg, e_ref, e, mask, h_buf, f)
-    h_buf.data .⊻= h_buf.data
-    h_buf.data .⊻= sequence(arg, dst(e_ref)).data .& sequence(arg, dst(e)).data
-    h_buf.data .&= mask.data
+    chunks = h_buf.data.chunks
+    h_ref = sequence(arg, dst(e_ref)).data.chunks
+    h = sequence(arg, dst(e)).data.chunks
+
+    @inbounds @simd ivdep for k ∈ eachindex(chunks)
+        chunks[k] ⊻= chunks[k]
+        chunks[k] ⊻= h_ref[k]
+        chunks[k] &= h[k]
+        chunks[k] &= mask[k]
+    end
 
     f(h_buf)
 end
@@ -636,8 +643,8 @@ function _sample_cedge(rng, arg, lat, nextidx, window, live_edge::T, redge, buff
         ws_ptr = convert(Ptr{Float64}, @alloc_ptr(ne(arg) * sizeof(Float64)))
         len = 0
 
-        mask = Sequence(falses(nmarkers(arg)))
-        mask.data[range(nextidx + 1, min(nextidx + 11, nmarkers(arg)))] .= true
+        mask = @alloc(UInt, div(nmarkers(arg), blocksize(Sequence), RoundUp))
+        mask!(mask, sam(arg), range(nextidx + 1, min(nextidx + 11, nmarkers(arg))))
         ## TODO: Do that without allocating.
         x = Sequence(undef, nmarkers(arg))
 
