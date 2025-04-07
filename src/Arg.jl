@@ -703,7 +703,7 @@ function sample_redge(rng, arg, e, nextidx, rlat_ubound)
 
     ## Sample recombination location
     ## The larger α - β is, the stronger the bias towards ancient branches.
-    Δlat_dist = Beta(3, 2)
+    Δlat_dist = Beta(2, 2)
     Δlat = rand(rng, Δlat_dist)
     arg.logprob[] += logpdf(Δlat_dist, Δlat)
     Δlat *= total_length
