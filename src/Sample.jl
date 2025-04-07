@@ -320,6 +320,10 @@ _wipe!(η::Sequence) = η.data.chunks .⊻= η.data.chunks
 
 _wipe!(h) = fill!(h, 0)
 
+#          +----------------------------------------------------------+
+#          |              Mutation & Recombination Rates              |
+#          +----------------------------------------------------------+
+
 for (f, symb) ∈ Dict(:mut_rate => :(:μ), :rec_rate => :(:ρ))
     @eval function $f(sample::Sample, scaled = true)
         ret = getfield(sample, $symb)
