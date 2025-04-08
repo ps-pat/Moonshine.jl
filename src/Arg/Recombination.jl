@@ -431,10 +431,11 @@ function sample_recombination_constrained!(rng, arg, breakpoint, winwidth, live_
         ClosedInterval(idxtopos(arg, nextidx - 1), nextpos)
 
     ## Sample recombination edge ##
-    e1, e2 = sample(rng, eachindex(live_edges), 2; replace = false)
+    es_idx = MVector{2, Int}(undef)
+    sample!(rng, eachindex(live_edges), es_idx; replace = false)
     arg.logprob[] += log(2) - log(n) - log(n - 1)
 
-    sample_derived_recombination!(rng, arg, e1, e2,
+    sample_derived_recombination!(rng, arg, first(es_idx), last(es_idx),
                                   breakpoint, window, nextidx, nextpos,
                                   live_edges, buffer = buffer)
 
