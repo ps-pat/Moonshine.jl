@@ -1,3 +1,7 @@
+#          +----------------------------------------------------------+
+#          |                        ARG Update                        |
+#          +----------------------------------------------------------+
+
 function _compute_sequence!(arg, v, mask)
     ## This function assumes that every marker is set to 1!
     η = sequence(arg, v)
@@ -75,6 +79,10 @@ function update_upstream!(arg, v; buffer = default_buffer())
 
     arg
 end
+
+#          +----------------------------------------------------------+
+#          |                      Recombination                       |
+#          +----------------------------------------------------------+
 
 export recombine!
 """
@@ -163,7 +171,9 @@ function extend_recombination!(arg, edge, otherdad, breakpoint; buffer = default
     update_upstream!(arg, d, buffer = buffer)
 end
 
-# -- Edges Iterator ----------------------------------------------------
+#          +----------------------------------------------------------+
+#          |                        Utilities                         |
+#          +----------------------------------------------------------+
 
 struct EdgesIntervalRec{I}
     genealogy::Arg
@@ -231,73 +241,49 @@ function iterate(iter::EdgesIntervalRec, state = 1)
     e, state + 1
 end
 
-function _weight_edge(arg, e_ref, e, mask, h_buf, f)
-    chunks = h_buf.data.chunks
-    h_ref = sequence(arg, dst(e_ref)).data.chunks
-    h = sequence(arg, dst(e)).data.chunks
+#          +----------------------------------------------------------+
+#          |                Constrained Recombinations                |
+#          +----------------------------------------------------------+
 
-    @inbounds @simd ivdep for k ∈ eachindex(chunks)
-        chunks[k] ⊻= chunks[k]
-        chunks[k] ⊻= h_ref[k]
-        chunks[k] &= h[k]
-        chunks[k] &= mask[k]
-    end
+function _sample_clat(rng, arg, rlat, possible_cedges)
+    domain_lbound = max(rlat, minimum(e -> latitude(arg, dst(e)), possible_cedges))
+    domain_ubound = maximum(e -> latitude(arg, src(e)), possible_cedges)
+    pp_dist = Uniform(domain_lbound, domain_ubound)
 
-    f(h_buf)
-end
+    λbound = length(possible_cedges)
+    t = (zero ∘ eltype)(pp_dist)
+    accept = false
+    @inbounds while !accept
+        t = rand(rng, pp_dist)
+        arg.logprob[] += logpdf(pp_dist, t)
 
-function _sample_cedge(rng, arg, lat, nextidx, window, live_edge::T, redge, buffer, λ = 0.3) where T
-    nextpos = idxtopos(arg, nextidx)
-
-    @no_escape buffer begin
-        cedges_ptr = convert(Ptr{T}, @alloc_ptr(ne(arg) * sizeof(T)))
-        ws_ptr = convert(Ptr{Float64}, @alloc_ptr(ne(arg) * sizeof(Float64)))
-        len = 0
-
-        mask = @alloc(UInt, div(nmarkers(arg), blocksize(Sequence), RoundUp))
-        mask!(mask, sam(arg), range(nextidx + 1, min(nextidx + 11, nmarkers(arg))))
-        ## TODO: Do that without allocating.
-        x = Sequence(undef, nmarkers(arg))
-
-        store = @alloc(T, nv(arg))
-        visited = @alloc(Bool, nrecombinations(arg))
-        @inbounds for e ∈ EdgesIntervalRec(arg, window, store, visited,
-                                             nextpos, nextidx, src(live_edge), lat)
-            ## Compute distance & weight
-            w = _weight_edge(arg, redge, e, mask, x, h -> λ * (1 - λ)^(1 - sum(h)))
-
-            ## Store edge and weight
-            len += 1
-            unsafe_store!(cedges_ptr, e, len)
-            unsafe_store!(ws_ptr, w, len)
+        ## `count` causes weird type instability for some reason
+        λt = zero(Int)
+        @simd ivdep for k ∈ eachindex(possible_cedges)
+            e = possible_cedges[k]
+            λt += latitude(arg, dst(e)) <= t <= latitude(arg, src(e))
         end
 
-        cedges = UnsafeArray{T, 1}(cedges_ptr, (len,))
-        ws = UnsafeArray{Float64, 1}(ws_ptr, (len,))
-        sample(rng, cedges, ProbabilityWeights(ws))
+        accept_dist = Bernoulli(λt / λbound)
+        accept = rand(rng, accept_dist)
+        arg.logprob[] += logpdf(accept_dist, accept)
     end
+
+    t
 end
 
 """
-    sample_redge(rng, arg, e, nextidx, rlat_ubound)
+    rlat_interval(arg, e, nextidx, ubound)
 
-Sample a recombination edge conditional on a given edge.
-
-The graph is traversed downstream starting from `dst(e)` as long as there is
-only one derived child.
+Compute the valid recombination interval for an edge at a given position.
 """
-function sample_redge(rng, arg, e, nextidx, rlat_ubound)
+function rlat_min(arg, e, nextidx)
     nextpos = idxtopos(arg, nextidx)
-
-    ## Compute the total length of valid branches
     s, d = src(e), dst(e)
     refstate = sequence(arg, d)[nextidx]
 
     valid_child = d
-    total_length = rlat_ubound - latitude(arg, s)
     @inbounds while !iszero(valid_child)
-        total_length += branchlength(arg, Edge(s => d))
-
         valid_child = 0
         for c ∈ children(arg, d, nextpos)
             sequence(arg, c)[nextidx] == refstate || continue
@@ -314,103 +300,34 @@ function sample_redge(rng, arg, e, nextidx, rlat_ubound)
         end
     end
 
-    ## Sample recombination location
-    ## The larger α - β is, the stronger the bias towards ancient branches.
-    Δlat_dist = Beta(2, 2)
-    Δlat = rand(rng, Δlat_dist)
-    arg.logprob[] += logpdf(Δlat_dist, Δlat)
-    Δlat *= total_length
-    lat = latitude(arg, d) + Δlat
-
-    ## Compute recombination edge ##
-    while Δlat > 0
-        Δlat -= branchlength(arg, Edge(s => d))
-        Δlat > 0 || break
-        d = s
-        s = (first ∘ dads)(arg, s, nextpos)
-    end
-
-    Edge(s => d), lat
+    latitude(arg, d)
 end
 
-# -- Constrained recombinations ----------------------------------------
+function _find_actual_edge(arg, e, nextidx, lat)
+    nextpos = idxtopos(arg, nextidx)
+    refstate = sequence(arg, dst(e))[nextidx]
 
-"""
-    sample_derived_recombination!(rng, arg, e1, e2, breakpoint, window, nextidx, nextpos, live_edges; buffer = default_buffer())
+    while true
+        latitude(arg, dst(e)) <= lat <= latitude(arg, src(e)) && return e
+        e = Edge(dst(e) => (first ∘ children)(arg, dst(e), nextpos))
+    end
+end
 
-Sample a recombination & recoalescence event between two derived edges
-constrained to eliminate one mutation.
+function _update_live_edges!(live_edges, arg, newd, nextidx, breakpoint)
+    news = (first ∘ dads)(arg, newd, breakpoint)
 
-Under certain conditions, it is not necessary to actually sample such an event.
-This is the case when the recombination and recoalescence event are incident.
-In this case, the recombination edge's ancestral interval is extended (see
-[`extend_recombination!`](@ref).
-"""
-function sample_derived_recombination!(rng, arg, e1, e2,
-                                       breakpoint, window, nextidx, nextpos,
-                                       live_edges; buffer = default_buffer())
-    ## This ensures that there is a least one edge available for recoalescence.
-    if latitude(arg, dst(live_edges[e1])) > latitude(arg, dst(live_edges[e2]))
-        e1, e2 = e2, e1
+    @inbounds while !ismutation_edge(arg, Edge(news => newd), nextidx)
+        newd = news
+        news = (first ∘ dads)(arg, news, breakpoint)
     end
 
-    ## Sample recombination edge and latitude
-    rlat_ubound = min(latitude(arg, src(live_edges[e1])),
-                      latitude(arg, src(live_edges[e2])))
-    redge, rlat = sample_redge(rng, arg, popat!(live_edges, e1), nextidx, rlat_ubound)
-    if e2 > e1
-        ## Accounts for length reduction of ̀`live_edges` following `popat!`
-        e2 -= 1
-    end
-
-    ## Sample recoalescence edge ##
-    cedge = _sample_cedge(rng, arg, rlat, nextidx, window, live_edges[e2],
-                          redge, buffer)
-
-    if  src(cedge) ∈ dads(arg, dst(redge)) && isrecombination(arg, dst(redge))
-        ## In this situation, there is acutaly no need for a new recombination
-        ## event. A mutation can be eliminated simply by extending `redge`'s
-        ## ancestral interval.
-        extend_recombination!(arg, Edge(src(cedge) => dst(redge)), src(redge),
-                              breakpoint, buffer = buffer)
-
-        newd = dst(cedge)
-    else
-        ## Sample recoalescence latitude ##
-        clat_lbound = max(rlat, latitude(arg, dst(cedge)))
-        clat_ubound = latitude(arg, src(cedge))
-        clat_span = clat_ubound - clat_lbound
-
-        ## Same strategy as for `rlat_dist` (see above).
-        clat_dist = Beta(2)
-        clat = rand(rng, clat_dist)
-        arg.logprob[] += logpdf(clat_dist, clat)
-        clat *= clat_span
-        clat += clat_lbound
-
-        ## Add recombination event to the graph ##
-        @debug "Constrained recombination event" redge cedge breakpoint rlat clat
-        recombine!(arg, redge, cedge, breakpoint, rlat, clat, buffer = buffer)
-
-        newd = nv(arg)
-    end
-
-    ## Compute new live edge ##
-    news = src(cedge)
-    if news != src(live_edges[e2])
-        while sequence(arg, news)[nextidx]
-            newd = news
-            news = (first ∘ dads)(arg, news, nextpos)
-        end
-    end
-
-    for (k, e) ∈ enumerate(live_edges)
+    @inbounds for (k, e) ∈ enumerate(live_edges)
         src(e) == news || continue
         live_edges[k] = Edge(news => newd)
         break
     end
 
-    live_edges
+    Edge(news => newd)
 end
 
 """
@@ -430,17 +347,84 @@ function sample_recombination_constrained!(rng, arg, breakpoint, winwidth, live_
     window = breakpoint ± winwidth / 2 ∪
         ClosedInterval(idxtopos(arg, nextidx - 1), nextpos)
 
-    ## Sample recombination edge ##
+    ## Sample live edges ##
     es_idx = MVector{2, Int}(undef)
     sample!(rng, eachindex(live_edges), es_idx; replace = false)
     arg.logprob[] += log(2) - log(n) - log(n - 1)
+    e1, e2 = live_edges[es_idx]
 
-    sample_derived_recombination!(rng, arg, first(es_idx), last(es_idx),
-                                  breakpoint, window, nextidx, nextpos,
-                                  live_edges, buffer = buffer)
+    ## Sample recombination location ##
+    es_mins = @SVector [rlat_min(arg, e1, nextidx), rlat_min(arg, e2, nextidx)]
+    es_max = min(latitude(arg, src(e1)), latitude(arg, src(e2)))
+
+    @no_escape buffer begin
+        ## We proceed in two steps to avoid sampling a location too close to
+        ## the ends of the recombination branch, which may cause numerical
+        ## instability.
+        ## First, we sample a recombination edge.
+        rints_width = @alloc(Float64, 2)
+        map!(es_min -> max(0, es_max - es_min), rints_width, es_mins)
+        recroot_idx = sample(rng, 1:2, ProbabilityWeights(rints_width))
+        arg.logprob[] += log(rints_width[recroot_idx]) - (log ∘ sum)(rints_width)
+
+        ## The larger α - β is, the stronger the bias towards ancient branches
+        ## (0 = no bias)
+        rlat_dist = Beta(2, 2)
+        rlat = rand(rng, rlat_dist)
+        arg.logprob[] += logpdf(rlat_dist, rlat)
+        rlat *= rints_width[recroot_idx]
+        rlat += es_mins[recroot_idx]
+
+        recroot, coalroot = isone(recroot_idx) ? (e1, e2) : (e2, e1)
+        redge = _find_actual_edge(arg, recroot, nextidx, rlat)
+
+        ## Sample recoalescence location ##
+        popat!(live_edges, isone(recroot_idx) ? first(es_idx) : last(es_idx))
+
+        store = @alloc(Edge{VertexType}, nv(arg))
+        visited = @alloc(Bool, nrecombinations(arg))
+        possible_cedges_ptr = convert(Ptr{Edge{VertexType}},
+                                      @alloc_ptr(ne(arg) * sizeof(Edge{VertexType})))
+        npossible_cedges = zero(Int)
+        for e ∈ EdgesIntervalRec(arg, window, store, visited, nextpos, nextidx, src(coalroot), rlat)
+            npossible_cedges += 1
+            unsafe_store!(possible_cedges_ptr, e, npossible_cedges)
+        end
+        possible_cedges = UnsafeArray{Edge{VertexType}, 1}(possible_cedges_ptr, (npossible_cedges,))
+        clat = _sample_clat(rng, arg, rlat, possible_cedges)
+
+        ## Sample recoalescence edge
+        ws = @alloc(Float64, npossible_cedges)
+        for (k, e) ∈ enumerate(possible_cedges)
+            ws[k] = latitude(arg, dst(e)) <= clat <= latitude(arg, src(e))
+        end
+
+        cedge = sample(rng, possible_cedges, ProbabilityWeights(ws))
+    end
+
+    if src(cedge) ∈ dads(arg, dst(redge)) && isrecombination(arg, dst(redge))
+        ## First, the possibility of extending a previous recombination event
+        ## must be considered. In this situation, there is acutaly no need for
+        ## a new recombination event. A mutation can be eliminated simply by
+        ## extending `redge`'s ancestral interval.
+        @debug "Recombination extension" redge cedge breakpoint
+        extend_recombination!(arg, Edge(src(cedge) => dst(redge)), src(redge),
+                              breakpoint, buffer = buffer)
+        newd = src(cedge)
+    else
+        @debug "Constrained recombination event" redge cedge breakpoint rlat clat
+        recombine!(arg, redge, cedge, breakpoint, rlat, clat, buffer = buffer)
+        newd = nv(arg)
+    end
+
+    _update_live_edges!(live_edges, arg, newd, nextidx, breakpoint)
 
     breakpoint
 end
+
+#          +----------------------------------------------------------+
+#          |               Unconstrained Recombination                |
+#          +----------------------------------------------------------+
 
 function sample_recombination_unconstrained!(rng, arg, winwidth,
                                              buffer = default_buffer())
@@ -531,6 +515,10 @@ function sample_recombination_unconstrained!(rng, arg, winwidth,
 
     breakpoint
 end
+
+#          +----------------------------------------------------------+
+#          |                       ARG Building                       |
+#          +----------------------------------------------------------+
 
 function build!(rng, arg::Arg, ρ; winwidth = ∞, buffer = default_buffer())
     ## Unconstrained recombinations ##
