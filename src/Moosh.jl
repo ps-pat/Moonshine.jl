@@ -17,7 +17,7 @@ using Bumper
 
 using AutoHashEquals
 
-using Base.Libc: malloc, free
+using UnsafeArrays: UnsafeArray
 
 ## Some constants.
 const VertexType = Int
@@ -33,7 +33,7 @@ const AIsType = AIs{Vector{Ω}}
 include("Sample.jl")
 include("Genealogy.jl")
 include("Tree.jl")
-include("Arg.jl")
+include("Arg/Arg.jl")
 include("genealogy_common.jl")
 include("Copulas/Copulas.jl")
 include("ArgDensity.jl")

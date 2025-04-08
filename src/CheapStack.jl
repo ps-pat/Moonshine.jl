@@ -9,8 +9,6 @@ import Base: eltype,
              iterate,
              vec
 
-using UnsafeArrays: UnsafeArray
-
 export CheapStack
 struct CheapStack{T}
     store::UnsafeArray{T, 1}
