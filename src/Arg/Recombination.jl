@@ -272,6 +272,38 @@ function _sample_clat(rng, arg, rlat, possible_cedges)
     t
 end
 
+function _sample_clat(rng, arg, rlat, redge, nextidx; buffer = default_buffer())
+    nextpos = idxtopos(arg, nextidx)
+
+    ## Homogeneous PP
+    λ = nv(arg) - nrecombinations(arg)
+    pp = Exponential(inv(λ))
+
+    clat = rlat
+    accept = false
+    while !accept
+        ## Sample from the homogeneous process
+        Δt = rand(rng, pp)
+        arg.logprob[] += logpdf(pp, Δt)
+        clat += Δt
+
+        ## Compute rate of the actual process at `clat`
+        λt = nlive(e -> !sequence(arg, dst(e))[nextidx], arg, clat, nextpos, buffer = buffer)
+        if clat <= latitude(arg, (first ∘ dads)(arg, src(redge), nextpos))
+            ## This accounts for the fact that `redgè` cannot recombine with
+            ## itself or its parental edge.
+            λt -= 1
+        end
+
+        ## Acceptation
+        accept_dist = Bernoulli(λt / λ)
+        accept = rand(rng, accept_dist)
+        arg.logprob[] += logpdf(accept_dist, accept)
+    end
+
+    clat
+end
+
 """
     rlat_interval(arg, e, nextidx, ubound)
 
@@ -303,9 +335,8 @@ function rlat_min(arg, e, nextidx)
     latitude(arg, d)
 end
 
-function _find_actual_edge(arg, e, nextidx, lat)
+function _find_actual_edge_derived(arg, e, nextidx, lat)
     nextpos = idxtopos(arg, nextidx)
-    refstate = sequence(arg, dst(e))[nextidx]
 
     while true
         latitude(arg, dst(e)) <= lat <= latitude(arg, src(e)) && return e
@@ -313,21 +344,91 @@ function _find_actual_edge(arg, e, nextidx, lat)
     end
 end
 
-function _update_live_edges!(live_edges, arg, newd, nextidx, breakpoint)
-    news = (first ∘ dads)(arg, newd, breakpoint)
+function _find_actual_edge_wild(arg, e, nextidx, lat)
+    nextpos = idxtopos(arg, nextidx)
 
-    @inbounds while !ismutation_edge(arg, Edge(news => newd), nextidx)
-        newd = news
-        news = (first ∘ dads)(arg, news, breakpoint)
+    @inbounds while true
+        latitude(arg, dst(e)) <= lat <= latitude(arg, src(e)) && return e
+
+        for c ∈ children(arg, dst(e), nextpos)
+            sequence(arg, c)[nextidx] && continue
+            e = Edge(dst(e) => c)
+            break
+        end
+    end
+end
+
+function _update_live_edges_wild!(live_edges, arg, newd, nextidx, breakpoint, es_idx;
+                                  buffer = default_buffer())
+    e = _update_live_edges_derived!(live_edges, arg, newd, nextidx, breakpoint, es_idx,
+                                    buffer = buffer)
+    e = Edge(src(e) => sibling(arg, dst(e)))
+
+    eidx = findfirst(==(e), live_edges)
+    isnothing(eidx) || popat!(live_edges, eidx)
+
+    live_edges
+end
+
+function _update_live_edges_derived!(live_edges, arg, newd, nextidx, breakpoint, es_idx;
+                                     buffer = default_buffer())
+    popat!(live_edges, last(es_idx))
+    popat!(live_edges, first(es_idx))
+
+    lastd = newd
+    e = Edge((first ∘ dads)(arg, newd, breakpoint) => newd)
+    @no_escape buffer begin
+        ptr = convert(Ptr{VertexType}, @alloc_ptr(2 * sizeof(VertexType)))
+
+        @inbounds while !ismutation_edge(arg, e, nextidx)
+            let eidx = findfirst(==(e), live_edges)
+                if !isnothing(eidx)
+                    popat!(live_edges, eidx)
+                else
+                    ss = siblings!(ptr, arg, dst(e), breakpoint)
+                    if !isempty(ss)
+                        eidx = findfirst(==(Edge(src(e) => first(ss))), live_edges)
+                        isnothing(eidx) || popat!(live_edges, eidx)
+                    end
+                end
+            end
+
+            lastd = newd
+            newd = src(e)
+            e = Edge((first ∘ dads)(arg, newd, breakpoint) => newd)
+        end
     end
 
-    @inbounds for (k, e) ∈ enumerate(live_edges)
-        src(e) == news || continue
-        live_edges[k] = Edge(news => newd)
-        break
-    end
+    e ∈ live_edges || push!(live_edges, e)
+    Edge(dst(e) => lastd)
+end
 
-    Edge(news => newd)
+function _sample_cedge_wild(rng, arg, lat, nextidx, redge::T;
+                            buffer = default_buffer()) where T
+    nextpos = idxtopos(arg, nextidx)
+
+    @no_escape buffer begin
+        cedges_ptr = convert(Ptr{T}, @alloc_ptr(ne(arg) * sizeof(T)))
+        len = 0
+
+        store = @alloc(T, nv(arg))
+        visited = @alloc(Bool, nrecombinations(arg))
+        @inbounds for e ∈ edges_interval(arg, nextpos, store, visited, mrca(arg), lat)
+            latitude(arg, dst(e)) <= lat <= latitude(arg, src(e)) || continue
+            ## TODO: avoid visiting derived edges & descendants
+            sequence(arg, dst(e))[nextidx] && continue
+            dst(e) == src(redge) && continue
+            dst(e) == dst(redge) && continue
+
+            ## Store edge
+            len += 1
+            unsafe_store!(cedges_ptr, e, len)
+        end
+
+        cedges = UnsafeArray{T, 1}(cedges_ptr, (len,))
+        arg.logprob[] -= log(len)
+        sample(rng, cedges)
+    end
 end
 
 """
@@ -350,22 +451,52 @@ function sample_recombination_constrained!(rng, arg, breakpoint, winwidth, live_
     ## Sample live edges ##
     es_idx = MVector{2, Int}(undef)
     sample!(rng, eachindex(live_edges), es_idx; replace = false)
+    if first(es_idx) > last(es_idx)
+        es_idx[1], es_idx[2] = es_idx[2], es_idx[1]
+    end
     arg.logprob[] += log(2) - log(n) - log(n - 1)
     e1, e2 = live_edges[es_idx]
 
+    ## Consider the possibility of a wild recombination
+    eu = Edge(0 => 0) # Uncle edge
+    newd = zero(VertexType)
+    let dads_e1 = dads(arg, src(e1), breakpoint),
+        dads_e2 = dads(arg, src(e2), breakpoint)
+
+        if !isempty(dads_e1) && first(dads_e1) == src(e2)
+            siblings_e1 = siblings(arg, dst(e1), breakpoint)
+            if !isempty(siblings_e1)
+                eu = Edge(src(e1) => first(siblings_e1))
+            end
+            newd = src(e2)
+        elseif !isempty(dads_e2) && first(dads_e2) == src(e1)
+            siblings_e2 = siblings(arg, dst(e2), breakpoint)
+            if !isempty(siblings_e2)
+                eu = Edge(src(e2) => first(siblings_e2))
+            end
+            newd = src(e1)
+        end
+    end
+
     ## Sample recombination location ##
-    es_mins = @SVector [rlat_min(arg, e1, nextidx), rlat_min(arg, e2, nextidx)]
+    es_mins = (
+        rlat_min(arg, e1, nextidx),
+        rlat_min(arg, e2, nextidx),
+        (iszero ∘ dst)(eu) ? Inf : latitude(arg, dst(eu)))
     es_max = min(latitude(arg, src(e1)), latitude(arg, src(e2)))
+    rints_width = @SVector [
+        max(0, es_max - es_mins[1]),
+        max(0, es_max - es_mins[2]),
+        isinf(es_mins[3]) ? zero(Float64) : branchlength(arg, eu)]
 
     @no_escape buffer begin
         ## We proceed in two steps to avoid sampling a location too close to
         ## the ends of the recombination branch, which may cause numerical
         ## instability.
         ## First, we sample a recombination edge.
-        rints_width = @alloc(Float64, 2)
-        map!(es_min -> max(0, es_max - es_min), rints_width, es_mins)
-        recroot_idx = sample(rng, 1:2, ProbabilityWeights(rints_width))
+        recroot_idx = sample(rng, eachindex(rints_width), ProbabilityWeights(rints_width))
         arg.logprob[] += log(rints_width[recroot_idx]) - (log ∘ sum)(rints_width)
+        wildrec = recroot_idx == 3
 
         ## The larger α - β is, the stronger the bias towards ancient branches
         ## (0 = no bias)
@@ -375,49 +506,58 @@ function sample_recombination_constrained!(rng, arg, breakpoint, winwidth, live_
         rlat *= rints_width[recroot_idx]
         rlat += es_mins[recroot_idx]
 
-        recroot, coalroot = isone(recroot_idx) ? (e1, e2) : (e2, e1)
-        redge = _find_actual_edge(arg, recroot, nextidx, rlat)
+        if wildrec
+            redge = eu
 
-        ## Sample recoalescence location ##
-        popat!(live_edges, isone(recroot_idx) ? first(es_idx) : last(es_idx))
+            ## Sample recoalescence location ##
+            clat = _sample_clat(rng, arg, rlat, redge, nextidx, buffer = buffer)
 
-        store = @alloc(Edge{VertexType}, nv(arg))
-        visited = @alloc(Bool, nrecombinations(arg))
-        possible_cedges_ptr = convert(Ptr{Edge{VertexType}},
-                                      @alloc_ptr(ne(arg) * sizeof(Edge{VertexType})))
-        npossible_cedges = zero(Int)
-        for e ∈ EdgesIntervalRec(arg, window, store, visited, nextpos, nextidx, src(coalroot), rlat)
-            npossible_cedges += 1
-            unsafe_store!(possible_cedges_ptr, e, npossible_cedges)
+            if clat > tmrca(arg)
+                cedge = Edge(mrca(arg) => mrca(arg))
+            else
+                cedge = _sample_cedge_wild(rng, arg, clat, nextidx, redge,
+                                           buffer = buffer)
+            end
+        else
+            recroot, coalroot = isone(recroot_idx) ? (e1, e2) : (e2, e1)
+            redge = _find_actual_edge_derived(arg, recroot, nextidx, rlat)
+
+            ## Sample recoalescence location ##
+            store = @alloc(Edge{VertexType}, nv(arg))
+            visited = @alloc(Bool, nrecombinations(arg))
+            possible_cedges_ptr = convert(Ptr{Edge{VertexType}},
+                                          @alloc_ptr(ne(arg) * sizeof(Edge{VertexType})))
+            npossible_cedges = zero(Int)
+            for e ∈ EdgesIntervalRec(arg, window, store, visited, nextpos, nextidx, src(coalroot), rlat)
+                npossible_cedges += 1
+                unsafe_store!(possible_cedges_ptr, e, npossible_cedges)
+            end
+            possible_cedges = UnsafeArray{Edge{VertexType}, 1}(possible_cedges_ptr, (npossible_cedges,))
+            clat = _sample_clat(rng, arg, rlat, possible_cedges)
+
+            ## Sample recoalescence edge
+            ws = @alloc(Float64, npossible_cedges)
+            for (k, e) ∈ enumerate(possible_cedges)
+                ws[k] = latitude(arg, dst(e)) <= clat <= latitude(arg, src(e))
+            end
+
+            probs = ProbabilityWeights(ws)
+            cedge_idx = sample(rng, eachindex(possible_cedges), probs)
+            arg.logprob[] += log(probs[cedge_idx])
+            cedge = possible_cedges[cedge_idx]
         end
-        possible_cedges = UnsafeArray{Edge{VertexType}, 1}(possible_cedges_ptr, (npossible_cedges,))
-        clat = _sample_clat(rng, arg, rlat, possible_cedges)
-
-        ## Sample recoalescence edge
-        ws = @alloc(Float64, npossible_cedges)
-        for (k, e) ∈ enumerate(possible_cedges)
-            ws[k] = latitude(arg, dst(e)) <= clat <= latitude(arg, src(e))
-        end
-
-        cedge = sample(rng, possible_cedges, ProbabilityWeights(ws))
     end
 
-    if src(cedge) ∈ dads(arg, dst(redge)) && isrecombination(arg, dst(redge))
-        ## First, the possibility of extending a previous recombination event
-        ## must be considered. In this situation, there is acutaly no need for
-        ## a new recombination event. A mutation can be eliminated simply by
-        ## extending `redge`'s ancestral interval.
-        @debug "Recombination extension" redge cedge breakpoint
-        extend_recombination!(arg, Edge(src(cedge) => dst(redge)), src(redge),
-                              breakpoint, buffer = buffer)
-        newd = src(cedge)
+    @debug "Constrained recombination event" redge cedge breakpoint rlat clat
+    recombine!(arg, redge, cedge, breakpoint, rlat, clat, buffer = buffer)
+
+    if wildrec
+        _update_live_edges_wild!(live_edges, arg, newd, nextidx, breakpoint, es_idx)
     else
-        @debug "Constrained recombination event" redge cedge breakpoint rlat clat
-        recombine!(arg, redge, cedge, breakpoint, rlat, clat, buffer = buffer)
         newd = nv(arg)
+        _update_live_edges_derived!(live_edges, arg, newd, nextidx, breakpoint, es_idx)
     end
 
-    _update_live_edges!(live_edges, arg, newd, nextidx, breakpoint)
 
     breakpoint
 end
@@ -547,13 +687,14 @@ function build!(rng, arg::Arg, ρ; winwidth = ∞, buffer = default_buffer())
             bp_ubound = idxtopos(arg, nextidx)
 
             bp_dist = Uniform(bp_lbound, bp_ubound)
-            breakpoints = (sort ∘ rand)(rng, bp_dist, nbp)
+            breakpoints = (sort! ∘ rand)(rng, bp_dist, nbp)
             arg.logprob[] -= nbp * log(bp_ubound - bp_lbound)
 
             for breakpoint ∈ breakpoints
                 sample_recombination_constrained!(rng, arg, breakpoint,
                                                   winwidth, live_edges,
                                                   buffer = buffer)
+                (isone ∘ length)(live_edges) && break
             end
 
             previdx = nextidx
