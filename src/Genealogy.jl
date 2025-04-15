@@ -1,5 +1,6 @@
 using Graphs
 
+using Bumper: UnsafeArrays
 using Graphs: AbstractSimpleGraph
 
 import Graphs: edges, vertices, ne, nv,
@@ -610,6 +611,7 @@ end
 
 export siblings, sibling
 """
+    siblings!(x, genealogy, v, args...)
     siblings(genealogy, v, args...)
     sibling(genealogy, v)
 
@@ -621,21 +623,44 @@ to constraint search to an interval.
 
 If you are certain that `v` only has one sibling, you can use the `sibling`
 method to avoid allocation.
+
+Argument `x` in the allocating method can either be an `AbstractArray` or a
+pointer.
 """
 function siblings end,
 function sibling end
 
-function siblings(genealogy, v, args...)
-    ret = Vector{VertexType}(undef, 0)
+function siblings!(x::Ptr, genealogy, v, args...)
+    len = 0
 
     for _dad ∈ dads(genealogy, v, args...)
         for _child ∈ children(genealogy, _dad, args...)
             _child == v && continue
-            push!(ret, _child)
+            len += 1
+            unsafe_store!(x, _child, len)
         end
     end
 
-    ret
+    UnsafeArray{VertexType, 1}(x, (len,))
+end
+
+function siblings!(x::AbstractArray, genealogy, v, args...)
+    len = 0
+
+    for _dad ∈ dads(genealogy, v, args...)
+        for _child ∈ children(genealogy, _dad, args...)
+            _child == v && continue
+            len += 1
+            x[len] = _child
+        end
+    end
+
+    resize!(x, len)
+end
+
+function siblings(genealogy, v, args...)
+    x = Vector{VertexType}(undef, 2)
+    siblings!(x, genealogy, v, args...)
 end
 
 function sibling(genealogy, v)
