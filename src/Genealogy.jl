@@ -562,19 +562,14 @@ let funtransorder = Dict(:dads => (:ancestors, (x, y) -> (x, y)),
         for (Argtype, testfun) ∈ typesandfun
             ## Parents & children
             @eval function $fun(genealogy, v, ω::$Argtype)
-                mask = 0x01
+                idx = 0x06
                 neig = $fun(genealogy, v)
-                @inbounds for (k, u) ∈ enumerate(neig)
-                    ωs = ancestral_intervals(genealogy, Edge($order(u, v)))
-                    $testfun(ω, ωs) || continue
-                    mask ⊻= UInt8(k)
+                @inbounds @simd for k ∈ eachindex(neig)
+                    ωs = ancestral_intervals(genealogy, Edge($order(neig[k], v)))
+                    idx ⊻= (0x03 << 2(k - 1)) * $testfun(ω, ωs)
                 end
 
-                a, b = 0x01, 0x01
-                a <<= mask & 0x01
-                mask >>= 0x01
-                b <<= mask & 0x01
-                view(neig, a:b)
+                view(neig, range(idx & 0x03, idx >> 0x02))
             end
 
             ## Ancestors & descendants

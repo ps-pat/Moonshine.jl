@@ -62,10 +62,8 @@ for idx ∈ 0:15
     cmp1 = all(==(:closed), (R1, L2)) ? :(<) : :(<=)
     cmp2 = all(==(:closed), (L1, R2)) ? :(>) : :(>=)
 
-    @eval function isdisjoint(A::$TypeA, B::$TypeB)
-        $cmp1(rightendpoint(A), leftendpoint(B)) && return true
-        $cmp2(leftendpoint(A), rightendpoint(B)) && return true
-        false
-    end
+    @eval isdisjoint(A::$TypeA, B::$TypeB) =
+        $cmp1(rightendpoint(A), leftendpoint(B)) ||
+        $cmp2(leftendpoint(A), rightendpoint(B))
 end
 

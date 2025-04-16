@@ -169,11 +169,12 @@ in(x, ωs::AIs) = any(ω -> x ∈ ω, ωs)
 issubset(x, ωs::AIs) = any(ω -> x ⊆ ω, ωs)
 
 function isdisjoint(x, ωs::AIs)
-    @inbounds for ω ∈ ωs
-        isdisjoint(x, ω) || return false
+    nb_not_disjoint = zero(Int)
+    @inbounds @simd for ω ∈ ωs
+        nb_not_disjoint += !isdisjoint(x, ω)
     end
 
-    true
+    iszero(nb_not_disjoint)
 end
 
 for f ∈ (:issubset, :isdisjoint)
