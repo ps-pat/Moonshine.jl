@@ -674,7 +674,7 @@ function build!(rng, arg::Arg, ρ; winwidth = ∞, buffer = default_buffer())
 
     ## Constrained recombinations ##
     @no_escape buffer begin
-        mutation_edges_buffer = @SVector [Edge{VertexType}[] for _ ∈ 1:64]
+        mutation_edges_buffer = ntuple(_ -> Edge{VertexType}[], mmn_chunksize)
         nextidx, live_edges = next_inconsistent_idx(arg, 1,
                                                     mutations_edges = mutation_edges_buffer,
                                                     buffer = buffer)

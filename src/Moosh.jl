@@ -22,6 +22,8 @@ using UnsafeArrays: UnsafeArray
 ## Some constants.
 const VertexType = Int
 const ∞ = Inf
+const mmn_chunksize = 8
+const mmn_chunktype = (eval ∘ Symbol)("UInt" * string(mmn_chunksize))
 
 include("workarounds.jl")
 include("Sequence.jl")

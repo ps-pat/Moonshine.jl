@@ -82,7 +82,7 @@ function mutation_edges(arg)
 end
 
 function _compute_mutations_sequences(mutations_sequences, c_buffer, mask)
-    @turbo for k ∈ 1:length(mutations_sequences)
+    @inbounds @simd ivdep for k ∈ eachindex(mutations_sequences)
         mutations_sequences[k] ⊻= c_buffer[k]
         mutations_sequences[k] &= mask
     end
@@ -90,23 +90,24 @@ function _compute_mutations_sequences(mutations_sequences, c_buffer, mask)
     mutations_sequences
 end
 
+
 function next_inconsistent_idx(arg, idx;
-                               mutations_edges = SVector{64}([Edge{VertexType}[] for _ ∈ 1:64]),
+                               mutations_edges = ntuple(_ -> Edge{VertexType}[], mmn_chunksize),
                                buffer = default_buffer())
     ## The mask restricts search to markers in (original) `idx` and
     ## `nmarkers(arg)` inclusively.
-    mask = typemax(UInt64)
-    mask <<= idxinchunk(Sequence, idx) - 1
+    mask = typemax(mmn_chunktype)
+    mask <<= idxinchunk(mmn_chunksize, idx) - 1
 
     @inbounds while idx <= nmarkers(arg)
         empty!.(mutations_edges)
 
         ωlbound = idxtopos(arg, idx)
 
-        idx_chunk = chunkidx(Sequence, idx)
-        idx = 64idx_chunk + 1 # idx is now the first marker of the next chunk
+        idx_chunk = chunkidx(mmn_chunksize, idx)
+        idx = mmn_chunksize * idx_chunk + 1 # idx is now the first marker of the next chunk
         if idx > nmarkers(arg)
-            mask >>>= 64 - idxinchunk(Sequence, nmarkers(arg))
+            mask >>>= mmn_chunksize - idxinchunk(mmn_chunksize, nmarkers(arg))
             ωubound = ∞
         else
             ωubound = idxtopos(arg, idx)
@@ -118,27 +119,30 @@ function next_inconsistent_idx(arg, idx;
             store = @alloc(Edge{VertexType}, nleaves(arg) + nrecombinations(arg))
             visited = @alloc(Bool, nrecombinations(arg))
             ei_ptr = convert(Ptr{Edge{VertexType}}, @alloc_ptr(ne(arg) * sizeof(Edge{VertexType})))
-            mutations_sequences_ptr = convert(Ptr{UInt}, @alloc_ptr((ne(arg)) * sizeof(UInt)))
-            c_buffer_ptr = convert(Ptr{UInt}, @alloc_ptr((ne(arg)) * sizeof(UInt)))
+            mutations_sequences_ptr = convert(Ptr{mmn_chunktype},
+                                              @alloc_ptr((ne(arg)) * sizeof(mmn_chunktype)))
+            c_buffer_ptr = convert(Ptr{mmn_chunktype},
+                                   @alloc_ptr((ne(arg)) * sizeof(mmn_chunktype)))
 
             ## Traverse marginal graph and fill containers
             ne_interval = 0
             for e ∈ edges_interval(arg, base_ω, store, visited)
                 ne_interval += 1
-
                 unsafe_store!(ei_ptr, e, ne_interval)
 
-                c1 = sequence(arg, src(e)).data.chunks[idx_chunk]
-                c2 = sequence(arg, dst(e)).data.chunks[idx_chunk]
-                unsafe_store!(mutations_sequences_ptr, c1, ne_interval)
-                unsafe_store!(c_buffer_ptr, c2, ne_interval)
+                cs = (
+                    reinterpret(mmn_chunktype, sequence(arg, src(e)).data.chunks),
+                    reinterpret(mmn_chunktype, sequence(arg, dst(e)).data.chunks))
+
+                unsafe_store!(mutations_sequences_ptr, first(cs)[idx_chunk], ne_interval)
+                unsafe_store!(c_buffer_ptr, last(cs)[idx_chunk], ne_interval)
             end
 
             ## Wrap pointers into arrays
             mutations_sequences =
-                UnsafeArray{UInt, 1}(mutations_sequences_ptr, (ne_interval,))
+                UnsafeArray{eltype(mutations_sequences_ptr), 1}(mutations_sequences_ptr, (ne_interval,))
             c_buffer =
-                UnsafeArray{UInt, 1}(c_buffer_ptr, (ne_interval,))
+                UnsafeArray{eltype(c_buffer_ptr), 1}(c_buffer_ptr, (ne_interval,))
 
             ## Compute mutations sequences
             _compute_mutations_sequences(mutations_sequences, c_buffer, mask)
@@ -151,8 +155,8 @@ function next_inconsistent_idx(arg, idx;
                 acc = 0
                 while true
                     j = trailing_zeros(mutations_sequence) + 1
-                    j > 64 && break
-                    pos = idxtopos(arg, 64(idx_chunk - 1) + acc + j)
+                    j > mmn_chunksize && break
+                    pos = idxtopos(arg, mmn_chunksize * (idx_chunk - 1) + acc + j)
                     if pos ∈ ancestral_intervals(arg, e) && pos ∈ base_ω
                         push!(mutations_edges[acc + j], e)
                     end
@@ -164,13 +168,13 @@ function next_inconsistent_idx(arg, idx;
 
         idx_mutation_chunk = findfirst(>(1) ∘ length, mutations_edges)
         if !isnothing(idx_mutation_chunk)
-            mutation_idx = 64(idx_chunk - 1) + idx_mutation_chunk
+            mutation_idx = mmn_chunksize * (idx_chunk - 1) + idx_mutation_chunk
             mutation_edges = mutations_edges[idx_mutation_chunk]
             return mutation_idx, mutation_edges
         end
 
         empty!.(mutations_edges)
-        mask = typemax(UInt64)
+        mask = typemax(mmn_chunktype)
     end
 
     0, Edge{VertexType}[]

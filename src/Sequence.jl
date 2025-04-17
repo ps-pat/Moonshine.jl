@@ -66,8 +66,11 @@ function blocksize end
 @generated blocksize(::Sequence) = blocksize(Sequence)
 
 for (fun, op) ∈ Dict(:chunkidx => :div, :idxinchunk => :mod)
-    @eval $fun(::Type{Sequence}, x) = $op(x - 1, blocksize(Sequence)) + 1
-    @eval $fun(::Sequence, x) = $fun(Sequence, x)
+    @eval begin
+        $fun(n::Int, x) = $op(x - 1, n) + 1
+        $fun(::Type{Sequence}, x) = $fun(blocksize(Sequence), x)
+        $fun(::Sequence, x) = $fun(Sequence, x)
+    end
 end
 
 ~(sequence::Sequence) = Sequence(broadcast(~, sequence.data))

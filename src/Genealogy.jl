@@ -942,9 +942,9 @@ end
 
 Determines if an edge is a mutation edge for a given marker.
 """
-function ismutation_edge(arg, e, idx)
+function ismutation_edge(genealogy, e, idx)
     _chunkidx = chunkidx(Sequence, idx)
-    hs = sequences(arg, e)
+    hs = sequences(genealogy, e)
     chunk1, chunk2 = hs[1].data.chunks[_chunkidx], hs[2].data.chunks[_chunkidx]
 
     mask = one(UInt64) << (idxinchunk(Sequence, idx) - 1)
