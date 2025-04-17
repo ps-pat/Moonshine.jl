@@ -272,36 +272,51 @@ function _sample_clat(rng, arg, rlat, possible_cedges)
     t
 end
 
-function _sample_clat(rng, arg, rlat, redge, nextidx; buffer = default_buffer())
+function _sample_clat(rng, arg, minlat, redge, nextidx; buffer = default_buffer())
     nextpos = idxtopos(arg, nextidx)
 
     ## Homogeneous PP
     λ = nv(arg) - nrecombinations(arg)
     pp = Exponential(inv(λ))
 
-    clat = rlat
-    accept = false
-    while !accept
-        ## Sample from the homogeneous process
-        Δt = rand(rng, pp)
-        arg.logprob[] += logpdf(pp, Δt)
-        clat += Δt
+    ret = zero(minlat)
+    @no_escape buffer begin
+        n = nleaves(arg)
+        λts = @alloc(Int, n)
+        clats = @alloc(Float64, n)
 
-        ## Compute rate of the actual process at `clat`
-        λt = nlive(e -> !sequence(arg, dst(e))[nextidx], arg, clat, nextpos, buffer = buffer)
-        if clat <= latitude(arg, (first ∘ dads)(arg, src(redge), nextpos))
-            ## This accounts for the fact that `redgè` cannot recombine with
-            ## itself or its parental edge.
-            λt -= 1
+        while iszero(ret)
+            cumsum!(clats, rand(rng, pp, n))
+            clats .+= minlat
+
+            nlive!(e -> !sequence(arg, dst(e))[nextidx], λts, arg, clats, nextpos, buffer = buffer)
+
+            for (k, (clat, λt)) ∈ (enumerate ∘ zip)(clats, λts)
+                Δt = clats[k] - (isone(k) ? minlat : clats[k - 1])
+                arg.logprob[] += logpdf(pp, Δt)
+
+                if clat <= latitude(arg, (first ∘ dads)(arg, src(redge), nextpos))
+                    ## This accounts for the fact that `redgè` cannot recombine with
+                    ## itself or its parental edge.
+                    λt -= 1
+                end
+
+                ## Acceptation
+                accept_dist = Bernoulli(λt / λ)
+                accept = rand(rng, accept_dist)
+                arg.logprob[] += logpdf(accept_dist, accept)
+
+                if accept
+                    ret = clat
+                    break
+                end
+            end
+
+            minlat = last(clats)
         end
-
-        ## Acceptation
-        accept_dist = Bernoulli(λt / λ)
-        accept = rand(rng, accept_dist)
-        arg.logprob[] += logpdf(accept_dist, accept)
     end
 
-    clat
+    ret
 end
 
 """

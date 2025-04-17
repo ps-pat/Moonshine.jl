@@ -884,16 +884,18 @@ Return a `Dict` that maps every edge of a genealogy to an integer in
 """
 edgesmap(genealogy) = Dict(reverse.(enumerate(edges(genealogy))))
 
-export nlive
+export nlive, nlive!
 """
-    nlive([predicate,]genealogy, lat)
-    nlive([predicate,]genealogy, lat, ωs; buffer = default_buffer())
+    nlive([predicate,] genealogy, lat)
+    nlive([predicate,] genealogy, lat, ωs; buffer = default_buffer())
+    nlive!([predicate,] counts, genealogy, lats, ωs; buffer = default_buffer())
 
 Number of live edges at a given latitude. Search can be restricted to an
 interval. If a pedicate is passed as first argument, only edged satisfying it
 will be counted.
 """
-function nlive end
+function nlive end,
+function nlive! end
 
 for (signature, test) ∈ Dict(
     :(nlive(genealogy, lat)) => :true,
@@ -915,8 +917,8 @@ for (signature, test) ∈ Dict(
 end
 
 for (signature, test) ∈ Dict(
-    :(nlive(genealogy, lat, ωs; buffer = default_buffer())) => :true,
-    :(nlive(predicate, genealogy, lat, ωs; buffer = default_buffer())) => :(predicate(e)))
+    :(nlive(genealogy, lat::Real, ωs; buffer = default_buffer())) => :true,
+    :(nlive(predicate, genealogy, lat::Real, ωs; buffer = default_buffer())) => :(predicate(e)))
     @eval $(signature) = begin
         ## The grand MRCA is live forever
         lat > tmrca(genealogy) && return one(Int)
@@ -934,6 +936,41 @@ for (signature, test) ∈ Dict(
         end
 
         live
+    end
+end
+
+for (signature, test) ∈ Dict(
+    :(nlive!(counts, genealogy, lats::AbstractVector{<:Real}, ωs; buffer = default_buffer())) =>
+    :true,
+    :(nlive!(predicate, counts, genealogy, lats::AbstractVector{<:Real}, ωs; buffer = default_buffer())) =>
+    :(predicate(e)))
+
+    @eval $(signature) = begin
+        fill!(counts, 0)
+
+        ## The grand MRCA is live forever
+        first_above_tmrca_idx = findfirst(>(tmrca(genealogy)), lats)
+        if isnothing(first_above_tmrca_idx)
+            lastlat = lastindex(lats)
+        else
+            counts[first_above_tmrca_idx:end] .+= 1
+            lastlat = first_above_tmrca_idx - 1
+        end
+
+        iszero(lastlat) && return counts
+
+        @no_escape buffer begin
+            store = @alloc(Edge{VertexType}, nleaves(genealogy) + nrecombinations(genealogy))
+            visited = @alloc(Bool, nrecombinations(genealogy))
+            @inbounds for e ∈ edges_interval(genealogy, ωs, store, visited, mrca(genealogy), first(lats))
+                @simd ivdep for k ∈ 1:lastlat
+                    counts[k] +=
+                    latitude(genealogy, dst(e)) <= lats[k] <= latitude(genealogy, src(e)) && $test
+                end
+            end
+        end
+
+        counts
     end
 end
 
