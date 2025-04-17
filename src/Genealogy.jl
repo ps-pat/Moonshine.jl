@@ -19,6 +19,8 @@ import Base: IteratorSize, eltype, length
 
 using NetworkLayout
 
+using UnicodePlots: histogram
+
 abstract type AbstractGenealogy <: AbstractSimpleGraph{VertexType} end
 
 #############
@@ -397,6 +399,21 @@ end
 
 graphplot(genealogy::AbstractGenealogy; attributes...) =
     graphplot(genealogy, Ω(0, ∞); attributes...)
+
+## TODO: `yflip` doesn't work
+export plot_latitudes
+"""
+    plot_latitudes(genealogy; kwargs...)
+
+Unicode histogram of a genealogy's latitudes. Additional keywords arguments are
+passed directly to [`UnicodePlots.histogram`](@ref).
+"""
+plot_latitudes(genealogy::AbstractGenealogy; kwargs...) =
+    histogram(latitudes(genealogy),
+              yflip = true,
+              title = "Vertices' Latitudes",
+              xlabel = "";
+              kwargs...)
 
 ##################
 # Common Methods #
