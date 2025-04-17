@@ -4,7 +4,7 @@ import Graphs: add_vertices!, add_edge!, rem_edge!
 
 using Random
 
-using StatsBase: samplepair, ProbabilityWeights
+using StatsBase: samplepair, ProbabilityWeights, fit, Histogram
 
 using SparseArrays
 
@@ -13,6 +13,8 @@ using Combinatorics: combinations
 using Distributions
 
 using StaticArrays: @SVector
+
+using UnicodePlots: heatmap
 
 ##################
 # Arg Definition #
@@ -176,6 +178,41 @@ function ancestral_mask(e::Edge, arg)
 
     inc = s > otherdad(arg, s, d)
     arg.recombination_mask[2recidx(arg, d) - 1 + inc]
+end
+
+export breakpoints
+"""
+    breakpoint(arg)
+
+Recombination events' positions
+"""
+breakpoints(arg::Arg) =
+    Iterators.map(rightendpoint, @view arg.recombination_mask[1:2:end])
+
+export plot_breakpoints
+"""
+    plot_breakpoints(arg; kwargs...)
+
+Heatmap of recombination events' positions. Additional keywords arguments are
+passed directly to [`UnicodePlots.histogram`](@ref).
+
+See also [`breakpoints`](@ref)
+"""
+
+function plot_breakpoints(arg;
+                          nbins = clamp(nrecombinations(arg) ÷ 100, 1, 100),
+                          kwargs...)
+    bins = range(0, sam(arg).sequence_length, length = nbins + 1)
+    bps = (collect ∘ breakpoints)(arg)
+    counts = repeat(reshape(fit(Histogram, bps, bins).weights, (1, nbins)), 10)
+
+    heatmap(counts,
+            border = :none,
+            labels = false,
+            title = "Recombinations' Positions",
+            height = 10,
+            colorbar = true;
+            kwargs...)
 end
 
 #          +----------------------------------------------------------+
