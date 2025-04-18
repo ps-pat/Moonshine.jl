@@ -58,5 +58,8 @@ for G ∈ (:Tree, :Arg)
     end
 
     @eval mrca($Gargname::$G, vs::AbstractVector) = mrca($Gargname, vs, -∞..∞)
+
+    @eval tmrca($Gargname::$G, vs::AbstractVector, ωs) =
+        latitude($Gargname, mrca($Gargname, vs, ωs))
 end
 

@@ -14,7 +14,7 @@ using Distributions
 
 using StaticArrays: @SVector
 
-using UnicodePlots: heatmap, label!
+using UnicodePlots: heatmap, label!, stairs
 
 ##################
 # Arg Definition #
@@ -226,6 +226,43 @@ function plot_breakpoints(arg;
     label!(plt, :bl, (string ∘ Int ∘ round ∘ first ∘ positions)(arg), color = :white)
     label!(plt, :br, (string ∘ Int ∘ round ∘ last ∘ positions)(arg), color = :white)
     label!(plt, :b, (string ∘ Int ∘ round ∘ mid ∘ positions)(arg), color = :white)
+
+    plt
+end
+
+export plot_tmrcas
+"""
+    plot_tmrcas(arg; kwargs...)
+
+Staircase plot of time to the most recent common ancestor. Additional keywords
+arguments are passed directly to [`UnicodePlots.histogram`](@ref).
+
+This function actually computes the tmrca of each recombinatoin breakpoint,
+which is **very** demanding, much more than simulating the graph. It is
+multithreaded in order to reduce computation time.
+
+See also [`tmrca`](@ref)
+
+# Keywords
+* `width` (`76`): width of the plot. Its default maximum value of 76 produces
+  a 80 columns wide plot.
+* `kwargs...`: additional keywords arguments are passed directly to
+  [`UnicodePlots.histogram`](@ref).
+"""
+function plot_tmrcas(arg::Arg; width = 76, kwargs...)
+    times = Vector{Float64}(undef, nrecombinations(arg) + 1)
+    grid = [0.; collect(breakpoints(arg))]
+
+    Threads.@threads :greedy for k ∈ eachindex(grid)
+        times[k] = tmrca(arg, leaves(arg), grid[k])
+    end
+
+    plt = stairs(grid, times,
+                 width = width,
+                 margin = 0,
+                 title = "TMRCAs",
+                 xlabel = "Position";
+                 kwargs...)
 
     plt
 end
