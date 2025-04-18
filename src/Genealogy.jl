@@ -604,7 +604,7 @@ let funtransorder = Dict(:dads => (:ancestors, (x, y) -> (x, y)),
                     readptr += 1
                     (isleaf(genealogy, v) || isroot(genealogy, v)) && continue
 
-                    resize!(funbuf, 2)
+                    resize!(buf, 2)
                     for u ∈ $fun(genealogy, v, ω)
                         u ∈ view(buf, 1:(writeptr-1)) && continue
                         buf[writeptr] = u
