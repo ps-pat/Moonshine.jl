@@ -24,6 +24,7 @@ const VertexType = Int
 const ∞ = Inf
 const mmn_chunksize = 8
 const mmn_chunktype = (eval ∘ Symbol)("UInt" * string(mmn_chunksize))
+default_colormap = :Paired_3
 
 include("workarounds.jl")
 include("Sequence.jl")

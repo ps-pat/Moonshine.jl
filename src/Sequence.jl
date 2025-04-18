@@ -20,6 +20,10 @@ using LinearAlgebra
 
 using SpecialFunctions: loggamma
 
+using UnicodePlots: heatmap, label!, annotate!
+
+using ChunkSplitters: index_chunks
+
 export Sequence
 ## "Efficient storage of marker data."
 @auto_hash_equals struct Sequence
@@ -27,13 +31,13 @@ export Sequence
 end
 
 function hash(s::Sequence, h::UInt)
-   ## Assumes that all sequences are of equal length!
+    ## Assumes that all sequences are of equal length!
 
     @inbounds @simd for chunk ∈ s.data.chunks
         h = hash(chunk, h)
     end
 
-   hash(:Sequence, h)
+    hash(:Sequence, h)
 end
 
 isempty(seq::Sequence) = isempty(seq.data)
@@ -42,15 +46,11 @@ isempty(seq::Sequence) = isempty(seq.data)
 
 string(sequence::Sequence) = replace(bitstring(sequence.data), r"[ :]" => "")
 
-function show(io::IO, ::MIME"text/plain", seq::Sequence)
-    len = length(seq)
-    header = "$len-markers Sequence"
+show(io::IO, ::MIME"text/plain", h::Sequence) =
+    (display ∘ plot)(h, height = 2, colorbar = false)
 
-    print(io, header)
-    isempty(seq) || print(io, ":\n", string(seq))
-end
-
-show(io::IO, seq::Sequence) = print(io, string(seq))
+show(io::IO, h::Sequence) =
+    (display ∘ plot)(h, height = 1, colorbar = false, title = "", labels = false)
 
 """
     blocksize(::Type{Sequence})
@@ -280,7 +280,8 @@ firstindex(seq::Sequence) = firstindex(seq.data)
 
 lastindex(seq::Sequence) = lastindex(seq.data)
 
-Base.getindex(sequence, I...) = getindex(sequence.data, I...)
+Base.getindex(h::Sequence, i::Integer) = getindex(h.data, i)
+Base.getindex(h::Sequence, I...) = Sequence(getindex(h.data, I...))
 
 ## Array.
 @generated Base.IndexStyle(::Type{Sequence}) = Base.IndexLinear()
@@ -288,3 +289,37 @@ Base.getindex(sequence, I...) = getindex(sequence.data, I...)
 Base.similar(seq::Sequence, args...) = similar(seq.data, args...)
 
 Base.setindex!(sequence::Sequence, x, i) = setindex!(sequence.data, x, i)
+
+#          +----------------------------------------------------------+
+#          |                         Plotting                         |
+#          +----------------------------------------------------------+
+
+export plot
+function plot(h::Sequence;
+              nbins = clamp(length(h), 1, 69),
+              height = 7,
+              kwargs...)
+    counts_vec = map(idx -> count(h[idx]), index_chunks(1:length(h), n = nbins))
+    counts = repeat(reshape(counts_vec, (1, length(counts_vec))), height)
+
+    plt = heatmap(counts,
+                  width = nbins,
+                  border = :none,
+                  margin = 0,
+                  title = (string ∘ length)(h) * "-markers Sequence",
+                  height = height,
+                  colorbar = true,
+                  zlabel = "#1",
+                  colormap = default_colormap;
+                  kwargs...)
+
+    for k ∈ 1:height
+        label!(plt, :l, k, "")
+    end
+
+    label!(plt, :bl, string(1), color = :white)
+    label!(plt, :br, (string ∘ length)(h), color = :white)
+    label!(plt, :b, string(length(h) ÷ 2), color = :white)
+
+    plt
+end
