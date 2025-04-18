@@ -407,6 +407,8 @@ export plot_latitudes
 
 Unicode histogram of a genealogy's latitudes. Additional keywords arguments are
 passed directly to [`UnicodePlots.histogram`](@ref).
+
+See also [`latitudes`](@ref), [`latitude`](@ref)
 """
 plot_latitudes(genealogy::AbstractGenealogy; kwargs...) =
     histogram(latitudes(genealogy),
