@@ -14,7 +14,7 @@ using Distributions
 
 using StaticArrays: @SVector
 
-using UnicodePlots: heatmap
+using UnicodePlots: heatmap, label!
 
 ##################
 # Arg Definition #
@@ -198,21 +198,36 @@ passed directly to [`UnicodePlots.histogram`](@ref).
 
 See also [`breakpoints`](@ref)
 """
-
 function plot_breakpoints(arg;
-                          nbins = clamp(nrecombinations(arg) ÷ 100, 1, 100),
+                          nbins = clamp(nrecombinations(arg) ÷ 100, 1, 69),
+                          height = 7,
                           kwargs...)
     bins = range(0, sam(arg).sequence_length, length = nbins + 1)
     bps = (collect ∘ breakpoints)(arg)
-    counts = repeat(reshape(fit(Histogram, bps, bins).weights, (1, nbins)), 10)
+    h = fit(Histogram, bps, bins)
+    counts = repeat(reshape(h.weights, (1, nbins)), 10)
 
-    heatmap(counts,
-            border = :none,
-            labels = false,
-            title = "Recombinations' Positions",
-            height = 10,
-            colorbar = true;
-            kwargs...)
+    plt = heatmap(counts,
+                  width = nbins,
+                  border = :none,
+                  margin = 0,
+                  title = "Recombinations' Positions",
+                  height = height,
+                  colorbar = true,
+                  zlabel = "#ρ",
+                  colormap = default_colormap;
+                  kwargs...)
+
+    for k ∈ 1:height
+        label!(plt, :l, k, "")
+    end
+
+    mid(x) = getindex(x, length(x) ÷ 2)
+    label!(plt, :bl, (string ∘ Int ∘ round ∘ first ∘ positions)(arg), color = :white)
+    label!(plt, :br, (string ∘ Int ∘ round ∘ last ∘ positions)(arg), color = :white)
+    label!(plt, :b, (string ∘ Int ∘ round ∘ mid ∘ positions)(arg), color = :white)
+
+    plt
 end
 
 #          +----------------------------------------------------------+
