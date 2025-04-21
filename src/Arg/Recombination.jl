@@ -272,12 +272,17 @@ function _sample_clat(rng, arg, rlat, possible_cedges)
     t
 end
 
-function _sample_clat(rng, arg, minlat, redge, nextidx; buffer = default_buffer())
+function _sample_clat(rng, arg, minlat, redge, fedge, nextidx; buffer = default_buffer())
     nextpos = idxtopos(arg, nextidx)
 
     ## Homogeneous PP
     λ = nv(arg) - nrecombinations(arg)
     pp = Exponential(inv(λ))
+
+    block_predicates = [
+        e -> sequence(arg, dst(e))[nextidx],
+        e -> e == fedge
+    ]
 
     ret = zero(minlat)
     @no_escape buffer begin
@@ -289,17 +294,11 @@ function _sample_clat(rng, arg, minlat, redge, nextidx; buffer = default_buffer(
             cumsum!(clats, rand(rng, pp, n))
             clats .+= minlat
 
-            nlive!(e -> !sequence(arg, dst(e))[nextidx], λts, arg, clats, nextpos, buffer = buffer)
+            nlive!(λts, arg, clats, nextpos, block_predicates = block_predicates, buffer = buffer)
 
             for (k, (clat, λt)) ∈ (enumerate ∘ zip)(clats, λts)
                 Δt = clats[k] - (isone(k) ? minlat : clats[k - 1])
                 arg.logprob[] += logpdf(pp, Δt)
-
-                if clat <= latitude(arg, (first ∘ dads)(arg, src(redge), nextpos))
-                    ## This accounts for the fact that `redgè` cannot recombine with
-                    ## itself or its parental edge.
-                    λt -= 1
-                end
 
                 ## Acceptation
                 accept_dist = Bernoulli(λt / λ)
@@ -324,52 +323,33 @@ end
 
 Compute the valid recombination interval for an edge at a given position.
 """
+function rlat_min end,
+function rlat_min! end
+
 function rlat_min(arg, e, nextidx)
     nextpos = idxtopos(arg, nextidx)
     s, d = src(e), dst(e)
     refstate = sequence(arg, d)[nextidx]
 
-    valid_child = d
-    @inbounds while !iszero(valid_child)
-        valid_child = 0
-        for c ∈ children(arg, d, nextpos)
-            sequence(arg, c)[nextidx] == refstate || continue
-            if iszero(valid_child)
-                valid_child = c
-            else
-                valid_child = 0
-            end
-        end
+    @inbounds while true
+        _children = children(arg, d, nextpos)
+        (isone ∘ length)(_children) || break
+        c = first(_children)
+        sequence(arg, c)[nextidx] == refstate || break
 
-        if !iszero(valid_child)
-            s = d
-            d = valid_child
-        end
+        s = d
+        d = c
     end
 
     latitude(arg, d)
 end
 
-function _find_actual_edge_derived(arg, e, nextidx, lat)
+function _find_actual_edge(arg, e, nextidx, lat)
     nextpos = idxtopos(arg, nextidx)
 
     while true
         latitude(arg, dst(e)) <= lat <= latitude(arg, src(e)) && return e
         e = Edge(dst(e) => (first ∘ children)(arg, dst(e), nextpos))
-    end
-end
-
-function _find_actual_edge_wild(arg, e, nextidx, lat)
-    nextpos = idxtopos(arg, nextidx)
-
-    @inbounds while true
-        latitude(arg, dst(e)) <= lat <= latitude(arg, src(e)) && return e
-
-        for c ∈ children(arg, dst(e), nextpos)
-            sequence(arg, c)[nextidx] && continue
-            e = Edge(dst(e) => c)
-            break
-        end
     end
 end
 
@@ -418,9 +398,14 @@ function _update_live_edges_derived!(live_edges, arg, newd, nextidx, breakpoint,
     Edge(dst(e) => lastd)
 end
 
-function _sample_cedge_wild(rng, arg, lat, nextidx, redge::T;
+function _sample_cedge_wild(rng, arg, lat, fedge, nextidx, redge::T;
                             buffer = default_buffer()) where T
     nextpos = idxtopos(arg, nextidx)
+
+    block_predicates = [
+        e -> sequence(arg, dst(e))[nextidx],
+        e -> e == fedge
+    ]
 
     @no_escape buffer begin
         cedges_ptr = convert(Ptr{T}, @alloc_ptr(ne(arg) * sizeof(T)))
@@ -428,14 +413,10 @@ function _sample_cedge_wild(rng, arg, lat, nextidx, redge::T;
 
         store = @alloc(T, nv(arg))
         visited = @alloc(Bool, nrecombinations(arg))
-        @inbounds for e ∈ edges_interval(arg, nextpos, store, visited, mrca(arg), lat)
+        @inbounds for e ∈ edges_interval(arg, nextpos, store, visited, mrca(arg), lat,
+                                           block_predicates = block_predicates)
             latitude(arg, dst(e)) <= lat <= latitude(arg, src(e)) || continue
-            ## TODO: avoid visiting derived edges & descendants
-            sequence(arg, dst(e))[nextidx] && continue
-            dst(e) == src(redge) && continue
-            dst(e) == dst(redge) && continue
 
-            ## Store edge
             len += 1
             unsafe_store!(cedges_ptr, e, len)
         end
@@ -493,18 +474,16 @@ function sample_recombination_constrained!(rng, arg, breakpoint, winwidth, live_
         end
     end
 
-    ## Sample recombination location ##
-    es_mins = (
-        rlat_min(arg, e1, nextidx),
-        rlat_min(arg, e2, nextidx),
-        (iszero ∘ dst)(eu) ? Inf : latitude(arg, dst(eu)))
-    es_max = min(latitude(arg, src(e1)), latitude(arg, src(e2)))
-    rints_width = @SVector [
-        max(0, es_max - es_mins[1]),
-        max(0, es_max - es_mins[2]),
-        isinf(es_mins[3]) ? zero(Float64) : branchlength(arg, eu)]
-
     @no_escape buffer begin
+        ## Sample recombination location ##
+        es_min_eu = (iszero ∘ dst)(eu) ? Inf : rlat_min(arg, eu, nextidx)
+        es_mins = (rlat_min(arg, e1, nextidx), rlat_min(arg, e2, nextidx), es_min_eu)
+        es_max = min(latitude(arg, src(e1)), latitude(arg, src(e2)))
+        rints_width = @SVector [
+            max(0, es_max - es_mins[1]),
+            max(0, es_max - es_mins[2]),
+            isinf(es_mins[3]) ? zero(Float64) : latitude(arg, src(eu)) - es_mins[3]]
+
         ## We proceed in two steps to avoid sampling a location too close to
         ## the ends of the recombination branch, which may cause numerical
         ## instability.
@@ -522,20 +501,21 @@ function sample_recombination_constrained!(rng, arg, breakpoint, winwidth, live_
         rlat += es_mins[recroot_idx]
 
         if wildrec
-            redge = eu
+            redge = _find_actual_edge(arg, eu, nextidx, rlat)
+            fedge =  Edge((first ∘ dads)(arg, src(eu)) => src(eu))
 
             ## Sample recoalescence location ##
-            clat = _sample_clat(rng, arg, rlat, redge, nextidx, buffer = buffer)
+            clat = _sample_clat(rng, arg, rlat, redge, fedge, nextidx, buffer = buffer)
 
             if clat > tmrca(arg)
                 cedge = Edge(mrca(arg) => mrca(arg))
             else
-                cedge = _sample_cedge_wild(rng, arg, clat, nextidx, redge,
+                cedge = _sample_cedge_wild(rng, arg, clat, fedge, nextidx, redge,
                                            buffer = buffer)
             end
         else
             recroot, coalroot = isone(recroot_idx) ? (e1, e2) : (e2, e1)
-            redge = _find_actual_edge_derived(arg, recroot, nextidx, rlat)
+            redge = _find_actual_edge(arg, recroot, nextidx, rlat)
 
             ## Sample recoalescence location ##
             store = @alloc(Edge{VertexType}, nv(arg))

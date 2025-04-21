@@ -19,7 +19,11 @@ using AutoHashEquals
 
 using UnsafeArrays: UnsafeArray
 
+using Base: unsafe_convert
+
 using ProgressMeter
+
+using FunctionWrappers: FunctionWrapper
 
 ## Some constants.
 const VertexType = Int
