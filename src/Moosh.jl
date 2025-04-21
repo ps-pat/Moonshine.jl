@@ -19,6 +19,8 @@ using AutoHashEquals
 
 using UnsafeArrays: UnsafeArray
 
+using ProgressMeter
+
 ## Some constants.
 const VertexType = Int
 const ∞ = Inf

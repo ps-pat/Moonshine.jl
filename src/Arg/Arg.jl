@@ -259,7 +259,7 @@ function plot_tmrcas(arg::Arg; width = 76, kwargs...)
     times = Vector{Float64}(undef, nrecombinations(arg) + 1)
     grid = [0.; collect(breakpoints(arg))]
 
-    Threads.@threads :greedy for k ∈ eachindex(grid)
+    @showprogress Threads.@threads :greedy for k ∈ eachindex(grid)
         times[k] = tmrca(arg, leaves(arg), grid[k])
     end
 

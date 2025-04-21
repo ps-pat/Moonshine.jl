@@ -675,7 +675,7 @@ end
 #          |                       ARG Building                       |
 #          +----------------------------------------------------------+
 
-function build!(rng, arg::Arg, ρ; winwidth = ∞, buffer = default_buffer())
+function build!(rng, arg::Arg, ρ; winwidth = ∞, buffer = default_buffer(), noprogress = false)
     ## Unconstrained recombinations ##
     nrecs_dist = Poisson(ρ)
     nrecs = rand(rng, nrecs_dist)
@@ -694,7 +694,11 @@ function build!(rng, arg::Arg, ρ; winwidth = ∞, buffer = default_buffer())
                                                     mutations_edges = mutation_edges_buffer,
                                                     buffer = buffer)
 
+        progenabled = nleaves(arg) * nmarkers(arg) >= 10000000
+        prog = Progress(nmarkers(arg), enabled = progenabled && !noprogress)
         while !iszero(nextidx)
+            update!(prog, nextidx)
+
             nbp = length(live_edges) - 1
 
             bp_lbound = isone(nextidx) ?
