@@ -13,8 +13,6 @@ import Distributions: insupport, pdf,
                       _rand!,
                       Bernoulli
 
-using Combinatorics
-
 using LinearAlgebra
 
 export BernoulliMulti

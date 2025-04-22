@@ -8,8 +8,6 @@ using StatsBase: samplepair, ProbabilityWeights, fit, Histogram
 
 using SparseArrays
 
-using Combinatorics: combinations
-
 using Distributions
 
 using StaticArrays: @SVector
