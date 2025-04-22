@@ -91,7 +91,7 @@ function _compute_mutations_sequences(mutations_sequences, c_buffer, mask)
 end
 
 
-function next_inconsistent_idx(arg, idx;
+function next_inconsistent_idx(arg, idx, stack;
                                mutations_edges = ntuple(_ -> Edge{VertexType}[], mmn_chunksize),
                                buffer = default_buffer())
     ## The mask restricts search to markers in (original) `idx` and
@@ -116,7 +116,6 @@ function next_inconsistent_idx(arg, idx;
         base_ω = Ω(ωlbound, ωubound)
 
         @no_escape buffer begin
-            store = @alloc(Edge{VertexType}, nleaves(arg) + nrecombinations(arg))
             visited = @alloc(Bool, nrecombinations(arg))
             ei_ptr = convert(Ptr{Edge{VertexType}}, @alloc_ptr(ne(arg) * sizeof(Edge{VertexType})))
             mutations_sequences_ptr = convert(Ptr{mmn_chunktype},
@@ -126,7 +125,7 @@ function next_inconsistent_idx(arg, idx;
 
             ## Traverse marginal graph and fill containers
             ne_interval = 0
-            for e ∈ edges_interval(arg, base_ω, store, visited)
+            for e ∈ edges_interval(arg, base_ω, stack, visited)
                 ne_interval += 1
                 unsafe_store!(ei_ptr, e, ne_interval)
 

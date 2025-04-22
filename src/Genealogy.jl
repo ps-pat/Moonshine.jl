@@ -831,19 +831,25 @@ struct EdgesInterval{T, I, E}
     block_predicates::Vector{FunctionWrapper{Bool, Tuple{E}}}
 end
 
-function EdgesInterval(genealogy::T, ωs::I, store::AbstractArray{E}, visited,
+function EdgesInterval(genealogy::T, ωs::I, stack::CheapStack{E}, visited,
                        root = mrca(genealogy), min_latitude = zero(Float64),
                        block_predicates = []) where {T, I, E}
-    eibuffer = CheapStack(store)
     fill!(visited, false)
 
     for d ∈ children(genealogy, root, ωs)
         e = Edge(root => d)
-        any(p -> p(e), block_predicates) || push!(eibuffer, e)
+        any(p -> p(e), block_predicates) || push!(stack, e)
     end
 
-    EdgesInterval{T, I, E}(genealogy, ωs, eibuffer, visited, convert(Float64, min_latitude), block_predicates)
+    EdgesInterval{T, I, E}(genealogy, ωs, stack, visited,
+                           convert(Float64, min_latitude), block_predicates)
 end
+
+EdgesInterval(genealogy::T, ωs::I, store::AbstractArray{E}, visited,
+              root = mrca(genealogy), min_latitude = zero(Float64),
+              block_predicates = []) where {T, I, E} =
+    EdgesInterval(genealogy, ωs, CheapStack(store), visited,
+                  root, min_latitude, block_predicates)
 
 IteratorSize(::T) where T<:EdgesInterval = Base.SizeUnknown()
 IteratorSize(::Type{<:EdgesInterval}) = Base.SizeUnknown()
@@ -887,10 +893,10 @@ end
 
 export edges_interval
 
-edges_interval(genealogy, ωs, store, visited,
+edges_interval(genealogy, ωs, buffer, visited,
                root = mrca(genealogy), min_latitude = zero(Float64);
                block_predicates = []) =
-    EdgesInterval(genealogy, ωs, store, visited, root, min_latitude, block_predicates)
+    EdgesInterval(genealogy, ωs, buffer, visited, root, min_latitude, block_predicates)
 
 function edges_interval(genealogy, ωs)
     ωs_e = AIsType()
@@ -962,7 +968,7 @@ function nlive(genealogy, lat::Real, ωs;
     live
 end
 
-function nlive!(counts, genealogy, lats::AbstractVector{<:Real}, ωs;
+function nlive!(counts, genealogy, lats::AbstractVector{<:Real}, ωs, stack;
                 block_predicates = [], buffer = default_buffer())
     fill!(counts, 0)
 
@@ -978,9 +984,8 @@ function nlive!(counts, genealogy, lats::AbstractVector{<:Real}, ωs;
     iszero(lastlat) && return counts
 
     @no_escape buffer begin
-        store = @alloc(Edge{VertexType}, nleaves(genealogy) + nrecombinations(genealogy))
         visited = @alloc(Bool, nrecombinations(genealogy))
-        @inbounds for e ∈ edges_interval(genealogy, ωs, store, visited, mrca(genealogy), first(lats),
+        @inbounds for e ∈ edges_interval(genealogy, ωs, stack, visited, mrca(genealogy), first(lats),
                                            block_predicates = block_predicates)
             @simd ivdep for k ∈ 1:lastlat
                 counts[k] +=
@@ -991,6 +996,15 @@ function nlive!(counts, genealogy, lats::AbstractVector{<:Real}, ωs;
 
     counts
 end
+
+nlive!(counts, genealogy, lats::AbstractVector{<:Real}, ωs;
+       block_predicates = [], buffer = default_buffer()) =
+    @no_escape buffer begin
+        store = @alloc(Edge{VertexType}, nleaves(genealogy))
+        stack = CheapStack(store)
+        nlive!(counts, genealogy, lats, ωs, stack,
+               block_predicates = block_predicates, buffer = buffer)
+    end
 
 """
     ismutation_edge(arg, e, idx)
