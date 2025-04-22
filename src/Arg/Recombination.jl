@@ -436,11 +436,7 @@ function sample_recombination_constrained!(rng, arg, breakpoint, winwidth,
     n = length(live_edges)
     nextidx = postoidx(arg, breakpoint)
     nextpos = idxtopos(arg, nextidx)
-
-    ## It is necessary to extend the window as below when simulating type II
-    ## recombination events.
-    window = breakpoint ± winwidth / 2 ∪
-        ClosedInterval(idxtopos(arg, nextidx - 1), nextpos)
+    window = breakpoint ± winwidth / 2
 
     @no_escape buffer begin
         ## Sample live edges ##
