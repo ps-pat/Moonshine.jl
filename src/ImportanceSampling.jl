@@ -86,7 +86,7 @@ export simulate!
     simulate!(chain[, idx])
 
 Simulate genealogies for a chain. Indices of the genealogies to be simulated
-cand be specified via the optional argument `idx`.
+can be specified via the optional argument `idx`.
 """
 function simulate! end
 
@@ -123,46 +123,4 @@ Effective sample size of the chain.
 function ess(chain)
     ws = weights(chain)
     sum(ws)^2 / sum(w -> w^2, ws)
-end
-
-##########################
-# Density reconstruction #
-##########################
-
-let dists = (:Bernoulli,)
-    for dist ∈ dists
-        name = Symbol("Phenotype" * string(dist))
-        @eval begin
-            const $name = PhenotypeDensity{T,C} where {D<:$dist, T, C<:AbstractΦCopula{D}}
-        end
-    end
-end
-
-export sample_dist
-function sample_dist(chain::IsChain{G,H}, fΦ::P) where {G,H,P<:PhenotypeBernoulli}
-    fG = chain.fG
-    nmissing = sum(ismissing.(phenotypes(fΦ)))
-
-    res_parts = map(chunks(chain, n = Threads.nthreads())) do (rg, _)
-        @spawn begin
-            local acc = zeros(BigFloat, Int(exp2(nmissing)))
-
-            for genealogy ∈ view(chain, rg)
-                local log_fΦ = log.(fΦ(genealogy))
-                local log_w =  fG(genealogy, logscale = true) -
-                    prob(genealogy, logscale = true)
-
-                acc .+= exp.(log_fΦ .+ log_w)
-            end
-
-            acc
-        end
-    end
-
-    res = zeros(BigFloat, Int(exp2(nmissing)))
-    for res_part ∈ res_parts
-        res += fetch(res_part)::Vector{BigFloat}
-    end
-
-    BernoulliMulti(res ./ sum(res, dims = 1))
 end
