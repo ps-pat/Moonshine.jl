@@ -34,12 +34,7 @@ end
 #          +----------------------------------------------------------+
 
 function hash(s::Sequence, h::UInt)
-    ## Assumes that all sequences are of equal length!
-
-    @inbounds @simd for chunk ∈ s.data.chunks
-        h = hash(chunk, h)
-    end
-
+    h = hash(s.data.chunks, h)
     hash(:Sequence, h)
 end
 
@@ -48,6 +43,26 @@ end
 isequal(h1::Sequence, h2::Sequence) = isequal(h1.data, h2.data)
 
 isempty(seq::Sequence) = isempty(seq.data)
+
+function cheap_hash(s::Sequence)
+    h = 0x5aacc77a902f6f2e
+    o = 0x5246e7da0d562ddf
+    ptr = unsafe_convert(Ptr{UInt32}, pointer(s.data.chunks))
+
+    @inbounds for k ∈ eachindex(s.data.chunks)
+        o += 0x5851f42d4c957f20
+        c = unsafe_load(ptr, 2k - 1)
+        x = c + o
+
+        o += 0x14057b7ef7678140
+        c = unsafe_load(ptr, 2k)
+        x *= c + o
+
+        h ⊻= x
+    end
+
+    h
+end
 
 @generated empty(::Sequence) = Sequence()
 

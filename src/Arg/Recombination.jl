@@ -24,7 +24,7 @@ function _update_ai!(vstack, arg, e, ωs, oldhash)
     empty!(ωs)
 
     ## Update vstack
-    newhash = hash((hash ∘ sequence)(arg, dst(e)),
+    newhash = hash((cheap_hash ∘ sequence)(arg, dst(e)),
                    (hash ∘ ancestral_intervals)(arg ,e))
     if (oldhash) != newhash
         push!(vstack, src(e))
@@ -45,7 +45,7 @@ function update_upstream!(arg, v, stack; buffer = default_buffer())
 
             ## Update sequence of `v` ##
             h = sequence(arg, v)
-            oldhash = hash(h)
+            oldhash = cheap_hash(h)
             h.data.chunks .⊻= .~h.data.chunks
             _compute_sequence!(arg, v, mask)
             iszero(dad(arg, v)) && continue
