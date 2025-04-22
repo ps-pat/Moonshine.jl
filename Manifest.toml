@@ -2,7 +2,7 @@
 
 julia_version = "1.11.5"
 manifest_format = "2.0"
-project_hash = "cb49227da1a6fea8dd2269915f1ab66dfb79b121"
+project_hash = "8c84a374856fd37396e53195674a09e8044be0d5"
 
 [[deps.ASL_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -99,11 +99,6 @@ version = "7.18.0"
 [[deps.Artifacts]]
 uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
 version = "1.11.0"
-
-[[deps.AutoHashEquals]]
-git-tree-sha1 = "4ec6b48702dacc5994a835c1189831755e4e76ef"
-uuid = "15f4f7f2-30c1-5605-9d31-71845cf9641f"
-version = "2.2.0"
 
 [[deps.Automa]]
 deps = ["PrecompileTools", "SIMD", "TranscodingStreams"]

@@ -1,7 +1,7 @@
 import Base: empty,
              similar,
              ~, &, |, xor, >>>, >>, <<, *,
-             ==,
+             ==, isequal,
              show,
              isempty,
              string,
@@ -25,10 +25,13 @@ using UnicodePlots: heatmap, label!, annotate!
 using ChunkSplitters: index_chunks
 
 export Sequence
-## "Efficient storage of marker data."
-@auto_hash_equals struct Sequence
+struct Sequence
     data::BitVector
 end
+
+#          +----------------------------------------------------------+
+#          |                         Equality                         |
+#          +----------------------------------------------------------+
 
 function hash(s::Sequence, h::UInt)
     ## Assumes that all sequences are of equal length!
@@ -39,6 +42,10 @@ function hash(s::Sequence, h::UInt)
 
     hash(:Sequence, h)
 end
+
+(==)(h1::Sequence, h2::Sequence) = h1.data == h2.data
+
+isequal(h1::Sequence, h2::Sequence) = isequal(h1.data, h2.data)
 
 isempty(seq::Sequence) = isempty(seq.data)
 

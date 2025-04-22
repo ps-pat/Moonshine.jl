@@ -15,8 +15,6 @@ using DataStructures: Stack, Queue
 
 using Bumper
 
-using AutoHashEquals
-
 using UnsafeArrays: UnsafeArray
 
 using Base: unsafe_convert
