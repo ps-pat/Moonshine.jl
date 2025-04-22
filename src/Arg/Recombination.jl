@@ -442,37 +442,37 @@ function sample_recombination_constrained!(rng, arg, breakpoint, winwidth,
     window = breakpoint ± winwidth / 2 ∪
         ClosedInterval(idxtopos(arg, nextidx - 1), nextpos)
 
-    ## Sample live edges ##
-    es_idx = MVector{2, Int}(undef)
-    sample!(rng, eachindex(live_edges), es_idx; replace = false)
-    if first(es_idx) > last(es_idx)
-        es_idx[1], es_idx[2] = es_idx[2], es_idx[1]
-    end
-    arg.logprob[] += log(2) - log(n) - log(n - 1)
-    e1, e2 = live_edges[es_idx]
-
-    ## Consider the possibility of a wild recombination
-    eu = Edge(0 => 0) # Uncle edge
-    newd = zero(VertexType)
-    let dads_e1 = dads(arg, src(e1), breakpoint),
-        dads_e2 = dads(arg, src(e2), breakpoint)
-
-        if !isempty(dads_e1) && first(dads_e1) == src(e2)
-            siblings_e1 = siblings(arg, dst(e1), breakpoint)
-            if !isempty(siblings_e1)
-                eu = Edge(src(e1) => first(siblings_e1))
-            end
-            newd = src(e2)
-        elseif !isempty(dads_e2) && first(dads_e2) == src(e1)
-            siblings_e2 = siblings(arg, dst(e2), breakpoint)
-            if !isempty(siblings_e2)
-                eu = Edge(src(e2) => first(siblings_e2))
-            end
-            newd = src(e1)
-        end
-    end
-
     @no_escape buffer begin
+        ## Sample live edges ##
+        es_idx = @alloc(Int, 2)
+        sample!(rng, eachindex(live_edges), es_idx; replace = false)
+        if first(es_idx) > last(es_idx)
+            es_idx[1], es_idx[2] = es_idx[2], es_idx[1]
+        end
+        arg.logprob[] += log(2) - log(n) - log(n - 1)
+        e1, e2 = @views live_edges[es_idx]
+
+        ## Consider the possibility of a wild recombination
+        eu = Edge(0 => 0) # Uncle edge
+        newd = zero(VertexType)
+        let dads_e1 = dads(arg, src(e1), breakpoint),
+            dads_e2 = dads(arg, src(e2), breakpoint)
+
+            if !isempty(dads_e1) && first(dads_e1) == src(e2)
+                siblings_e1 = siblings(arg, dst(e1), breakpoint)
+                if !isempty(siblings_e1)
+                    eu = Edge(src(e1) => first(siblings_e1))
+                end
+                newd = src(e2)
+            elseif !isempty(dads_e2) && first(dads_e2) == src(e1)
+                siblings_e2 = siblings(arg, dst(e2), breakpoint)
+                if !isempty(siblings_e2)
+                    eu = Edge(src(e2) => first(siblings_e2))
+                end
+                newd = src(e1)
+            end
+        end
+
         ## Sample recombination location ##
         es_min_eu = (iszero ∘ dst)(eu) ? Inf : rlat_min(arg, eu, nextidx)
         es_mins = (rlat_min(arg, e1, nextidx), rlat_min(arg, e2, nextidx), es_min_eu)
@@ -486,7 +486,14 @@ function sample_recombination_constrained!(rng, arg, breakpoint, winwidth,
         ## the ends of the recombination branch, which may cause numerical
         ## instability.
         ## First, we sample a recombination edge.
-        recroot_idx = sample(rng, eachindex(rints_width), ProbabilityWeights(rints_width))
+        recroot_idx = one(Int)
+        @inbounds let t = sum(rints_width) * rand(rng)
+            if t > first(rints_width)
+                t -= first(rints_width)
+                recroot_idx = t <= rints_width[2] ? 2 : 3
+            end
+        end
+
         arg.logprob[] += log(rints_width[recroot_idx]) - (log ∘ sum)(rints_width)
         wildrec = recroot_idx == 3
 
@@ -528,26 +535,30 @@ function sample_recombination_constrained!(rng, arg, breakpoint, winwidth,
             clat = _sample_clat(rng, arg, rlat, possible_cedges)
 
             ## Sample recoalescence edge
-            ws = @alloc(Float64, npossible_cedges)
+            ws = @alloc(Int, npossible_cedges)
+            cumweight = zero(Int)
             for (k, e) ∈ enumerate(possible_cedges)
-                ws[k] = latitude(arg, dst(e)) <= clat <= latitude(arg, src(e))
+                cumweight += latitude(arg, dst(e)) <= clat <= latitude(arg, src(e))
+                ws[k] = cumweight
             end
 
-            probs = ProbabilityWeights(ws)
-            cedge_idx = sample(rng, eachindex(possible_cedges), probs)
-            arg.logprob[] += log(probs[cedge_idx])
+            cedge_idx = zero(Int)
+            let k = rand(rng, 1:cumweight)
+                cedge_idx = findfirst(==(k), ws)
+            end
+            arg.logprob[] -= log(cumweight)
             cedge = possible_cedges[cedge_idx]
         end
-    end
 
-    @debug "Constrained recombination event" redge cedge breakpoint rlat clat
-    recombine!(arg, redge, cedge, breakpoint, rlat, clat, vstack, buffer = buffer)
+        @debug "Constrained recombination event" redge cedge breakpoint rlat clat
+        recombine!(arg, redge, cedge, breakpoint, rlat, clat, vstack, buffer = buffer)
 
-    if wildrec
-        _update_live_edges_wild!(live_edges, arg, newd, nextidx, breakpoint, es_idx)
-    else
-        newd = nv(arg)
-        _update_live_edges_derived!(live_edges, arg, newd, nextidx, breakpoint, es_idx)
+        if wildrec
+            _update_live_edges_wild!(live_edges, arg, newd, nextidx, breakpoint, es_idx)
+        else
+            newd = nv(arg)
+            _update_live_edges_derived!(live_edges, arg, newd, nextidx, breakpoint, es_idx)
+        end
     end
 
 
@@ -664,12 +675,6 @@ function build!(rng, arg::Arg, ρ; winwidth = ∞, buffer = default_buffer(), no
         end
     end
 
-    ## Constrained recombinations ##
-    mutation_edges_buffer = ntuple(_ -> Edge{VertexType}[], mmn_chunksize)
-    nextidx, live_edges = next_inconsistent_idx(arg, 1,
-                                                mutations_edges = mutation_edges_buffer,
-                                                buffer = buffer)
-
     progenabled = nleaves(arg) * nmarkers(arg) >= 10000000
     prog = Progress(nmarkers(arg), enabled = progenabled && !noprogress)
 
@@ -678,6 +683,12 @@ function build!(rng, arg::Arg, ρ; winwidth = ∞, buffer = default_buffer(), no
         vstore = @alloc(VertexType, nleaves(arg))
         estack = CheapStack(estore)
         vstack = CheapStack(vstore)
+
+        ## Constrained recombinations ##
+        mutation_edges_buffer = ntuple(_ -> Edge{VertexType}[], mmn_chunksize)
+        nextidx, live_edges = next_inconsistent_idx(arg, 1, estack,
+                                                    mutations_edges = mutation_edges_buffer,
+                                                    buffer = buffer)
 
         while !iszero(nextidx)
             update!(prog, nextidx)
@@ -701,7 +712,7 @@ function build!(rng, arg::Arg, ρ; winwidth = ∞, buffer = default_buffer(), no
             end
 
             previdx = nextidx
-            nextidx, live_edges = next_inconsistent_idx(arg, nextidx + 1,
+            nextidx, live_edges = next_inconsistent_idx(arg, nextidx + 1, estack,
                                                         mutations_edges = mutation_edges_buffer,
                                                         buffer = buffer)
         end
