@@ -329,19 +329,6 @@ end
 ############
 
 """
-    maxdepth(genealogy, v)
-
-Compute the depth of a vertex, that is the number of egdes between it and the
-genealogy's mrca.
-"""
-function maxdepth(genealogy, v, depth = 0)
-    _dads = dads(genealogy, v)
-    isempty(_dads) && return depth
-
-    mapreduce(d -> maxdepth(genealogy, d, depth + 1), max, _dads)
-end
-
-"""
     GenLayout(leaveslayer)
 
 Layout function designed to plot genealogies. Leaves are all placed on the
