@@ -675,8 +675,8 @@ function build!(rng, arg::Arg, ρ; winwidth = ∞, buffer = default_buffer(), no
     prog = Progress(nmarkers(arg), enabled = progenabled && !noprogress)
 
     @no_escape buffer begin
-        estore = @alloc(Edge{VertexType}, nleaves(arg))
-        vstore = @alloc(VertexType, nleaves(arg))
+        estore = @alloc(Edge{VertexType}, max(100, nleaves(arg)))
+        vstore = @alloc(VertexType, max(100, nleaves(arg)))
         estack = CheapStack(estore)
         vstack = CheapStack(vstore)
 
