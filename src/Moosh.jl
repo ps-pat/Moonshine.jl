@@ -23,11 +23,30 @@ using ProgressMeter
 
 using FunctionWrappers: FunctionWrapper
 
-## Some constants.
+using CpuId: simdbytes
+
+using SIMD: VecRange
+
+#          +----------------------------------------------------------+
+#          |                        Constants.                        |
+#          +----------------------------------------------------------+
+
 const VertexType = Int
 const ∞ = Inf
 const mmn_chunksize = 8
 const mmn_chunktype = (eval ∘ Symbol)("UInt" * string(mmn_chunksize))
+const simd_vecsize = simdbytes()
+
+#          +----------------------------------------------------------+
+#          |                     Global variables                     |
+#          +----------------------------------------------------------+
+
+"""
+    default_colormap = :Paired_3
+
+Color map used by UnicodePlots.jl. See
+[ColorSchemes.jl](https://juliagraphics.github.io/ColorSchemes.jl/stable/).
+"""
 default_colormap = :Paired_3
 
 include("workarounds.jl")

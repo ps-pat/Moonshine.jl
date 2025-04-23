@@ -11,9 +11,11 @@ import IntervalSets: leftendpoint, rightendpoint, endpoints, width
 
 using IntervalSets: TypedEndpointsInterval
 
-######################
-# Khatri-Rao Product #
-######################
+import SIMD._pointer
+
+#          +----------------------------------------------------------+
+#          |                    Khatri-Rao Product                    |
+#          +----------------------------------------------------------+
 
 function ⊙(A::AbstractMatrix{T}, B::AbstractMatrix{T}) where T
     c = size(A, 2)
@@ -38,9 +40,9 @@ function ⊙(A::AbstractMatrix{T}, B::AbstractMatrix{T}) where T
     ret
 end
 
-####################
-# Set of intervals #
-####################
+#          +----------------------------------------------------------+
+#          |                     Set of intervals                     |
+#          +----------------------------------------------------------+
 
 function isdisconnected(A::AI, B::AI)
     AB = A ∩ B
@@ -67,3 +69,9 @@ for idx ∈ 0:15
         $cmp2(leftendpoint(A), rightendpoint(B))
 end
 
+#          +----------------------------------------------------------+
+#          |                   UnsafeArrays & simd                    |
+#          +----------------------------------------------------------+
+
+Base.@propagate_inbounds _pointer(arr::UnsafeArray, i, I) =
+    pointer(arr, LinearIndices(arr)[i, I...])

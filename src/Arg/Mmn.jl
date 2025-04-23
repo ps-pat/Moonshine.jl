@@ -81,16 +81,6 @@ function mutation_edges(arg)
     mutation_edges!(ret, arg, Ω(0, ∞))
 end
 
-function _compute_mutations_sequences(mutations_sequences, c_buffer, mask)
-    @inbounds @simd ivdep for k ∈ eachindex(mutations_sequences)
-        mutations_sequences[k] ⊻= c_buffer[k]
-        mutations_sequences[k] &= mask
-    end
-
-    mutations_sequences
-end
-
-
 function next_inconsistent_idx(arg, idx, stack;
                                mutations_edges = ntuple(_ -> Edge{VertexType}[], mmn_chunksize),
                                buffer = default_buffer())
@@ -115,43 +105,50 @@ function next_inconsistent_idx(arg, idx, stack;
 
         base_ω = Ω(ωlbound, ωubound)
 
-        @no_escape buffer begin
+        @inbounds @no_escape buffer begin
             visited = @alloc(Bool, nrecombinations(arg))
-            ei_ptr = convert(Ptr{Edge{VertexType}}, @alloc_ptr(ne(arg) * sizeof(Edge{VertexType})))
-            mutations_sequences_ptr = convert(Ptr{mmn_chunktype},
-                                              @alloc_ptr((ne(arg)) * sizeof(mmn_chunktype)))
-            c_buffer_ptr = convert(Ptr{mmn_chunktype},
-                                   @alloc_ptr((ne(arg)) * sizeof(mmn_chunktype)))
+            ei_ptr = unsafe_convert(Ptr{Edge{VertexType}},
+                                    @alloc_ptr(ne(arg) * sizeof(Edge{VertexType})))
 
-            ## Traverse marginal graph and fill containers
-            ne_interval = 0
+            padded_ne = ne(arg) + ne(arg) % simd_vecsize
+            chunks_s_ptr = unsafe_convert(Ptr{mmn_chunktype},
+                                          @alloc_ptr(padded_ne * sizeof(VertexType)))
+            chunks_d_ptr = unsafe_convert(Ptr{mmn_chunktype},
+                                          @alloc_ptr(padded_ne * sizeof(VertexType)))
+
+            ## Collect edges
+            ne_interval = zero(Int)
             for e ∈ edges_interval(arg, base_ω, stack, visited)
+                s_ptr = unsafe_convert(Ptr{mmn_chunktype},
+                                       pointer(sequence(arg, src(e)).data.chunks))
+                d_ptr = unsafe_convert(Ptr{mmn_chunktype},
+                                       pointer(sequence(arg, dst(e)).data.chunks))
+                schunk = unsafe_load(s_ptr, idx_chunk)
+                dchunk = unsafe_load(d_ptr, idx_chunk)
+
                 ne_interval += 1
                 unsafe_store!(ei_ptr, e, ne_interval)
-
-                cs = (
-                    reinterpret(mmn_chunktype, sequence(arg, src(e)).data.chunks),
-                    reinterpret(mmn_chunktype, sequence(arg, dst(e)).data.chunks))
-
-                unsafe_store!(mutations_sequences_ptr, first(cs)[idx_chunk], ne_interval)
-                unsafe_store!(c_buffer_ptr, last(cs)[idx_chunk], ne_interval)
+                unsafe_store!(chunks_s_ptr, schunk, ne_interval)
+                unsafe_store!(chunks_d_ptr, dchunk, ne_interval)
             end
 
-            ## Wrap pointers into arrays
-            mutations_sequences =
-                UnsafeArray{eltype(mutations_sequences_ptr), 1}(mutations_sequences_ptr, (ne_interval,))
-            c_buffer =
-                UnsafeArray{eltype(c_buffer_ptr), 1}(c_buffer_ptr, (ne_interval,))
-
-            ## Compute mutations sequences
-            _compute_mutations_sequences(mutations_sequences, c_buffer, mask)
+            ## Traverse marginal graph and compute mutation sequences
+            padded_ne = ne_interval + ne_interval % simd_vecsize
+            chunks_s = UnsafeArray{eltype(chunks_s_ptr), 1}(chunks_s_ptr, (padded_ne,))
+            chunks_d = UnsafeArray{eltype(chunks_d_ptr), 1}(chunks_d_ptr, (padded_ne,))
+            let lane = VecRange{simd_vecsize}(0)
+                @inbounds for k ∈ 1:simd_vecsize:padded_ne
+                    chunks_s[lane + k] ⊻= chunks_d[lane + k]
+                    chunks_s[lane + k] &= mask
+                end
+            end
 
             ## Find mutation edges
-            ei = UnsafeArray{Edge{VertexType}, 1}(ei_ptr, (ne_interval,))
-            for (i, e) ∈ enumerate(ei)
-                mutations_sequence = mutations_sequences[i]
-
+            for i ∈ 1:ne_interval
+                e = unsafe_load(ei_ptr, i)
+                mutations_sequence = unsafe_load(chunks_s_ptr, i)
                 acc = 0
+
                 while true
                     j = trailing_zeros(mutations_sequence) + 1
                     j > mmn_chunksize && break
@@ -178,4 +175,3 @@ function next_inconsistent_idx(arg, idx, stack;
 
     0, Edge{VertexType}[]
 end
-
