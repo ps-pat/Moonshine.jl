@@ -14,8 +14,6 @@ import Base: empty,
 
 using Random
 
-import Base: bitcount
-
 using LinearAlgebra
 
 using SpecialFunctions: loggamma
@@ -106,9 +104,6 @@ end
 for fun ∈ [:<<, :>>, :>>>]
     @eval $fun(sequence::Sequence, k) = Sequence($fun(sequence.data, k))
 end
-
-bitcount(η::Sequence; init::T = 0) where T =
-    bitcount(η.data.chunks, init = init)
 
 function *(h::Sequence, v::AbstractVector{T}) where T
     acc = zero(T)
