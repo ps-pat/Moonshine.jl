@@ -248,14 +248,22 @@ multithreaded in order to reduce computation time.
 See also [`tmrca`](@ref)
 
 # Keywords
+* `npoints` (`nrecombinations(arg) + 1`): approximate number of points at which
+  to compute the TMRCA. By default, every recombination breakpoint is
+  considered. Use a smaller number of points to reduce computing time.
 * `width` (`76`): width of the plot. Its default maximum value of 76 produces
   a 80 columns wide plot.
 * `kwargs...`: additional keywords arguments are passed directly to
   [`UnicodePlots.histogram`](@ref).
 """
-function plot_tmrcas(arg::Arg; width = 76, kwargs...)
-    times = Vector{Float64}(undef, nrecombinations(arg) + 1)
-    grid = [0.; collect(breakpoints(arg))]
+function plot_tmrcas(arg::Arg; width = 76, npoints = nrecombinations(arg) + 1,
+                     kwargs...)
+    lastidx = nrecombinations(arg) + 1
+    stride = max(1, div(lastidx, npoints - 1, RoundDown) - 1)
+    idx = StepRange(1, stride, lastidx)
+
+    grid = [0.; collect(breakpoints(arg))[idx]]
+    times = similar(grid, Float64)
 
     @showprogress Threads.@threads :greedy for k ∈ eachindex(grid)
         times[k] = tmrca(arg, leaves(arg), grid[k])

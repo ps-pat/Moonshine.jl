@@ -579,32 +579,36 @@ let funtransorder = Dict(:dads => (:ancestors, (x, y) -> (x, y)),
             end
 
             ## Ancestors & descendants
-            @eval function $transfun!(buf, genealogy, v, ω::$Argtype)
-                writeptr = readptr = firstindex(buf)
+            @eval function $transfun!(buf_ptr, genealogy, v, ω::$Argtype)
+                head = tail = zero(Int)
                 @inbounds for u ∈ $fun(genealogy, v, ω)
-                    buf[writeptr] = u
-                    writeptr += 1
+                    head += 1
+                    unsafe_store!(buf_ptr, u, head)
                 end
 
-                @inbounds while readptr < writeptr
-                    v = buf[readptr]
-                    readptr += 1
+                @inbounds while tail < head
+                    tail += 1
+                    v = unsafe_load(buf_ptr, tail)
                     (isleaf(genealogy, v) || isroot(genealogy, v)) && continue
 
-                    resize!(buf, 2)
                     for u ∈ $fun(genealogy, v, ω)
-                        u ∈ view(buf, 1:(writeptr-1)) && continue
-                        buf[writeptr] = u
-                        writeptr += 1
+                        for k ∈ 1:head
+                            u == unsafe_load(buf_ptr, k) && @goto skip
+                        end
+
+                        head += 1
+                        unsafe_store!(buf_ptr, u, head)
+
+                        @label skip
                     end
                 end
 
-                resize!(buf, writeptr - 1)
+                UnsafeArray{eltype(buf_ptr), 1}(buf_ptr, (head,))
             end
 
             @eval function $transfun(genealogy, v, ω::$Argtype)
-                $transfun!(Vector{VertexType}(undef, nv(genealogy) - 1),
-                        genealogy, v, ω)
+                $transfun!(pointer(Vector{VertexType}(undef, nv(genealogy) - 1)),
+                           genealogy, v, ω)
             end
         end
     end

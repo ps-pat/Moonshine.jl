@@ -40,18 +40,25 @@ for G ∈ (:Tree, :Arg)
 
 # -- MRCA --------------------------------------------------------------
 
-    @eval function mrca($Gargname::$G, vs::AbstractVector, ωs)
+    @eval function mrca($Gargname::$G, vs::AbstractVector, x;
+                        buffer = default_buffer())
         μ = mrca($Gargname)
         iszero(μ) && return μ
 
-        while true
-            @label beg
-            for c ∈ children($Gargname, μ, ωs)
-                vs ⊆ descendants($Gargname, c, ωs) || continue
-                μ = c
-                @goto beg
+        @no_escape buffer begin
+            descendants_ptr = unsafe_convert(Ptr{VertexType},
+                                             @alloc_ptr(nv(arg) * sizeof(VertexType)))
+            while true
+                flag = false
+                for c ∈ children($Gargname, μ, x)
+                    if vs ⊆ descendants!(descendants_ptr, $Gargname, c, x)
+                        μ = c
+                        flag = true
+                        break
+                    end
+                end
+                flag || break
             end
-            break
         end
 
         μ
