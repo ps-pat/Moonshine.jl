@@ -125,8 +125,7 @@ function ancestral_intervals!(ωs, arg::Arg, e::Edge; wipe = true, simplify = tr
     ωs
 end
 
-ancestral_intervals(arg::Arg, e::Edge) =
-    get!(() -> AIsType([Ω(0, ∞)]), arg.ancestral_intervals, e)
+ancestral_intervals(arg::Arg, e::Edge) = arg.ancestral_intervals[e]
 
 function ancestral_intervals!(ωs, arg::Arg, v::VertexType; wipe = true)
     wipe && empty!(ωs)

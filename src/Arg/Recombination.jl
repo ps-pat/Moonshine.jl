@@ -121,16 +121,19 @@ function recombine!(arg, redge, cedge, breakpoint, rlat, clat, stack;
     rem_edge!(arg, redge)
 
     ## Replace recoalescence edge ##
-    ωc = ancestral_intervals(arg, cedge)
-    add_edge!(arg, Edge(cvertex, rvertex), ωr_right)
-    add_edge!(arg, Edge(cvertex, dst(cedge)), ωc)
     root_recombination = !rem_edge!(arg, cedge)
     if root_recombination
+        ωc = AIsType([Ω(0, ∞)])
         arg.mrca[] = cvertex
     else
-        ωc_new = union(ωc, ωr_right)
-        add_edge!(arg, Edge(src(cedge), cvertex), ωc_new)
+        ωc = ancestral_intervals(arg, cedge)
+        let ωc_new = union(ωc, ωr_right)
+            add_edge!(arg, Edge(src(cedge), cvertex), ωc_new)
+        end
     end
+
+    add_edge!(arg, Edge(cvertex, rvertex), ωr_right)
+    add_edge!(arg, Edge(cvertex, dst(cedge)), ωc)
 
     ## Compute sequence of new vertices ##
     @no_escape buffer begin
