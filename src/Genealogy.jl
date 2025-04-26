@@ -532,10 +532,8 @@ for (fun, list) ∈ Dict(:dads => Meta.quot(:badjlist),
     @eval $fun(genealogy, v) = getfield(graph(genealogy), $list)[v]
 end
 
-let funtransorder = Dict(:dads => (:ancestors, (x, y) -> (x, y)),
-                         :children => (:descendants, (x, y) -> (y, x))),
-    typesandfun = ((:Real, in), (:AI, !isdisjoint), (:(AIs{<:AbstractVector{<:AI}}), !isdisjoint))
-    for (fun, (transfun, order)) ∈ funtransorder
+let funtrans = Dict(:dads => :ancestors, :children => :descendants)
+    for (fun, transfun) ∈ funtrans
         transfun! = Symbol(string(transfun) * '!')
 
         @eval function $transfun!(buf, genealogy, v)
@@ -565,51 +563,37 @@ let funtransorder = Dict(:dads => (:ancestors, (x, y) -> (x, y)),
                        genealogy, v)
         end
 
-        for (Argtype, testfun) ∈ typesandfun
-            ## Parents & children
-            @eval function $fun(genealogy, v, ω::$Argtype)
-                idx = 0x06
-                neig = $fun(genealogy, v)
-                @inbounds @simd for k ∈ eachindex(neig)
-                    ωs = ancestral_intervals(genealogy, Edge($order(neig[k], v)))
-                    idx ⊻= (0x03 << 2(k - 1)) * $testfun(ω, ωs)
-                end
-
-                @inbounds view(neig, range(idx & 0x03, idx >> 0x02))
+        ## Ancestors & descendants
+        @eval function $transfun!(buf_ptr, genealogy, v, ω)
+            head = tail = zero(Int)
+            @inbounds for u ∈ $fun(genealogy, v, ω)
+                head += 1
+                unsafe_store!(buf_ptr, u, head)
             end
 
-            ## Ancestors & descendants
-            @eval function $transfun!(buf_ptr, genealogy, v, ω::$Argtype)
-                head = tail = zero(Int)
-                @inbounds for u ∈ $fun(genealogy, v, ω)
+            @inbounds while tail < head
+                tail += 1
+                v = unsafe_load(buf_ptr, tail)
+                (isleaf(genealogy, v) || isroot(genealogy, v)) && continue
+
+                for u ∈ $fun(genealogy, v, ω)
+                    for k ∈ 1:head
+                        u == unsafe_load(buf_ptr, k) && @goto skip
+                    end
+
                     head += 1
                     unsafe_store!(buf_ptr, u, head)
+
+                    @label skip
                 end
-
-                @inbounds while tail < head
-                    tail += 1
-                    v = unsafe_load(buf_ptr, tail)
-                    (isleaf(genealogy, v) || isroot(genealogy, v)) && continue
-
-                    for u ∈ $fun(genealogy, v, ω)
-                        for k ∈ 1:head
-                            u == unsafe_load(buf_ptr, k) && @goto skip
-                        end
-
-                        head += 1
-                        unsafe_store!(buf_ptr, u, head)
-
-                        @label skip
-                    end
-                end
-
-                UnsafeArray{eltype(buf_ptr), 1}(buf_ptr, (head,))
             end
 
-            @eval function $transfun(genealogy, v, ω::$Argtype)
-                $transfun!(pointer(Vector{VertexType}(undef, nv(genealogy) - 1)),
-                           genealogy, v, ω)
-            end
+            UnsafeArray{eltype(buf_ptr), 1}(buf_ptr, (head,))
+        end
+
+        @eval function $transfun(genealogy, v, ω)
+            $transfun!(pointer(Vector{VertexType}(undef, nv(genealogy) - 1)),
+                       genealogy, v, ω)
         end
     end
 end

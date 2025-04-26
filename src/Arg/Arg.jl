@@ -84,6 +84,36 @@ mrca(arg, ωs) = mrca(arg, leaves(arg), ωs)
 
 @generated maxchildren(::Type{Arg}) = 2
 
+let funs = (:dads, :children),
+    typesandtests = ((:Real, in), (:AI, !isdisjoint), (:(AIs{<:AbstractVector{<:AI}}), !isdisjoint))
+
+    for fun ∈ funs
+        orderfun = fun == :dads ? (x, y) -> y => x : (x, y) -> x => y
+        isrecmodifier = fun == :dads ? :! : :identity
+
+        for (Argtype, testfun) ∈ typesandtests
+            @eval @inbounds function $fun(arg, v, ωs::$Argtype)
+                neig = $fun(arg, v)
+                isempty(neig) && return view(neig, 0x01:0x00)
+
+                ai1 = ancestral_intervals(arg, Edge($orderfun(v, first(neig))))
+
+                if $isrecmodifier(isrecombination)(arg, v)
+                    idx = UInt8($testfun(ωs, ai1))
+                    return view(neig, 0x01:idx)
+                end
+
+                ai2 = ancestral_intervals(arg, Edge($orderfun(v, last(neig))))
+                idx = 0x06
+                idx ⊻= 0x03 * $testfun(ωs, ai1)
+                idx ⊻= 0x0c * $testfun(ωs, ai2)
+
+                view(neig, range(idx & 0x03, idx >> 0x02))
+            end
+        end
+    end
+end
+
 ###########################
 # AbstractGraph Interface #
 ###########################
