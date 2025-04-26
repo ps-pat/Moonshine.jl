@@ -170,7 +170,8 @@ issubset(x, ωs::AIs) = any(ω -> x ⊆ ω, ωs)
 
 function isdisjoint(x, ωs::AIs)
     nb_not_disjoint = zero(Int)
-    @inbounds @simd for ω ∈ ωs
+    ## Possible race condition is not an issue
+    @inbounds @simd ivdep for ω ∈ ωs
         nb_not_disjoint += !isdisjoint(x, ω)
     end
 
