@@ -8,8 +8,6 @@ using StatsBase: samplepair, ProbabilityWeights, fit, Histogram
 
 using SparseArrays
 
-using Distributions
-
 using StaticArrays: @SVector
 
 using UnicodePlots: heatmap, label!, stairs
@@ -27,7 +25,7 @@ struct Arg <: AbstractGenealogy
     sequences::Vector{Sequence}
     ancestral_intervals::Dict{Edge{VertexType}, AIsType}
     sample::Sample
-    logprob::Base.RefValue{Float64x2}
+    logdensity::Base.RefValue{Double64}
 end
 
 function Arg(tree::Tree)
@@ -43,7 +41,7 @@ function Arg(tree::Tree)
         sequences(tree),
         ancestral_intervals,
         sam(tree),
-        Ref(prob(tree, logscale = true)))
+        tree.logdensity)
 end
 
 function Arg(rng::AbstractRNG, n, μ, ρ, Ne, sequence_length)

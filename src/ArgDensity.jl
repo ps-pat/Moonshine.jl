@@ -1,5 +1,3 @@
-using Distributions: logpdf
-
 using DataStructures: enqueue!, dequeue!
 
 #############

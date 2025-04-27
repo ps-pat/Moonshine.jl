@@ -255,7 +255,7 @@ function _sample_clat(rng, arg, rlat, possible_cedges)
     accept = false
     @inbounds while !accept
         t = rand(rng, pp_dist)
-        arg.logprob[] += logpdf(pp_dist, t)
+        add_logdensity!(arg, pp_dist, t)
 
         ## `count` causes weird type instability for some reason
         λt = zero(Int)
@@ -266,7 +266,7 @@ function _sample_clat(rng, arg, rlat, possible_cedges)
 
         accept_dist = Bernoulli(λt / λbound)
         accept = rand(rng, accept_dist)
-        arg.logprob[] += logpdf(accept_dist, accept)
+        add_logdensity!(arg, accept_dist, accept)
     end
 
     t
@@ -292,19 +292,20 @@ function _sample_clat(rng, arg, minlat, redge, fedge, nextidx, stack;
         clats = @alloc(Float64, n)
 
         while iszero(ret)
-            cumsum!(clats, rand(rng, pp, n))
+            Δclats = rand(rng, pp, n)
+            cumsum!(clats, Δclats)
             clats .+= minlat
 
             nlive!(λts, arg, clats, nextpos, stack, block_predicates = block_predicates, buffer = buffer)
 
             for (k, (clat, λt)) ∈ (enumerate ∘ zip)(clats, λts)
+                add_logdensity!(arg, pp, Δclats[k])
                 Δt = clats[k] - (isone(k) ? minlat : clats[k - 1])
-                arg.logprob[] += logpdf(pp, Δt)
 
                 ## Acceptation
                 accept_dist = Bernoulli(λt / λ)
                 accept = rand(rng, accept_dist)
-                arg.logprob[] += logpdf(accept_dist, accept)
+                add_logdensity!(arg, accept_dist, accept)
 
                 if accept
                     ret = clat
@@ -422,7 +423,7 @@ function _sample_cedge_wild(rng, arg, lat, fedge, nextidx, redge::T, stack;
         end
 
         cedges = UnsafeArray{T, 1}(cedges_ptr, (len,))
-        arg.logprob[] -= log(len)
+        arg.logdensity[] -= log(len)
         sample(rng, cedges)
     end
 end
@@ -448,7 +449,7 @@ function sample_recombination_constrained!(rng, arg, breakpoint, winwidth,
         if first(es_idx) > last(es_idx)
             es_idx[1], es_idx[2] = es_idx[2], es_idx[1]
         end
-        arg.logprob[] += log(2) - log(n) - log(n - 1)
+        add_logdensity!(arg, log(2) - log(n) - log(n - 1))
         e1, e2 = @views live_edges[es_idx]
 
         ## Consider the possibility of a wild recombination
@@ -491,16 +492,16 @@ function sample_recombination_constrained!(rng, arg, breakpoint, winwidth,
                 t -= first(rints_width)
                 recroot_idx = t <= rints_width[2] ? 2 : 3
             end
-        end
+end
 
-        arg.logprob[] += log(rints_width[recroot_idx]) - (log ∘ sum)(rints_width)
+        add_logdensity!(arg, log(rints_width[recroot_idx]) - (log ∘ sum)(rints_width))
         wildrec = recroot_idx == 3
 
         ## The larger α - β is, the stronger the bias towards ancient branches
         ## (0 = no bias)
         rlat_dist = Beta(2, 2)
         rlat = rand(rng, rlat_dist)
-        arg.logprob[] += logpdf(rlat_dist, rlat)
+        add_logdensity!(arg, rlat_dist, rlat)
         rlat *= rints_width[recroot_idx]
         rlat += es_mins[recroot_idx]
 
@@ -545,7 +546,7 @@ function sample_recombination_constrained!(rng, arg, breakpoint, winwidth,
             let k = rand(rng, 1:cumweight)
                 cedge_idx = findfirst(==(k), ws)
             end
-            arg.logprob[] -= log(cumweight)
+            add_logdensity!(arg, -log(cumweight))
             cedge = possible_cedges[cedge_idx]
         end
 
@@ -601,12 +602,12 @@ function sample_recombination_unconstrained!(rng, arg, winwidth,
 
             breakpoint_dist = Uniform(endpoints(bp_int)...)
             breakpoint = rand(rng, breakpoint_dist)
-            arg.logprob[] += logpdf(breakpoint_dist, breakpoint)
+            add_logdensity!(arg, breakpoint_dist, breakpoint)
 
             ## Sample the recombination latitude ##
             rlat_dist = Beta(2)
             rlat = rand(rng, rlat_dist)
-            arg.logprob[] += logpdf(rlat_dist, rlat)
+            add_logdensity!(arg, rlat_dist, rlat)
             rlat *= branchlength(arg, redge)
             rlat += latitude(arg, dst(redge))
 
@@ -623,7 +624,7 @@ function sample_recombination_unconstrained!(rng, arg, winwidth,
     ## Sample the recoalescence latitude ##
     Δclat_dist = Exponential(inv(nlive(arg, rlat, window, buffer = buffer)))
     Δclat = rand(rng, Δclat_dist)
-    arg.logprob[] += logpdf(Δclat_dist, Δclat)
+    add_logdensity!(arg, Δclat_dist, Δclat)
     clat = rlat + Δclat
 
     ## Sample the recoalescence edge ##
@@ -666,7 +667,7 @@ function build!(rng, arg::Arg, ρ; winwidth = ∞, buffer = default_buffer(), no
     ## Unconstrained recombinations ##
     nrecs_dist = Poisson(ρ)
     nrecs = rand(rng, nrecs_dist)
-    arg.logprob[] += logpdf(nrecs_dist, nrecs)
+    add_logdensity!(arg, nrecs_dist, nrecs)
 
     @no_escape buffer begin
         for k ∈ 1:nrecs
@@ -700,7 +701,7 @@ function build!(rng, arg::Arg, ρ; winwidth = ∞, buffer = default_buffer(), no
 
             bp_dist = Uniform(bp_lbound, bp_ubound)
             breakpoints = (sort! ∘ rand)(rng, bp_dist, nbp)
-            arg.logprob[] -= nbp * log(bp_ubound - bp_lbound)
+            arg.logdensity[] -= nbp * log(bp_ubound - bp_lbound)
 
             for breakpoint ∈ breakpoints
                 sample_recombination_constrained!(rng, arg, breakpoint,

@@ -2,8 +2,6 @@
 # Multivariate Bernoulli #
 ##########################
 
-using Distributions
-
 import Base: length, eltype
 
 import Distributions: insupport, pdf,

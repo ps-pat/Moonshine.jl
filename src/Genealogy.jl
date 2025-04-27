@@ -123,17 +123,17 @@ See also [`tmrca`](@ref) for the time to the most recent common ancestor.
 """
 function mrca end
 
-export prob
+export dens
 """
-    prob(genealogy; logscale = false)
+    dens(genealogy; logscale = false)
 
-Probability of the genealogy.
+Value of the ancestral recombination graph density evaluated at a given
+genealogy.
 
-# Implementation,
-
+# Implementation
 Only mandatory if copulas are to be fitted on the genealogy.
 """
-function prob end
+function dens end
 
 export positions
 """

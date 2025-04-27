@@ -9,7 +9,7 @@ const AI = AbstractInterval
 
 using LoopVectorization
 
-using MultiFloats
+using DoubleFloats: Double64
 
 using DataStructures: Stack, Queue
 
@@ -26,6 +26,8 @@ using FunctionWrappers: FunctionWrapper
 using CpuId: simdbytes
 
 using SIMD: VecRange
+
+using Distributions
 
 #          +----------------------------------------------------------+
 #          |                        Constants.                        |
@@ -49,7 +51,6 @@ Color map used by UnicodePlots.jl. See
 """
 default_colormap = :Paired_3
 
-include("workarounds.jl")
 include("Sequence.jl")
 include("tools.jl")
 include("foreign.jl")
@@ -67,22 +68,6 @@ include("ImportanceSampling.jl")
 
 function __init__()
     __init_msprime__()
-end
-
-##################
-# Precompilation #
-##################
-
-@setup_workload begin
-    rng = Xoshiro(42)
-    n = 2
-    m = 1
-    H = Sample([Sequence(rng, m) for _ ∈ 1:n], 1e-8, 1e-8, 1000, 1000, [0.])
-    @compile_workload begin
-        tree = Tree(H)
-        build!(rng, tree)
-        arg = Arg(tree)
-    end
 end
 
 end # module Moosh

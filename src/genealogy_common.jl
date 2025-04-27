@@ -21,12 +21,23 @@ for G ∈ (:Tree, :Arg)
         v ≤ n ? zero(Float64) : latitudes($Gargname)[v - n]
     end
 
-    ## Probability of a genealogy.
-    @eval function prob($Gargname::$G; logscale = false)
-        ret = getfield($Gargname, :logprob)[]
+    ## Density of a genealogy
+    @eval function dens($Gargname::$G; logscale = false)
+        ret = big(getfield($Gargname, :logdensity)[])
 
-        logscale ? ret : exp(ret)
+        if !logscale
+            ret = exp(ret)
+        end
+
+        ret
     end
+
+    @eval function add_logdensity!($Gargname::$G, x)
+        $Gargname.logdensity[] += x
+    end
+
+    @eval add_logdensity!($Gargname::$G, distribution, x) =
+        add_logdensity!($Gargname, logpdf(distribution, x))
 
     ## Other methods.
     @eval isempty($Gargname::$G) = isempty(getfield($Gargname, :sequences))

@@ -110,7 +110,7 @@ Importance samping weights of the chain.
 """
 weights(chain, logscale = false) = Iterators.map(chain) do genealogy
     fG = chain.fG
-    log_weight = fG(genealogy, logscale = true) - prob(genealogy, logscale = true)
+    log_weight = fG(genealogy, logscale = true) - dens(genealogy, logscale = true)
     logscale ? log_weight : exp(log_weight)
 end
 

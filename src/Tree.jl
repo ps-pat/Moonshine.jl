@@ -4,8 +4,6 @@ import Graphs: add_edge!
 
 using Random
 
-using Distributions
-
 using StatsBase: sample, FrequencyWeights
 
 import Base: iterate, length, size, isempty
@@ -22,7 +20,7 @@ struct Tree <: AbstractGenealogy
     latitudes::Vector{Float64}
     sequences::Vector{Sequence}
     sample::Sample
-    logprob::Base.RefValue{Float64x2}
+    logdensity::Base.RefValue{Double64}
 end
 
 function Tree(sample::Sample)
@@ -34,7 +32,7 @@ function Tree(sample::Sample)
     Tree(SimpleDiGraph(2n - 1),
          zeros(Float64, n - 1),
          sequences,
-         sample, Ref(zero(Float64x2)))
+         sample, Ref(zero(Double64)))
 end
 
 function Tree(rng::AbstractRNG, n, μ, ρ, Ne, sequence_length)
@@ -219,7 +217,7 @@ function build!(rng, tree::Tree;
         v1_idxs = sample(rng, 1:nlive, norms[1:nlive], 2, replace = false)
         v1_idx = norms[first(v1_idxs)] > norms[last(v1_idxs)] ?
             first(v1_idxs) : last(v1_idxs)
-        tree.logprob[] += log(norms[v1_idx]) - log(norms.sum)
+        add_logdensity!(tree, log(norms[v1_idx]) - log(norms.sum))
         v1 = live[v1_idx]
         live[v1_idx] = live[nlive]
         norms[v1_idx] = norms[nlive]
@@ -254,12 +252,12 @@ function build!(rng, tree::Tree;
         v2 = live[v2_idx]
         v = 2n - nlive
         live[v2_idx] = v
-        tree.logprob[] += logpdf(Gumbel(gumbel_μ), gumbel_x)
+        add_logdensity!(tree, Gumbel(gumbel_μ), gumbel_x)
 
         ## Sample coalescence latitude
         Δcoal_dist = Exponential(inv(nlive))
         Δ = rand(rng, Δcoal_dist)
-        tree.logprob[] += logpdf(Δcoal_dist, Δ)
+        add_logdensity!(tree, Δcoal_dist, Δ)
 
         ## Add coalescence event to tree
         add_edge!(tree, v, v1)
