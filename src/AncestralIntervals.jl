@@ -46,7 +46,7 @@ end
 
 iterate(ai::AIs, state) = iterate(ai.data, state)
 
-eltype(::Type{AIs{<:AbstractVector{T}}}) where T = T
+eltype(::Type{<:AIs{<:AbstractVector{T}}}) where T = T
 
 IteratorSize(::AIs) = Base.HasLength()
 IteratorSize(::Type{AIs}) = Base.HasLength()
@@ -178,7 +178,7 @@ function isdisjoint(x, ωs::AIs)
 end
 
 for f ∈ (:issubset, :isdisjoint)
-    @eval $f(ωs::AIs, x) = $f(x, ωs)
+    @eval $f(ωs::AIs, x::Union{<:AIs, AI}) = $f(x, ωs)
     @eval $f(ωs1::AIs, ωs2::AIs) = all(ω -> $f(ωs2, ω), ωs1)
 end
 
@@ -187,10 +187,10 @@ end
 for f ∈ (:union, :intersect)
     f! = Symbol(string(f) * '!')
 
-    @eval $f(ωs::AIs, x; simplify = true) =
+    @eval $f(ωs::AIs, x::Union{<:AIs, AI}; simplify = true) =
         $f!(copy(ωs), x, simplify = simplify)
 
-    @eval $f(x, ωs::AIs; simplify = true) = $f(ωs, x, simplify = simplify)
+    @eval $f(x::Union{<:AIs, AI}, ωs::AIs; simplify = true) = $f(ωs, x, simplify = simplify)
 end
 
 #          +----------------------------------------------------------+

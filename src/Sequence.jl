@@ -102,7 +102,7 @@ for fun ∈ [:&, :|, :xor]
 end
 
 for fun ∈ [:<<, :>>, :>>>]
-    @eval $fun(sequence::Sequence, k) = Sequence($fun(sequence.data, k))
+    @eval $fun(sequence::Sequence, k::Integer) = Sequence($fun(sequence.data, k))
 end
 
 function *(h::Sequence, v::AbstractVector{T}) where T

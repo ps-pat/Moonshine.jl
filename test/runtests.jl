@@ -4,13 +4,11 @@ using Moosh
 
 import Aqua
 
-Aqua.test_all(Moosh,
-              project_extras = false,
-              ambiguities = false,
-              unbound_args = false,
-              piracies = false,
-              deps_compat = false,
-              persistent_tasks = false)
+let piracy_allowed = [
+    Moosh._pointer] # See https://github.com/eschnett/SIMD.jl/issues/121
+
+    @time Aqua.test_all(Moosh, piracies = (treat_as_own = piracy_allowed,))
+end
 
 using Test:
     @test,
@@ -32,7 +30,7 @@ include("shrinkers.jl")
 @time begin
     @testset begin
         include("Sequence.jl")
-        include("Tree.jl")
-        #include("Arg.jl")
+        # include("Tree.jl")
+        # include("Arg.jl")
     end
 end
