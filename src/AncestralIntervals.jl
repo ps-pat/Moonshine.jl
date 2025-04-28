@@ -5,7 +5,6 @@ import Base:
     getindex, setindex!, firstindex, lastindex,
     ## AbstractArrays
     IndexStyle, deleteat!, resize!,
-    ## Strided Arrays
     strides, unsafe_convert, elsize,
     ## Set operations
     union!, union, intersect!, intersect, join, in, issubset, isdisjoint,
