@@ -27,6 +27,8 @@ using SIMD: VecRange
 
 using Distributions
 
+using DocStringExtensions
+
 #          +----------------------------------------------------------+
 #          |                        Constants.                        |
 #          +----------------------------------------------------------+
@@ -49,6 +51,10 @@ Color map used by UnicodePlots.jl. See
 [ColorSchemes.jl](https://juliagraphics.github.io/ColorSchemes.jl/stable/).
 """
 default_colormap = :Paired_3
+
+#          +----------------------------------------------------------+
+#          |                        Inclusions                        |
+#          +----------------------------------------------------------+
 
 include("Sequence.jl")
 include("tools.jl")
