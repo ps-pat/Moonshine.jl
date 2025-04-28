@@ -6,8 +6,6 @@ using Random
 
 using StatsBase: samplepair, ProbabilityWeights, fit, Histogram
 
-using SparseArrays
-
 using StaticArrays: @SVector
 
 using UnicodePlots: heatmap, label!, stairs

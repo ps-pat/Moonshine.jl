@@ -1,7 +1,5 @@
 module Moosh
 
-using PrecompileTools
-
 using StatsFuns: logtwo, log2π
 
 using IntervalSets
