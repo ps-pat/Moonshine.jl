@@ -663,18 +663,7 @@ end
 #          |                       ARG Building                       |
 #          +----------------------------------------------------------+
 
-function build!(rng, arg::Arg, ρ; winwidth = ∞, buffer = default_buffer(), noprogress = false)
-    ## Unconstrained recombinations ##
-    nrecs_dist = Poisson(ρ)
-    nrecs = rand(rng, nrecs_dist)
-    add_logdensity!(arg, nrecs_dist, nrecs)
-
-    @no_escape buffer begin
-        for k ∈ 1:nrecs
-            sample_recombination_unconstrained!(rng, arg, winwidth, buffer)
-        end
-    end
-
+function build!(rng, arg::Arg; winwidth = ∞, buffer = default_buffer(), noprogress = false)
     progenabled = nleaves(arg) * nmarkers(arg) >= 10000000
     prog = Progress(nmarkers(arg), enabled = progenabled && !noprogress)
 
