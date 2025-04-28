@@ -65,6 +65,15 @@ include("ArgDensity.jl")
 include("Distributions.jl")
 include("ImportanceSampling.jl")
 
+#          +----------------------------------------------------------+
+#          |                      Precompilation                      |
+#          +----------------------------------------------------------+
+
+precompile(Arg, (Xoshiro, Float64, Float64, Float64, Float64, Float64))
+precompile(build!, (Xoshiro, Arg))
+
+# ----------------------------------------------------------------------
+
 function __init__()
     __init_msprime__()
 end
