@@ -38,6 +38,7 @@ const ∞ = Inf
 const mmn_chunksize = 8
 const mmn_chunktype = (eval ∘ Symbol)("UInt" * string(mmn_chunksize))
 const simd_vecsize = simdbytes()
+const simd_chunksize = (simd_vecsize ÷ 8)
 
 #          +----------------------------------------------------------+
 #          |                     Global variables                     |

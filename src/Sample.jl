@@ -242,7 +242,7 @@ end
 #          +----------------------------------------------------------+
 
 function mask!(v::AbstractVector{UInt64}, sample::Sample, idx::AbstractUnitRange;
-                         wipe = true)
+               wipe = true)
     wipe && _wipe!(v)
 
     chunks_idx = chunkidx(Sequence, idx.start), chunkidx(Sequence, idx.stop)
@@ -251,7 +251,7 @@ function mask!(v::AbstractVector{UInt64}, sample::Sample, idx::AbstractUnitRange
     ## BitVectors.
 
     ## First chunk
-    let nleading0 = idxinchunk(Sequence, idx.start) - 1,
+    @inbounds let nleading0 = idxinchunk(Sequence, idx.start) - 1,
         ntrailing0 = blocksize(Sequence) - (first(chunks_idx) == last(chunks_idx) ?
             idxinchunk(Sequence, idx.stop) : blocksize(Sequence))
 
@@ -266,12 +266,21 @@ function mask!(v::AbstractVector{UInt64}, sample::Sample, idx::AbstractUnitRange
     first(chunks_idx) == last(chunks_idx) && return v
 
     ## Middle chunks
-    @turbo for k ∈ range(first(chunks_idx) + 1, last(chunks_idx) - 1)
-        v[k] |= typemax(UInt)
+    @inbounds let nchunks = last(chunks_idx) - first(chunks_idx) - 1,
+        extra_chunks = nchunks % simd_chunksize,
+        lane = VecRange{simd_chunksize}(0)
+
+        for k ∈ range(first(chunks_idx) + 1, last(chunks_idx) - 1 - extra_chunks, step = simd_chunksize)
+            v[lane + k] |= typemax(UInt)
+        end
+
+        for k ∈ range(last(chunks_idx) - extra_chunks, last(chunks_idx) - 1)
+            v[k] |= typemax(UInt)
+        end
     end
 
     ## Last chunk
-    let ntrailing0 = blocksize(Sequence) - idxinchunk(Sequence, idx.stop)
+    @inbounds let ntrailing0 = blocksize(Sequence) - idxinchunk(Sequence, idx.stop)
         mask = typemax(UInt)
         mask >>>= ntrailing0
 
