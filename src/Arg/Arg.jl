@@ -86,7 +86,7 @@ let funs = (:dads, :children),
     typesandtests = ((:Real, in), (:AI, !isdisjoint), (:(AIs{<:AbstractVector{<:AI}}), !isdisjoint))
 
     for fun ∈ funs
-        orderfun = fun == :dads ? (x, y) -> y => x : (x, y) -> x => y
+        edge = fun == :dads ? :(Edge(u => v)) : :(Edge(v => u))
         isrecmodifier = fun == :dads ? :! : :identity
 
         for (Argtype, testfun) ∈ typesandtests
@@ -94,14 +94,16 @@ let funs = (:dads, :children),
                 neig = $fun(arg, v)
                 isempty(neig) && return view(neig, 0x01:0x00)
 
-                ai1 = ancestral_intervals(arg, Edge($orderfun(v, first(neig))))
+                u = first(neig)
+                ai1 = ancestral_intervals(arg, $edge)
 
                 if $isrecmodifier(isrecombination)(arg, v)
                     idx = UInt8($testfun(ωs, ai1))
                     return view(neig, 0x01:idx)
                 end
 
-                ai2 = ancestral_intervals(arg, Edge($orderfun(v, last(neig))))
+                u = last(neig)
+                ai2 = ancestral_intervals(arg, $edge)
                 idx = 0x06
                 idx ⊻= 0x03 * $testfun(ωs, ai1)
                 idx ⊻= 0x0c * $testfun(ωs, ai2)
