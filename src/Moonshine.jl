@@ -1,4 +1,4 @@
-module Moosh
+module Moonshine
 
 using StatsFuns: logtwo, log2π
 
@@ -78,4 +78,4 @@ function __init__()
     __init_msprime__()
 end
 
-end # module Moosh
+end

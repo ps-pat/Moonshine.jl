@@ -1,13 +1,13 @@
 #!/usr/bin/env julia
 
-using Moosh
+using Moonshine
 
 import Aqua
 
 let piracy_allowed = [
-    Moosh._pointer] # See https://github.com/eschnett/SIMD.jl/issues/121
+    Moonshine._pointer] # See https://github.com/eschnett/SIMD.jl/issues/121
 
-    @time Aqua.test_all(Moosh, piracies = (treat_as_own = piracy_allowed,))
+    @time Aqua.test_all(Moonshine, piracies = (treat_as_own = piracy_allowed,))
 end
 
 using Test:
