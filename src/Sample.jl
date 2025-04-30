@@ -243,7 +243,7 @@ end
 
 function mask!(v::AbstractVector{UInt64}, sample::Sample, idx::AbstractUnitRange;
                wipe = true)
-    wipe && _wipe!(v)
+    wipe && wipe!(h)
 
     chunks_idx = chunkidx(Sequence, idx.start), chunkidx(Sequence, idx.stop)
 
@@ -292,7 +292,7 @@ end
 
 function ancestral_mask!(v::AbstractVector{UInt64}, sample::Sample, ω::Ω;
                          wipe = true)
-    wipe && _wipe!(v)
+    wipe && wipe!(v)
 
     idx = postoidx(sample, ω)
     (iszero ∘ length)(idx) && return v
@@ -301,13 +301,13 @@ function ancestral_mask!(v::AbstractVector{UInt64}, sample::Sample, ω::Ω;
 end
 
 function ancestral_mask!(η::Sequence, sample::Sample, ω::Ω; wipe = true)
-    wipe && _wipe!(η)
+    wipe && wipe!(η)
     η.data[postoidx(sample, ω)] .= true
     η
 end
 
 function ancestral_mask!(η, sample::Sample, ωs; wipe = true)
-    wipe && _wipe!(η)
+    wipe && wipe!(η)
 
     for ω ∈ ωs
         ancestral_mask!(η, sample, ω, wipe = false)
@@ -320,14 +320,12 @@ ancestral_mask(sample::Sample, x) =
     ancestral_mask!(Sequence(falses(nmarkers(sample))), sample, x, wipe = false)
 
 function ancestral_mask!(η, sample::Sample, pos::AbstractFloat; wipe = true)
-    wipe && _wipe!(η)
+    wipe && wipe!(η)
     η[postoidx(sample, pos)] = true
     η
 end
 
-_wipe!(η::Sequence) = η.data.chunks .⊻= η.data.chunks
-
-_wipe!(h) = fill!(h, 0)
+wipe!(h) = fill!(h, 0)
 
 #          +----------------------------------------------------------+
 #          |              Mutation & Recombination Rates              |

@@ -183,9 +183,9 @@ for (f, fill_f) ∈ Dict(:zeros => :falses, :ones => :trues)
     @eval $f(::Type{Sequence}, n::Integer) = (Sequence ∘ $fill_f)(n)
 end
 
-function wipe!(sequence::Sequence)
-    sequence.data .⊻= sequence.data
-    sequence
+function wipe!(h::Sequence)
+    h.data.chunks .⊻= h.data.chunks
+    h
 end
 
 function copy!(s1::Sequence, s2::Sequence)
