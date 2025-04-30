@@ -35,8 +35,8 @@ using DocStringExtensions
 
 const VertexType = Int
 const ∞ = Inf
-const mmn_chunksize = 8
-const mmn_chunktype = (eval ∘ Symbol)("UInt" * string(mmn_chunksize))
+const mmn_chunksize = 1
+const mmn_chunktype = (eval ∘ Symbol)("UInt" * string(8mmn_chunksize))
 const simd_vecsize = simdbytes()
 const simd_chunksize = (simd_vecsize ÷ 8)
 

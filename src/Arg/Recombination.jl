@@ -674,7 +674,7 @@ function build!(rng, arg::Arg; winwidth = ∞, buffer = default_buffer(), noprog
         vstack = CheapStack(vstore)
 
         ## Constrained recombinations ##
-        mutation_edges_buffer = ntuple(_ -> Edge{VertexType}[], mmn_chunksize)
+        mutation_edges_buffer = ntuple(_ -> Edge{VertexType}[], 8mmn_chunksize)
         nextidx, live_edges = next_inconsistent_idx(arg, 1, estack,
                                                     mutations_edges = mutation_edges_buffer,
                                                     buffer = buffer)

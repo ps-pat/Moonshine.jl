@@ -82,22 +82,23 @@ function mutation_edges(arg)
 end
 
 function next_inconsistent_idx(arg, idx, stack;
-                               mutations_edges = ntuple(_ -> Edge{VertexType}[], mmn_chunksize),
+                               mutations_edges = ntuple(_ -> Edge{VertexType}[], 8mmn_chunksize),
                                buffer = default_buffer())
+    chunksize = 8mmn_chunksize
     ## The mask restricts search to markers in (original) `idx` and
     ## `nmarkers(arg)` inclusively.
     mask = typemax(mmn_chunktype)
-    mask <<= idxinchunk(mmn_chunksize, idx) - 1
+    mask <<= idxinchunk(chunksize, idx) - 1
 
     @inbounds while idx <= nmarkers(arg)
         empty!.(mutations_edges)
 
         ωlbound = idxtopos(arg, idx)
 
-        idx_chunk = chunkidx(mmn_chunksize, idx)
-        idx = mmn_chunksize * idx_chunk + 1 # idx is now the first marker of the next chunk
+        idx_chunk = chunkidx(chunksize, idx)
+        idx = chunksize * idx_chunk + 1 # idx is now the first marker of the next chunk
         if idx > nmarkers(arg)
-            mask >>>= mmn_chunksize - idxinchunk(mmn_chunksize, nmarkers(arg))
+            mask >>>= chunksize - idxinchunk(chunksize, nmarkers(arg))
             ωubound = ∞
         else
             ωubound = idxtopos(arg, idx)
@@ -151,8 +152,8 @@ function next_inconsistent_idx(arg, idx, stack;
 
                 while true
                     j = trailing_zeros(mutations_sequence) + 1
-                    j > mmn_chunksize && break
-                    pos = idxtopos(arg, mmn_chunksize * (idx_chunk - 1) + acc + j)
+                    j > chunksize && break
+                    pos = idxtopos(arg, chunksize * (idx_chunk - 1) + acc + j)
                     if pos ∈ ancestral_intervals(arg, e) && pos ∈ base_ω
                         push!(mutations_edges[acc + j], e)
                     end
@@ -164,7 +165,7 @@ function next_inconsistent_idx(arg, idx, stack;
 
         idx_mutation_chunk = findfirst(>(1) ∘ length, mutations_edges)
         if !isnothing(idx_mutation_chunk)
-            mutation_idx = mmn_chunksize * (idx_chunk - 1) + idx_mutation_chunk
+            mutation_idx = chunksize * (idx_chunk - 1) + idx_mutation_chunk
             mutation_edges = mutations_edges[idx_mutation_chunk]
             return mutation_idx, mutation_edges
         end
