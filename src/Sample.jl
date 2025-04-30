@@ -26,37 +26,10 @@ struct Sample <: AbstractVector{Sequence}
     coefs::NTuple{2, Float64}
 end
 
-"""
-    _validate_positions(positions, nmarkers)
-
-Validate a marker of positions. Tries to fix it if invalid. Return a vector
-of uniformly spaced positions if it cannot be fixed.
-"""
-function _validate_positions(positions, nmarkers)
-    if length(positions) != nmarkers || !issorted(positions)
-        @info((isempty(positions) ? "A" : "Invalid positions: a") *
-              "ssuming equally spaced markers")
-        positions = isone(nmarkers) ?
-                    [0.0] : (collect ∘ range)(0, 1, length = nmarkers)
-    end
-    if minimum(positions) < 0
-        @info("First position is < 0: shifting positions right")
-        positions .-= minimum(positions)
-    end
-    if maximum(positions) > 1
-        @info("Last position is > 0: scaling positions")
-        positions ./= maximum(positions)
-    end
-
-    positions
-end
-
 function Sample(H::AbstractVector{Sequence};
                 μ = 1e-8, ρ = 0, Ne = 10_000,
                 sequence_length = length(H) + 1,
                 positions = 1:length(H))
-    # positions = _validate_positions(positions, (length ∘ first)(H))
-
     ## Compute coefficients.
     n = length(positions)
     sum_positions = sum(positions)
