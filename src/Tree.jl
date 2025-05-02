@@ -171,88 +171,80 @@ function _sample_toilet(rng, xs, potential, threshold_prop)
     threshold = floor(Int, length(xs) * threshold_prop)
     iter = (Iterators.Stateful ∘ enumerate)(xs)
     z = ∞
-    μ = zero(Float64)
-    ret = zero(Int)
+    logπ = zero(z)
+    logΣπ = zero(logπ)
+    idx = zero(Int)
     for (k, x) ∈ iter
-        z = potential(x)
-        isinf(z) && continue
-        μ += z
-        z -= log(randexp(rng))
-        ret = k
+        logπ = potential(x)
+        isinf(logπ) && continue
+        logΣπ = logπ
+        z = logπ - log(randexp(rng))
+        idx = k
         break
     end
 
     for (k, x) ∈ iter
-        newz = potential(x)
-        isinf(newz) && continue
-        tmin, tmax = minmax(newz, μ)
-        μ = tmax + (log1p ∘ exp)(tmin - tmax)
+        logπ_new = potential(x)
+        isinf(logπ_new) && continue
+        πmin, πmax = minmax(logπ_new, logΣπ)
+        logΣπ = πmax + (log1p ∘ exp)(πmin - πmax)
 
-        newz -= log(randexp(rng))
+        newz = logπ_new - log(randexp(rng))
         newz <= z && continue
 
+        logπ = logπ_new
         z = newz
-        ret = k
+        idx = k
 
         k <= threshold || break
     end
 
-    ret, (z, μ)
+    if iszero(idx) # All potentials were infinite
+        idx = sample(rng, eachindex(xs))
+        logπ = 0
+        logΣπ = (log ∘ length)(xs)
+    end
+
+    idx, logπ - logΣπ
 end
 
 function build!(rng, tree::Tree;
-                Dist::Distance = Hamming{Int}(), bias0 = ∞, toilet_prop = 1)
+                Dist::Distance = Hamming{Int}(), bias0 = 1, threshold_prop = 1)
     n = nleaves(tree)
     nv(tree) ≠ 2n - 1 || !iszero(ne(tree)) && error("Invalid tree")
-    μ = mut_rate(tree, true)
+    μ = mut_rate(tree, false)
     η0 = zeros(Sequence, nmarkers(tree))
-
-    ## Compute the norm of the sequences. They are stored as
-    ## FrequencyWeights since they will be used for sampling sequences.
-    norms = FrequencyWeights([distance(Dist, η0, η) + 1 for η ∈ sequences(tree, 1:n)])
 
     live = collect(leaves(tree))
     for nlive ∈ range(length(live), 2, step = -1)
         ## Sample first sequence
-        v1_idxs = sample(rng, 1:nlive, norms[1:nlive], 2, replace = false)
-        v1_idx = norms[first(v1_idxs)] > norms[last(v1_idxs)] ?
-            first(v1_idxs) : last(v1_idxs)
-        add_logdensity!(tree, log(norms[v1_idx]) - log(norms.sum))
+        v1_idx = sample(rng, 1:nlive)
+        add_logdensity!(tree, -log(nlive))
         v1 = live[v1_idx]
         live[v1_idx] = live[nlive]
-        norms[v1_idx] = norms[nlive]
-        norms[nlive] = 0
         nlive -= 1
 
         ## Sample second sequence
         potential2 =
-            let η1 = sequence(tree, v1),
-                η1_d0 = distance(Dist, η0, η1)
-
+            let η1 = sequence(tree, v1)
                 function (η)
                     d = distance(Dist, η1, η)
-                    if distance(Dist, η0, η) > η1_d0
-                        d += bias0
-                    end
-
                     iszero(d) && return zero(Float64)
+                    d *= bias0
 
-                    ## Use Stirling approximation.
-                    logd = log(d)
-                    ret = d * (log(μ) - logd + 1) - 0.5 * (log2π + logd)
-                    ret
+                    ## Poisson potential with Stirling's approximation
+                    d * (log(μ) - log(d) + 1)
                 end
             end
 
-        v2_idx, (gumbel_x, gumbel_μ) =
-            _sample_toilet(rng,
-                           sequences(tree, live[1:nlive]),
-                           potential2,
-                           toilet_prop)
+        v2_idx, logprob = _sample_toilet(rng,
+                                         sequences(tree, live[1:nlive]),
+                                         potential2,
+                                         threshold_prop)
         v2 = live[v2_idx]
         v = 2n - nlive
         live[v2_idx] = v
-        add_logdensity!(tree, Gumbel(gumbel_μ), gumbel_x)
+        add_logdensity!(tree, logprob)
 
         ## Sample coalescence latitude
         Δcoal_dist = Exponential(inv(nlive))
@@ -264,7 +256,6 @@ function build!(rng, tree::Tree;
         add_edge!(tree, v, v2)
 
         sequences(tree)[v] = sequence(tree, v1) & sequence(tree, v2)
-        norms[v2_idx] = distance(Dist, η0, sequence(tree, v)) + 1
 
         latitudes(tree)[n - nlive] = latitude(tree, v - 1) + Δ
     end
