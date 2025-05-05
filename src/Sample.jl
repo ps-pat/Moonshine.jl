@@ -12,17 +12,40 @@ const Ω = Interval{:closed, :open, Float64}
 
 export Sample
 """
-    struct Sample
+    $(TYPEDEF)
 
 Contain a sample of haplotypes and informations about them.
+
+Implements [the iteration interface](https://docs.julialang.org/en/v1/manual/interfaces/#man-interface-iteration) and [the array interface](https://docs.julialang.org/en/v1/manual/interfaces/#man-interface-array).
+
+# Fields
+$(TYPEDFIELDS)
+
+# Constructors
+!!! info
+    Random constructor sample sequences via [msprime](https://tskit.dev/msprime/docs/stable/intro.html) using a [binary mutation model](https://tskit.dev/msprime/docs/stable/api.html#msprime.BinaryMutationModel).
+
+$(METHODLIST)
+
+where:
+* `n`: number of sequences
+* `rng`: random number generator
+* `ts`: [Tree Sequence](https://tskit.dev/tskit/docs/latest/python-api.html#the-treesequence-class)
 """
 struct Sample <: AbstractVector{Sequence}
+    "Vector of haplotypes"
     H::Vector{Sequence}
+    "Unscaled (per-locus) mutation rate"
     μ::Float64
+    "Unscaled (per-locus) recombination rate"
     ρ::Float64
+    "Effective population size"
     Ne::Float64
+    "Sequence length"
     sequence_length::Float64
+    "Marker's positions"
     positions::Vector{Float64}
+    "Coefficients for positions' line"
     coefs::NTuple{2, Float64}
 end
 
@@ -214,7 +237,21 @@ end
 #          |                          Masks                           |
 #          +----------------------------------------------------------+
 
-function mask!(v::AbstractVector{UInt64}, sample::Sample, idx::AbstractUnitRange;
+"""
+    $(FUNCTIONNAME)(h, sample, idx; wipe = true)
+
+Construct a mask for a range of markers.
+
+If `wipe = true`, `h` is wiped beforehand.
+
+See also [`wipe!`](@ref).
+
+# Methods
+$(METHODLIST)
+
+--*Internal*--
+"""
+function mask!(h::AbstractVector{UInt64}, sample::Sample, idx::AbstractUnitRange;
                wipe = true)
     wipe && wipe!(h)
 
@@ -232,11 +269,11 @@ function mask!(v::AbstractVector{UInt64}, sample::Sample, idx::AbstractUnitRange
         mask >>>= ntrailing0
         mask &= typemax(UInt) << nleading0
 
-        v[first(chunks_idx)] |= mask
+        h[first(chunks_idx)] |= mask
     end
 
     ## Early termination in case only one chunk needs to be modified
-    first(chunks_idx) == last(chunks_idx) && return v
+    first(chunks_idx) == last(chunks_idx) && return h
 
     ## Middle chunks
     @inbounds let nchunks = last(chunks_idx) - first(chunks_idx) - 1,
@@ -244,11 +281,11 @@ function mask!(v::AbstractVector{UInt64}, sample::Sample, idx::AbstractUnitRange
         lane = VecRange{simd_chunksize}(0)
 
         for k ∈ range(first(chunks_idx) + 1, last(chunks_idx) - 1 - extra_chunks, step = simd_chunksize)
-            v[lane + k] |= typemax(UInt)
+            h[lane + k] |= typemax(UInt)
         end
 
         for k ∈ range(last(chunks_idx) - extra_chunks, last(chunks_idx) - 1)
-            v[k] |= typemax(UInt)
+            h[k] |= typemax(UInt)
         end
     end
 
@@ -257,10 +294,10 @@ function mask!(v::AbstractVector{UInt64}, sample::Sample, idx::AbstractUnitRange
         mask = typemax(UInt)
         mask >>>= ntrailing0
 
-        v[last(chunks_idx)] |= mask
+        h[last(chunks_idx)] |= mask
     end
 
-    v
+    h
 end
 
 function ancestral_mask!(v::AbstractVector{UInt64}, sample::Sample, ω::Ω;
@@ -303,6 +340,22 @@ wipe!(h) = fill!(h, 0)
 #          +----------------------------------------------------------+
 #          |              Mutation & Recombination Rates              |
 #          +----------------------------------------------------------+
+
+export mut_rate
+"""
+    $(FUNCTIONNAME)(sample, scaled = true)
+
+(Scaled) mutation rate.
+"""
+function mut_rate end
+
+export rec_rate
+"""
+    $(FUNCTIONNAME)(sample, scaled = true)
+
+(Scaled) recombination rate.
+"""
+function rec_rate end
 
 for (f, symb) ∈ Dict(:mut_rate => :(:μ), :rec_rate => :(:ρ))
     @eval function $f(sample::Sample, scaled = true)

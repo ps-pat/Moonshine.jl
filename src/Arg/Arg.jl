@@ -15,14 +15,46 @@ using UnicodePlots: heatmap, label!, stairs
 ##################
 
 export Arg
+"""
+    $(TYPEDEF)
+
+Ancestral recombination graph.
+
+See also [`Tree`](@ref).
+
+# Fields
+$(TYPEDFIELDS)
+
+# Constructors
+!!! info
+    Random constructor calls [`Sample`](@ref)'s random constructor.
+
+!!! warning
+    These **do not** actually build the arg. For that, see
+    [`build!(rng, arg)`](@ref).
+
+$(METHODLIST)
+
+# Arguments
+* `tree`: coalescent [`Tree`](@ref)
+* other arguments are identical to [`Sample`](@ref)
+"""
 struct Arg <: AbstractGenealogy
+    "Graph's topology"
     graph::SimpleDiGraph{VertexType}
+    "Vertices' latitudes"
     latitudes::Vector{Float64}
+    "∩-mask for ancestral intervals"
     recombination_mask::Vector{AIsType}
+    "Arg's grand MRCA"
     mrca::Base.RefValue{VertexType}
+    "Vertices' haplotypes"
     sequences::Vector{Sequence}
+    "Edges' ancestral intervals"
     ancestral_intervals::Dict{Edge{VertexType}, AIsType}
+    "Associated [`Sample`](@ref)"
     sample::Sample
+    "Log-value of the associated pdf"
     logdensity::Base.RefValue{Double64}
 end
 
@@ -207,7 +239,7 @@ end
 
 export breakpoints
 """
-    breakpoint(arg)
+    $(SIGNATURES)
 
 Recombination events' positions
 """
@@ -216,7 +248,7 @@ breakpoints(arg::Arg) =
 
 export plot_breakpoints
 """
-    plot_breakpoints(arg; kwargs...)
+    $(SIGNATURES)
 
 Heatmap of recombination events' positions.
 
@@ -227,7 +259,7 @@ See also [`breakpoints`](@ref)
   default maximum value of 69 produces a nice 80 columns wide plot.
 * `height` (`7`): height of the plot.
 * `kwargs...`: additional keywords arguments are passed directly to
-  [`UnicodePlots.histogram`](@ref).
+  [`UnicodePlots.histogram`](https://github.com/JuliaPlots/UnicodePlots.jl).
 """
 function plot_breakpoints(arg;
                           nbins = clamp(nrecombinations(arg) ÷ 100, 1, 69),
@@ -263,7 +295,7 @@ end
 
 export plot_tmrcas
 """
-    plot_tmrcas(arg; kwargs...)
+    $(SIGNATURES)
 
 Staircase plot of time to the most recent common ancestor. Additional keywords
 arguments are passed directly to [`UnicodePlots.histogram`](@ref).
@@ -280,10 +312,14 @@ See also [`tmrca`](@ref)
   considered. Use a smaller number of points to reduce computing time.
 * `width` (`76`): width of the plot. Its default maximum value of 76 produces
   a 80 columns wide plot.
+* `noprogress` (`false`): hide progress meter
 * `kwargs...`: additional keywords arguments are passed directly to
-  [`UnicodePlots.histogram`](@ref).
+  [`UnicodePlots.histogram`](https://github.com/JuliaPlots/UnicodePlots.jl).
 """
-function plot_tmrcas(arg::Arg; width = 76, npoints = nrecombinations(arg) + 1,
+function plot_tmrcas(arg::Arg;
+                     width = 76,
+                     npoints = nrecombinations(arg) + 1,
+                     noprogress = false,
                      kwargs...)
     lastidx = nrecombinations(arg) + 1
     stride = max(1, div(lastidx, npoints - 1, RoundDown) - 1)
@@ -292,7 +328,7 @@ function plot_tmrcas(arg::Arg; width = 76, npoints = nrecombinations(arg) + 1,
     grid = [0.; collect(breakpoints(arg))[idx]]
     times = similar(grid, Float64)
 
-    @showprogress Threads.@threads :greedy for k ∈ eachindex(grid)
+    @showprogress enabled = !noprogress Threads.@threads :greedy for k ∈ eachindex(grid)
         times[k] = tmrca(arg, leaves(arg), grid[k])
     end
 
@@ -311,12 +347,19 @@ end
 #          +----------------------------------------------------------+
 
 """
-    otherdad(arg, s, d)
-    otherdad(arg, e)
+    $(FUNCTIONNAME)(arg, s, d)
+    $(FUNCTIONNAME)(arg, e)
 
 Return the parent of `d` that is not `s` for a recombination vertex `d`. If `d`
 is not a recombination vertex, returns `s`. Can also take an edge as argument.
+
+# Methods
+$(METHODLIST)
+
+--*Internal*--
 """
+function otherdad end
+
 function otherdad(arg, s, d)
     ret = s
     for dad ∈ dads(arg, d)

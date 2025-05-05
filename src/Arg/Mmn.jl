@@ -81,6 +81,16 @@ function mutation_edges(arg)
     mutation_edges!(ret, arg, Ω(0, ∞))
 end
 
+export next_inconsistent_idx
+"""
+    $(SIGNATURES)
+
+Index of the next inconsistent marker, that is the next which mutates more than
+once in a given ancestral recombination graph.
+
+`stack` must be of type `CheapStack{Edge{VertexType}}` (see
+[`CheapStack`](@ref)).
+"""
 function next_inconsistent_idx(arg, idx, stack;
                                mutations_edges = ntuple(_ -> Edge{VertexType}[], 8mmn_chunksize),
                                buffer = default_buffer())

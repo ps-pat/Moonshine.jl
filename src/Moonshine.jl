@@ -3,7 +3,6 @@ module Moonshine
 using StatsFuns: logtwo, log2π
 
 using IntervalSets
-const AI = AbstractInterval
 
 using LoopVectorization
 
@@ -33,17 +32,70 @@ using DocStringExtensions
 #          |                        Constants.                        |
 #          +----------------------------------------------------------+
 
-const VertexType = Int
 const ∞ = Inf
+
+"""
+    const AI = AbstractInterval
+
+Abstract types for intervals from
+[`IntervalSets`](https://juliamath.github.io/IntervalSets.jl/stable/).
+
+See also [`IntervalSets.AbstractInterval`](@extref) and [`Ω`](@ref).
+
+--*Internal*--
+"""
+const AI = AbstractInterval
+
+"""
+    const VertexType = Int
+Type of the vertices. Any `genealogy` that is an instance of
+[`AbstractGenealogy`](@ref) should be constructed so that `graph(genealogy)` is
+an instance of `AbstractGraphs{VertexType}`
+(see [`Graphs.AbstractGraph`](@extref).)
+
+--*Internal*--
+"""
+const VertexType = Int
+
+"""
+    const mmn_chunksize = 1
+Size (in *bytes*) of a chunk of markers in [`next_inconsistent_idx`](@ref).
+
+--*Internal*--
+"""
 const mmn_chunksize = 1
+
+"""
+    const mmn_chunktype = (eval ∘ Symbol)("UInt" * string(8mmn_chunksize))
+Type of a chunk of markers in [`next_inconsistent_idx`](@ref).
+
+--*Internal*--
+"""
 const mmn_chunktype = (eval ∘ Symbol)("UInt" * string(8mmn_chunksize))
+
+"""
+    const simd_vecsize = simdbytes()
+
+Size (in *bytes*) of a SIMD registry on host machine.
+
+--*Internal*--
+"""
 const simd_vecsize = simdbytes()
-const simd_chunksize = (simd_vecsize ÷ 8)
+
+"""
+    const simd_chunksize = simd_vecsize ÷ 8
+
+Number of chunks of markers that fit in a SIMD registry.
+
+--*Internal*--
+"""
+const simd_chunksize = simd_vecsize ÷ 8
 
 #          +----------------------------------------------------------+
 #          |                     Global variables                     |
 #          +----------------------------------------------------------+
 
+export default_colormap
 """
     default_colormap = :Paired_3
 

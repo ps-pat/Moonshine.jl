@@ -4,3 +4,4 @@ work.jl
 .dir-locals.el
 .vscode/
 .CondaPkg/
+.ltex/

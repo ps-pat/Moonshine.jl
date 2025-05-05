@@ -15,11 +15,39 @@ using SpecialFunctions: loggamma
 ###################
 
 export Tree
+"""
+    $(TYPEDEF)
+
+Coalescent tree.
+
+See also [`Arg`](@ref).
+
+# Fields
+$(TYPEDFIELDS)
+
+# Constructors
+!!! info
+    Random constructor calls [`Sample`](@ref)'s random constructor.
+
+!!! warning
+    These **do not** actually build the tree. For that, see
+    [`build!(rng, tree)`](@ref).
+
+$(METHODLIST)
+
+# Arguments
+Arguments are the same as for [`Sample`](@ref).
+"""
 struct Tree <: AbstractGenealogy
+    "Tree's topology"
     graph::SimpleDiGraph{VertexType}
+    "Vertices' latitudes"
     latitudes::Vector{Float64}
+    "Vertices' haplotypes"
     sequences::Vector{Sequence}
+    "Associated [`Sample`](@ref)"
     sample::Sample
+    "Log-value of the associated pdf"
     logdensity::Base.RefValue{Double64}
 end
 
@@ -69,7 +97,7 @@ add_edge!(tree::Tree, v1, v2) = add_edge!(graph(tree), v1, v2)
 
 export depth
 """
-    depth(tree, v)
+    $(SIGNATURES)
 
 Depth of a vertex.
 """
@@ -157,16 +185,6 @@ descendants_leaves(tree::Tree, v; buffer = default_buffer()) =
 # Tree Building #
 #################
 
-export build!
-"""
-    build!(rng, tree, distance; bias0 = ∞, toilet_prop = 1)
-
-Build a coalescent tree
-
-`tree` must contain 2n-1 vertices (where n is the number of leaves) and no edge.
-"""
-function build! end
-
 function _sample_toilet(rng, xs, potential, threshold_prop)
     threshold = floor(Int, length(xs) * threshold_prop)
     iter = (Iterators.Stateful ∘ enumerate)(xs)
@@ -209,7 +227,7 @@ function _sample_toilet(rng, xs, potential, threshold_prop)
 end
 
 function build!(rng, tree::Tree;
-                Dist::Distance = Hamming{Int}(), bias0 = 1, threshold_prop = 1)
+                Dist::Distance = Hamming{Int}(), bias0 = 0, threshold_prop = 1)
     n = nleaves(tree)
     nv(tree) ≠ 2n - 1 || !iszero(ne(tree)) && error("Invalid tree")
     μ = mut_rate(tree, false)
@@ -230,7 +248,7 @@ function build!(rng, tree::Tree;
                 function (η)
                     d = distance(Dist, η1, η)
                     iszero(d) && return zero(Float64)
-                    d *= bias0
+                    d += d * bias0
 
                     ## Poisson potential with Stirling's approximation
                     d * (log(μ) - log(d) + 1)

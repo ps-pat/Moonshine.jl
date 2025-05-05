@@ -2,7 +2,7 @@ import Base: empty,
              similar,
              ~, &, |, xor, >>>, >>, <<, *,
              ==, isequal,
-             show,
+             show, display,
              isempty,
              string,
              convert,
@@ -23,6 +23,27 @@ using UnicodePlots: heatmap, label!, annotate!
 using ChunkSplitters: index_chunks
 
 export Sequence
+"""
+    $(TYPEDEF)
+
+Sequence of biallelic genetic markers (haplotype).
+
+Implement [the iteration interface](https://docs.julialang.org/en/v1/manual/interfaces/#man-interface-iteration) as well as standard bitwise operations.
+
+!!! info
+    Random constructors sample marker's states via [`Random.bitrand`](@extref).
+
+# Fields
+$(TYPEDFIELDS)
+
+# Constructors
+$(METHODLIST)
+
+where:
+* `n`: number of markers
+* `rng`: random number generator
+* `minLength, maxLength`: bounds for sequence length
+"""
 struct Sequence
     data::BitVector
 end
@@ -42,6 +63,13 @@ isequal(h1::Sequence, h2::Sequence) = isequal(h1.data, h2.data)
 
 isempty(seq::Sequence) = isempty(seq.data)
 
+"""
+    $(FUNCTIONNAME)
+
+Simple (and fast) hash function.
+
+--*Internal*--
+"""
 function cheap_hash(s::Sequence)
     h = 0x5aacc77a902f6f2e
     o = 0x5246e7da0d562ddf
@@ -67,16 +95,21 @@ end
 string(sequence::Sequence) = replace(bitstring(sequence.data), r"[ :]" => "")
 
 show(io::IO, ::MIME"text/plain", h::Sequence) =
-    (display ∘ plot)(h, height = 2, colorbar = false)
+    print(io, plot_sequence(h, height = 2, colorbar = false))
 
 show(io::IO, h::Sequence) =
-    (display ∘ plot)(h, height = 1, colorbar = false, title = "", labels = false)
+    print(io, plot_sequence(h, height = 2, colorbar = false, title = "", labels = false))
 
 """
-    blocksize(::Type{Sequence})
-    blocksize(seq)
+    $(FUNCTIONNAME)(::Type{Sequence})
+    $(FUNCTIONNAME)(::Sequence)
 
-Size of the blocks of a sequence.
+Size (in *bits*) of the blocks (chunks) of a sequence.
+
+# Methods
+$(METHODLIST)
+
+--*Internal*--
 """
 function blocksize end
 
@@ -84,6 +117,32 @@ function blocksize end
 @generated blocksize(::Type{Sequence}) = 8sizeof(UInt64)
 
 @generated blocksize(::Sequence) = blocksize(Sequence)
+
+"""
+    $(FUNCTIONNAME)(n, x)
+    $(FUNCTIONNAME)(::Type{Sequence}, x)
+    $(FUNCTIONNAME)(::Sequence, x)
+
+Index of the chunk associated with marker `x`.
+
+See also [`idxinchunk`](@ref).
+
+--*Internal*--
+"""
+function chunkidx end
+
+"""
+    $(FUNCTIONNAME)(n, x)
+    $(FUNCTIONNAME)(::Type{Sequence}, x)
+    $(FUNCTIONNAME)(::Sequence, x)
+
+Index of marker `x` in its associated chunk.
+
+See also [`chunkidx`](@ref).
+
+--*Internal*--
+"""
+function idxinchunk end
 
 for (fun, op) ∈ Dict(:chunkidx => :div, :idxinchunk => :mod)
     @eval begin
@@ -125,46 +184,14 @@ end
 
 *(v::AbstractVector, h::Sequence) = h * v
 
-"""
-    Sequence(undef, n)
-    Sequence(data)
-    Sequence([rng = GLOBAL_RNG,], n)
-    Sequence([rng = GLOBAL_RNG,] minlength, maxlength)
-
-  - `Sequence(undef, n)`: Uninitialized sequence of length `n`
-  - `Sequence(data)`: sequence containing `data`
-  - `Sequence(rng, n)`: random sequence of length n
-  - `Sequence(rng, minlength, maxlength)`: random sequence of
-    length uniformly sampled in `minlength:maxlength`
-
-# Arguments
-
-  - `n`: Number of markers.
-  - `data`: Vector containing data.
-  - `rng`: random number generator.
-  - `minLength, maxLength`: bounds for sequence length.
-
-# Notes
-
-  - To construct an empty sequence, use `empty(Sequence)`
-  - To construct a Sequence from a string of bits, use `convert(Sequence, str)`
-"""
-function Sequence end
-
 Sequence() = Sequence(BitVector())
 
-Sequence(::UndefInitializer, n) = Sequence(BitVector(undef, n))
+Sequence(undef::UndefInitializer, n) = Sequence(BitVector(undef, n))
 
 Sequence(rng::AbstractRNG, n) = Sequence(bitrand(rng, n))
 
 function Sequence(rng::AbstractRNG, minlength, maxlength)
     Sequence(rng, rand(rng, range(minlength, maxlength)))
-end
-
-Sequence(n::Integer) = Sequence(GLOBAL_RNG, n)
-
-function Sequence(minlength::Integer, maxlength::Integer)
-    Sequence(GLOBAL_RNG, minlength, maxlength)
 end
 
 function convert(::Type{Sequence}, str::AbstractString)
@@ -183,19 +210,26 @@ for (f, fill_f) ∈ Dict(:zeros => :falses, :ones => :trues)
     @eval $f(::Type{Sequence}, n::Integer) = (Sequence ∘ $fill_f)(n)
 end
 
+"""
+    $(SIGNATURES)
+
+Set all markers to wild state (0).
+
+--*Internal*--
+"""
 function wipe!(h::Sequence)
     h.data.chunks .⊻= h.data.chunks
     h
 end
 
-function copy!(s1::Sequence, s2::Sequence)
-    s1.data .⊻= s1.data .⊻ s2.data
-    s1
+function copy!(h1::Sequence, h2::Sequence)
+    h1.data .⊻= h1.data .⊻ h2.data
+    h1
 end
 
-function sum(s::Sequence)
+function sum(h::Sequence)
     ret = zero(Int)
-    @inbounds @simd for chunk ∈ s.data.chunks
+    @inbounds @simd for chunk ∈ h.data.chunks
         ret += count_ones(chunk)
     end
 
@@ -207,31 +241,33 @@ end
 #############
 
 export Distance
-
 """
-    abstract type Distance{T}
+    $(TYPEDEF)
 
-Distance between two `Sequence`s.
+Distance between two [`Sequence`](@ref)s.
 
 # Implementation
 The only required method for a distance `D<:Distance` to be usable for tree
 contruction is
-```
+
     distance(::D{T}, ::Sequence, ::Sequence) where T
-```
+
 It is also useful to implement a default constructor. For example, if
 `D` is a discrete distance,
-```
+
     D() = D{Int}()
-```
 """
 abstract type Distance{T} end
 
+export distance
 """
-    distance(Dist, η1, η2)
-    distance(Dist, H)
+    $(FUNCTIONNAME)(Dist, h1, h2)
+    $(FUNCTIONNAME)(Dist, H)
 
-Compute distance between sequences.
+Compute distances between sequences.
+
+# Methods
+$(METHODLIST)
 """
 function distance end
 
@@ -249,32 +285,43 @@ function distance(Dist::Distance{T}, H::AbstractVector) where {T}
     mat
 end
 
-## Hamming distance
 export Hamming
+"""
+    $(TYPEDEF)
+
+Hamming distance.
+"""
 struct Hamming{T} <: Distance{T} end
 
 Hamming() = Hamming{Int64}()
 
-function distance(::Hamming{T}, η1::Sequence, η2::Sequence) where T
+function distance(::Hamming{T}, h1::Sequence, h2::Sequence) where T
     ## Works since unused bits of a BitArray are always set to 0.
     d = zero(T)
-    nblocks = (length(η1) - 1) ÷ blocksize(η1) + 1
+    nblocks = (length(h1) - 1) ÷ blocksize(h1) + 1
 
     @tturbo for k ∈ 1:nblocks
-        d += convert(T, count_ones(η1.data.chunks[k] ⊻ η2.data.chunks[k]))
+        d += convert(T, count_ones(h1.data.chunks[k] ⊻ h2.data.chunks[k]))
     end
 
     d
 end
 
-## Leftmost marker distance
-export Left
-struct Left{T} <: Distance{T} end
+export LeftM
+"""
+    $(TYPEDEF)
 
-Left() = Left{Int64}()
+Left marker distance.
 
-distance(::Left{T}, η1::Sequence, η2::Sequence) where {T} =
-    convert(T, first(η1) ⊻ first(η2))
+This is only the discrete metric for the leftmost marker. Technically not a
+metric for haplotypes, but widely used.
+"""
+struct LeftM{T} <: Distance{T} end
+
+LeftM() = LeftM{Int64}()
+
+distance(::LeftM{T}, h1::Sequence, h2::Sequence) where {T} =
+    convert(T, first(h1) ⊻ first(h2))
 
 #############
 # Iteration #
@@ -311,11 +358,21 @@ Base.setindex!(sequence::Sequence, x, i) = setindex!(sequence.data, x, i)
 #          |                         Plotting                         |
 #          +----------------------------------------------------------+
 
-export plot
-function plot(h::Sequence;
-              nbins = clamp(length(h), 1, 69),
-              height = 7,
-              kwargs...)
+export plot_sequence
+"""
+    $(SIGNATURES)
+
+Unicode-graphic representation of an haplotype.
+
+# Arguments
+* `nbins` (`clamp(length(h), 1, 69)`): number of bins
+* ̀`height` (`7`): number of rows
+* `kwargs`: arguments passed directly to `UnicodePlots.heatmap`
+"""
+function plot_sequence(h::Sequence;
+                       nbins = clamp(length(h), 1, 69),
+                       height = 7,
+                       kwargs...)
     counts_vec = map(idx -> count(h[idx]), index_chunks(1:length(h), n = nbins))
     counts = repeat(reshape(counts_vec, (1, length(counts_vec))), height)
 

@@ -663,6 +663,15 @@ end
 #          |                       ARG Building                       |
 #          +----------------------------------------------------------+
 
+"""
+    $(SIGNATURES)
+
+Build an ancestral recombination graph.
+
+# Arguments
+* `winwidth` (`∞`): width of the window of positions to consider
+* `noprogress` (`false`): hide progress bar
+"""
 function build!(rng, arg::Arg; winwidth = ∞, buffer = default_buffer(), noprogress = false)
     progenabled = nleaves(arg) * nmarkers(arg) >= 10000000
     prog = Progress(nmarkers(arg), enabled = progenabled && !noprogress)

@@ -13,6 +13,13 @@ import Base:
 import IntervalSets: leftendpoint, rightendpoint, endpoints, width
 
 export Ω
+"""
+    const Ω = Interval{:closed, :open, Float64}
+
+Right semi-open interval.
+
+See also [`AI`](@ref), [`AIs`](@ref) and [`AncestralIntervals`](@ref).
+"""
 const Ω = Interval{:closed, :open, Float64}
 
 #          +----------------------------------------------------------+
@@ -20,19 +27,56 @@ const Ω = Interval{:closed, :open, Float64}
 #          +----------------------------------------------------------+
 
 export AncestralIntervals
+"""
+    $(TYPEDEF)
+
+Collection of intervals.
+
+Meant to represent the set of intervals an edge/vertex is ancestral for. You
+might want to use the convenient shorthand [`AIs`](@ref) instead.
+
+Implements [the iteration interface](https://docs.julialang.org/en/v1/manual/interfaces/#man-interface-iteration) and [the array interface](https://docs.julialang.org/en/v1/manual/interfaces/#man-interface-array).
+
+See also [`AI`](@ref) and [`Ω`](@ref).
+
+# Fields
+$(TYPEDFIELDS)
+
+# Constructors
+$(METHODLIST)
+
+# Arguments
+If `simplify = true`, intervals contained in data are simplified: see
+[`simplify!`](@ref) for details.
+
+!!! warning
+    Many methods assume `AIs` to be simplified. You might want to disable
+    simplification to optimize a sequence of operation, but you should probably
+    simplify the final result.
+"""
 struct AncestralIntervals{T<:AbstractVector{<:AI}} <: AbstractVector{AI}
     data::T
+
+    function AncestralIntervals{T}(data::T; simplify = true) where T
+        ωs = new{T}(data)
+        simplify && simplify!(ωs)
+        ωs
+    end
 end
 
+"""
+    const AIs = AncestralIntervals
+
+Alias for [`AncestralIntervals`](@ref).
+
+See also [`AI`](@ref) and [`Ω`](@ref).
+"""
 const AIs = AncestralIntervals
 
 AIs{V}() where V<:AbstractVector{T} where T = AIs(T[], simplify = false)
 
-function AIs(A::T; simplify = true) where T
-    ωs = AIs{T}(A)
-    simplify && simplify!(ωs)
-    ωs
-end
+AIs(data::V; simplify = true) where V<:AbstractVector{T} where T =
+    AIs{V}(data, simplify = simplify)
 
 #          +----------------------------------------------------------+
 #          |                        Interfaces                        |
@@ -90,20 +134,31 @@ empty!(ωs::AIs) = empty!(ωs.data)
 #          |                      Set Operations                      |
 #          +----------------------------------------------------------+
 
-function simplify!(ai::AIs)
-    filter!(!isempty, ai)
+"""
+    $(SIGNATURES)
+
+Simplify an [`AIs`](@ref).
+
+Two operations are performed:
+* connected intervals are merged together (see [`isdisconnected`](@ref));
+* intervals are sorted by left endpoint.
+
+--*Internal*--
+"""
+function simplify!(ωs::AIs)
+    filter!(!isempty, ωs)
 
     @label loop
-    @inbounds for i ∈ length(ai):-1:2
+    @inbounds for i ∈ length(ωs):-1:2
         for j ∈ (i-1):-1:1
-            isdisconnected(ai[i], ai[j]) && continue
-            ai[j] = ai[j] ∪ ai[i]
-            deleteat!(ai, i)
+            isdisconnected(ωs[i], ωs[j]) && continue
+            ωs[j] = ωs[j] ∪ ωs[i]
+            deleteat!(ωs, i)
             @goto loop
         end
     end
 
-    sort!(ai, alg = InsertionSort, by = leftendpoint)
+    sort!(ωs, alg = InsertionSort, by = leftendpoint)
 end
 
 # -- Union -------------------------------------------------------------
@@ -206,9 +261,12 @@ width(ωs::AIs) = rightendpoint(ωs) - leftendpoint(ωs)
 
 export closure
 """
-    closure(x)
+    $(FUNCTIONNAME)(x)
 
 Mathematical closure of `x`
+
+# Methods
+$(METHODLIST)
 """
 function closure end
 

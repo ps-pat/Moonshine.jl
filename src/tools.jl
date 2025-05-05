@@ -17,6 +17,13 @@ import SIMD._pointer
 #          |                    Khatri-Rao Product                    |
 #          +----------------------------------------------------------+
 
+"""
+    $(SIGNATURES)
+
+Khatri-Rao (column-wise Kronecker) product.
+
+--*Internal*--
+"""
 function ⊙(A::AbstractMatrix{T}, B::AbstractMatrix{T}) where T
     c = size(A, 2)
     c == size(B, 2) ||
@@ -44,6 +51,14 @@ end
 #          |                     Set of intervals                     |
 #          +----------------------------------------------------------+
 
+"""
+    $(SIGNATURES)
+
+True if intervals are disconnected, that is their intersection is empty *and*
+they do not share an endpoint.
+
+--*Internal*--
+"""
 function isdisconnected(A::AI, B::AI)
     AB = A ∩ B
     isempty(AB) && !=(endpoints(AB)...)
