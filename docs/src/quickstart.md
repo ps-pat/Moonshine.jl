@@ -86,11 +86,11 @@ last line creates our sample, calling [`msprime.sim_ancestry`](https://tskit.dev
 argument* is detailed in [`Sample`](@ref)'s documentation.
 
 !!! note "Julia👶: Standard Library"
-    `Random` is part of Julia's standard library so you do not have to explicitly
-    install it (although you still have to import it/its symbols). A complete
-    list of standard library's modules is available in the
-    [Official documentation](https://docs.julialang.org/en/v1/), section "Standard
-    Library".
+    `Random` is part of Julia's standard library, so you do not have to
+    explicitly install it (although you still have to import it/its symbols). A
+    complete list of standard library's modules is available in the
+    [Official documentation](https://docs.julialang.org/en/v1/), section
+    "Standard Library".
 
 If you have a decent terminal with good Unicode support, you should get an
 output similar to the one above. Otherwise, do yourself a favour a go download a
