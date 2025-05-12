@@ -1138,10 +1138,14 @@ uuid = "a63ad114-7e13-5084-954f-fe012c677804"
 version = "1.11.0"
 
 [[deps.Moonshine]]
-deps = ["Bumper", "ChunkSplitters", "CondaPkg", "CpuId", "DataStructures", "Distributions", "DocStringExtensions", "DoubleFloats", "FunctionWrappers", "GeometryBasics", "GraphMakie", "Graphs", "IntervalSets", "JSON", "LayeredLayouts", "LinearAlgebra", "LoopVectorization", "NetworkLayout", "ProgressMeter", "PythonCall", "Random", "RandomNumbers", "SIMD", "SpecialFunctions", "StaticArrays", "Statistics", "StatsAPI", "StatsBase", "StatsFuns", "UnicodePlots", "UnsafeArrays"]
+deps = ["Bumper", "ChunkSplitters", "CondaPkg", "CpuId", "DataStructures", "Distributions", "DocStringExtensions", "DoubleFloats", "FunctionWrappers", "GeometryBasics", "Graphs", "IntervalSets", "JSON", "LayeredLayouts", "LinearAlgebra", "LoopVectorization", "NetworkLayout", "ProgressMeter", "PythonCall", "Random", "RandomNumbers", "SIMD", "SpecialFunctions", "StaticArrays", "Statistics", "StatsAPI", "StatsBase", "StatsFuns", "UnicodePlots", "UnsafeArrays"]
 path = ".."
 uuid = "99b31415-443e-43a2-8bf4-ca532bb4a161"
-version = "0.2.1"
+version = "0.2.2"
+weakdeps = ["GraphMakie"]
+
+    [deps.Moonshine.extensions]
+    MoonshineMakie = "GraphMakie"
 
 [[deps.MosaicViews]]
 deps = ["MappedArrays", "OffsetArrays", "PaddedViews", "StackViews"]

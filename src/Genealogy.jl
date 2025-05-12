@@ -7,8 +7,6 @@ import Graphs: edges, vertices, ne, nv,
                eltype, edgetype, is_directed,
                has_edge, has_vertex, inneighbors, outneighbors
 
-import GraphMakie: graphplot
-
 using LayeredLayouts
 
 using GeometryBasics: Point
@@ -21,6 +19,7 @@ using NetworkLayout
 
 using UnicodePlots: histogram
 
+export AbstractGenealogy
 """
     $(TYPEDEF)
 
@@ -290,6 +289,33 @@ function plot_layout end
 
 plot_layout(::AbstractGenealogy) = Spring()
 
+export plot_genealogy
+"""
+    $(FUNCTIONNAME)(genealogy[, ω]; kwargs...)
+
+Plot a genealogy.
+
+Only edges and vertices ancestral for `ω` are plotted.
+
+Implemented as an extension to `Moonshine.jl`. To use this method, you have to
+import [`GraphMakie`](@ref) (and a
+[Makie](https://github.com/MakieOrg/Makie.jl) backend).
+
+See also [`plot_layout`](@ref).
+
+# Arguments
+* `wild_color` (`:blue`): color of wild vertices, that is those having only wild
+  markers in `ω`.
+* `derived_color` (`:red`): color of derived (non-wild) vertices
+* `arrow_show` (`false`): whether or not to draw arrows
+* `edge_color` (`:gray`): color of edges
+* `edge_width` (`3`): width of edges
+* `layout` (`plot_layout(genealogy)`): layout function
+* `attributes...`: attributes passed directly to
+  [`GraphMakie.graphplot`](@extref)
+"""
+function plot_genealogy end
+
 """
     $(FUNCTIONNAME)(genealogy)
 
@@ -464,78 +490,6 @@ GenLayout(leaveslayer, leaves) = function (genealogy_graph)
     ## Rotate by -π/2.
     Point.(zip(ys, -xs))
 end
-
-"""
-    $(FUNCTIONNAME)(genealogy[, ω]; kwargs...)
-
-Plot a genealogy.
-
-Only edges and vertices ancestral for `ω` are plotted.
-
-The generic is not re-exported. To use this method, you have to import
-[`GraphMakie`](@ref) (and a backend).
-
-See also [`plot_layout`](@ref).
-
-# Arguments
-* `wild_color` (`:blue`): color of wild vertices, that is those having only wild
-  markers in `ω`.
-* `derived_color` (`:red`): color of derived (non-wild) vertices
-* `arrow_show` (`false`): whether or not to draw arrows
-* `edge_color` (`:gray`): color of edges
-* `edge_width` (`3`): width of edges
-* `layout` (`plot_layout(genealogy)`): layout function
-* `attributes...`: attributes passed directly to
-  [`GraphMakie.graphplot`](@extref)
-
-# Methods
-$(METHODLIST)
-"""
-function graphplot end
-
-function graphplot(genealogy::AbstractGenealogy, ω;
-                   wild_color = :blue,
-                   derived_color = :red,
-                   arrow_show = false,
-                   edge_color = :gray,
-                   edge_width = 3,
-                   layout = plot_layout(genealogy),
-                   attributes...)
-    vlabels = string.(range(1, nv(genealogy)))
-
-    ## Color of the vertices.
-    mask = fill(ancestral_mask(genealogy, ω), nv(genealogy))
-    node_color = ifelse.(any.(sequences(genealogy) .& mask),
-                         derived_color, wild_color)
-
-    ## Hide non ancestral edges and vertices ##
-    ewidth = DefaultDict{Edge{VertexType}, Int}(edge_width)
-    for e ∈ edges(genealogy)
-        isdisjoint(ancestral_intervals(genealogy, e), ω) || continue
-        ewidth[e] = 0
-    end
-
-    vsize = DefaultDict{VertexType, Any}(30)
-    for v ∈ ivertices(genealogy)
-        isdisjoint(ancestral_intervals(genealogy, v), ω) || continue
-        vsize[v] = 0
-        vlabels[v] = ""
-    end
-
-    graphplot(graph(genealogy),
-              layout = layout,
-              node_size = vsize,
-              ilabels = vlabels,
-              ilabels_color = :white,
-              edge_color = edge_color,
-              edge_width = ewidth,
-              arrow_show = arrow_show,
-              node_color = node_color,
-              attributes...)
-end
-
-graphplot(genealogy::AbstractGenealogy; attributes...) =
-    graphplot(genealogy, Ω(0, ∞); attributes...)
 
 ## TODO: `yflip` doesn't work
 export plot_latitudes

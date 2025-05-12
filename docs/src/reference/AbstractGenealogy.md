@@ -104,6 +104,6 @@ tmrca
 
 #### Plotting
 ```@docs
-graphplot(::AbstractGenealogy, ::Any)
+plot_genealogy
 plot_latitudes
 ```

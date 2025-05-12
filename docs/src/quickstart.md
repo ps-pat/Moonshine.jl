@@ -113,7 +113,8 @@ argument of type `AbstractVector{Sequence}` (or a *supertype* thereof for that
 matter) is satisfiable by a `Sample` in a method call. Second, `Sample`
 implement two *interfaces*: the array interface and the iteration interface.
 This mean we can basically treat them as arrays (like we did) and as iterables
-(using a `for` loop or a higher order function such as [`Base.argmax`](@extref).
+(using a `for` loop or a higher order function such as
+[`Base.argmax`](@extref)).
 
 ## Coalescent Trees: the [`Tree`](@ref) type
 Now that we have some data, it's time to build our first coalescent tree. A
@@ -160,19 +161,19 @@ that to, provided you installed two packages:
 * [GraphMakie](https://github.com/MakieOrg/GraphMakie.jl);
 * [GLMakie](https://docs.makie.org/stable/explanations/backends/glmakie) (or
   any other [Makie backend](https://docs.makie.org/v0.22/explanations/backends/backends)).
-You can then plot `tree` via the [`graphplot`](@ref) method:
+You can then plot `tree` via the [`plot_genealogy`](@ref) method:
 ```julia-repl
 julia> using GraphMakie
 
 julia> using GLMakie
 
-julia> graphplot(tree)
+julia> plot_genealogy(tree)
 ```
 ```@setup quickstart
-save("assets/graphplot_tree1.png", graphplot(tree), size = (800, 600))
+save("assets/plot_genealogy_tree1.png", plot_genealogy(tree), size = (800, 600))
 ```
 After some time, you should obtain the following plot:
-![](assets/graphplot_tree1.png)
+![](assets/plot_genealogy_tree1.png)
 This is all good and well, but you might wonder about the distribution of
 `tree`. `tree` is a coalescent tree in the graph-theoretical sense, meaning that
 it is a full binary tree. Since we are working conditional on a sample of
@@ -210,12 +211,12 @@ build!(rng, tree0, bias0 = Inf)
 plot_latitudes(tree0)
 ```
 ```@setup quickstart
-save("assets/graphplot_tree2.png", graphplot(tree0), size = (800, 600))
+save("assets/plot_genealogy_tree2.png", plot_genealogy(tree0), size = (800, 600))
 ```
 ```julia-repl
-julia> graphplot(tree0)
+julia> plot_genealogy(tree0)
 ```
-![](assets/graphplot_tree2.png)
+![](assets/plot_genealogy_tree2.png)
 Notice the difference from the previous plot, even tough we used the same sample
 and RNG? Alright, one last tree example. One common demand of spatial ARG
 inference algorithm is building a tree consistent with the leftmost marker. To
@@ -225,14 +226,14 @@ more than the discrete metric on the leftmost marker. First, let's have a look
 at the situation on `tree`. We can colour vertices according to the status of
 their leftmost marker as follows:
 ```@setup quickstart
-let fig = graphplot(tree, Ω(positions(tree)[1:2]...))
-    save("assets/graphplot_tree3.png", fig, size = (800, 600))
+let fig = plot_genealogy(tree, Ω(positions(tree)[1:2]...))
+    save("assets/plot_genealogy_tree3.png", fig, size = (800, 600))
 end
 ```
 ```julia-repl
-julia> graphplot(tree, Ω(positions(tree)[1:2]...))
+julia> plot_genealogy(tree, Ω(positions(tree)[1:2]...))
 ```
-![](assets/graphplot_tree3.png)
+![](assets/plot_genealogy_tree3.png)
 
 !!! note "Julia👶: Splat..."
     If you've never encountered it before in another language, the ellipsis
@@ -249,7 +250,7 @@ might have guessed, `positions(tree)[1:2]` returns the positions of the first
 two markers of `tree`. These are then splatted into `Ω` so that
 `Ω(positions(tree)[1:2]...)` represents ``[p_1, p_2)`` where ``p_k`` is the
 position of marker ``k``. Passing this interval as second argument to
-`graphplot` tells it to only consider edges, vertices and markers that are
+`plot_genealogy` tells it to only consider edges, vertices and markers that are
 ancestral for it. In particular, vertices are coloured according to the status
 of the markers included in the interval (which is only the first marker in our
 example): a vertex is red if all markers are derived, blue otherwise. This means
@@ -261,14 +262,14 @@ tree_left = Tree(s)
 build!(copy(rng_orig), tree_left, Dist = LeftM(), bias0 = Inf)
 ```
 ```@setup quickstart
-let fig = graphplot(tree_left, Ω(positions(tree_left)[1:2]...))
-    save("assets/graphplot_tree_left.png", fig, size = (800, 600))
+let fig = plot_genealogy(tree_left, Ω(positions(tree_left)[1:2]...))
+    save("assets/plot_genealogy_tree_left.png", fig, size = (800, 600))
 end
 ```
 ```julia-repl
-julia> graphplot(tree_left, Ω(positions(tree_left)[1:2]...))
+julia> plot_genealogy(tree_left, Ω(positions(tree_left)[1:2]...))
 ```
-![](assets/graphplot_tree_left.png)
+![](assets/plot_genealogy_tree_left.png)
 As expected, the leftmost marker mutates only once.
 
 Before moving on to ARGs, I have to tell you about another handy constructor
@@ -311,7 +312,7 @@ plot its vertices' latitudes:
 ```@repl quickstart
 plot_latitudes(arg_tree)
 ```
-I won't `graphplot` it though since as you might have noticed, this is quite a
+I won't `plot_genealogy` it though since as you might have noticed, this is quite a
 demanding process even for a 19-vertices tree.
 
 Moonshine ARG building algorithm is of the spatial (as opposed to temporal)
