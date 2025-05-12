@@ -716,5 +716,6 @@ function build!(rng, arg::Arg; winwidth = ∞, buffer = default_buffer(), noprog
         end
     end
 
+    finish!(prog)
     arg
 end
