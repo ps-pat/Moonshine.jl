@@ -7,9 +7,6 @@ import Base: iterate,
 
 using Graphs: Edge
 
-export Ω
-const Ω = Interval{:closed, :open, Float64}
-
 export Sample
 """
     $(TYPEDEF)
