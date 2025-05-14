@@ -187,34 +187,48 @@ descendants_leaves(tree::Tree, v; buffer = default_buffer()) =
 
 function _sample_toilet(rng, xs, potential, threshold_prop)
     threshold = floor(Int, length(xs) * threshold_prop)
-    iter = (Iterators.Stateful ∘ enumerate)(xs)
     z = ∞
     logπ = zero(z)
     logΣπ = zero(logπ)
     idx = zero(Int)
-    for (k, x) ∈ iter
+
+    k = (zero ∘ eltype)(xs.iter)
+    it = iterate(xs)
+    while !isnothing(it)
+        x, k = it
+
         logπ = potential(x)
-        isinf(logπ) && continue
+        isinf(logπ) && @goto iterate_loop1
+
         logΣπ = logπ
         z = logπ - log(randexp(rng))
-        idx = k
+        idx = k - 1
+
+        @label iterate_loop1
+        it = iterate(xs, k)
         break
     end
 
-    for (k, x) ∈ iter
+    while !isnothing(it)
+        x, k = it
+
         logπ_new = potential(x)
-        isinf(logπ_new) && continue
+        isinf(logπ_new) && @goto iterate_loop2
+
         πmin, πmax = minmax(logπ_new, logΣπ)
         logΣπ = πmax + (log1p ∘ exp)(πmin - πmax)
 
         newz = logπ_new - log(randexp(rng))
-        newz <= z && continue
+        newz <= z && @goto iterate_loop2
 
         logπ = logπ_new
         z = newz
-        idx = k
+        idx = k - 1
 
         k <= threshold || break
+
+        @label iterate_loop2
+        it = iterate(xs, k)
     end
 
     if iszero(idx) # All potentials were infinite
