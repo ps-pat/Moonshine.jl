@@ -57,7 +57,7 @@ function Tree(sample::Sample)
     sequences = Vector{Sequence}(undef, 2n - 1)
     sequences[1:n] .= sample.H
 
-    Tree(SimpleDiGraph(2n - 1),
+    Tree(SimpleDiGraph{VertexType}(2n - 1),
          zeros(Float64, n - 1),
          sequences,
          sample, Ref(zero(Double64)))

@@ -581,7 +581,7 @@ Sequence of a genealogy associated with a vertex.
 
 See also [`sequences`](@ref) to get all the sequences of a genealogy.
 """
-sequence(genealogy, v::VertexType) = getindex(sequences(genealogy), v)
+sequence(genealogy, v) = getindex(sequences(genealogy), v)
 
 export nmarkers
 """

@@ -104,7 +104,7 @@ function recombine!(arg, redge, cedge, breakpoint, rlat, clat, stack;
     end
 
     ## Add recombination and recoalescence vertices to arg ##
-    rvertex, cvertex = nv(arg) .+ (1, 2)
+    rvertex, cvertex = VertexType.(nv(arg) .+ (1, 2))
     add_vertices!(
         arg,
         (Sequence(trues(nmarkers(arg))), Sequence(trues(nmarkers(arg)))),
