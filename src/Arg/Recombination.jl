@@ -245,31 +245,60 @@ end
 #          |                Constrained Recombinations                |
 #          +----------------------------------------------------------+
 
-function _sample_clat(rng, arg, rlat, possible_cedges)
-    domain_lbound = max(rlat, minimum(e -> latitude(arg, dst(e)), possible_cedges))
-    domain_ubound = maximum(e -> latitude(arg, src(e)), possible_cedges)
-    pp_dist = Uniform(domain_lbound, domain_ubound)
+function _sample_cedge(rng, arg, rlat::T, possible_cedges, nextidx;
+                       buffer = default_buffer()) where T
+    cedge = zero(VertexType)
+    clat = zero(T)
 
-    λbound = length(possible_cedges)
-    t = (zero ∘ eltype)(pp_dist)
-    accept = false
-    @inbounds while !accept
-        t = rand(rng, pp_dist)
-        add_logdensity!(arg, pp_dist, t)
+    @no_escape buffer begin
+        ## Compute minimum latitudes & domain bounds
+        domain_lbound = typemax(T)
+        domain_ubound = typemin(T)
+        min_latitudes = @alloc(T, length(possible_cedges))
+        @inbounds for (k, e) ∈ enumerate(possible_cedges)
+            max_latitude = latitude(arg, src(e))
+            if domain_ubound < max_latitude
+                domain_ubound = max_latitude
+            end
 
-        ## `count` causes weird type instability for some reason
-        λt = zero(Int)
-        @simd ivdep for k ∈ eachindex(possible_cedges)
-            e = possible_cedges[k]
-            λt += latitude(arg, dst(e)) <= t <= latitude(arg, src(e))
+            min_latitudes[k] = max(rlat, rlat_min(arg, e, nextidx))
+            if domain_lbound > min_latitudes[k]
+                domain_lbound = min_latitudes[k]
+            end
         end
 
-        accept_dist = Bernoulli(λt / λbound)
-        accept = rand(rng, accept_dist)
-        add_logdensity!(arg, accept_dist, accept)
+        ## Sample latitude
+        ws = @alloc(Int, length(possible_cedges))
+        pp_dist = Uniform(domain_lbound, domain_ubound)
+        λbound = length(possible_cedges)
+        clat = (zero ∘ eltype)(pp_dist)
+        λt = zero(Int)
+        accept = false
+        @inbounds while !accept
+            clat = rand(rng, pp_dist)
+            add_logdensity!(arg, pp_dist, clat)
+
+            ## `count` causes weird type instability for some reason
+            λt = zero(Int)
+            @simd ivdep for k ∈ eachindex(possible_cedges)
+                λt += min_latitudes[k] <= clat <= latitude(arg, src(possible_cedges[k]))
+                ws[k] = λt
+            end
+
+            accept_dist = Bernoulli(λt / λbound)
+            accept = rand(rng, accept_dist)
+            add_logdensity!(arg, accept_dist, accept)
+        end
+
+        cedge_idx = zero(Int)
+        let k = rand(rng, 1:λt)
+            cedge_idx = findfirst(==(k), ws)
+        end
+        add_logdensity!(arg, -log(λt))
+        cedge = _find_actual_edge(arg, possible_cedges[cedge_idx], nextidx, clat)
     end
 
-    t
+    cedge, clat
 end
 
 function _sample_clat(rng, arg, minlat, redge, fedge, nextidx, stack;
@@ -532,22 +561,8 @@ end
                 unsafe_store!(possible_cedges_ptr, e, npossible_cedges)
             end
             possible_cedges = UnsafeArray{Edge{VertexType}, 1}(possible_cedges_ptr, (npossible_cedges,))
-            clat = _sample_clat(rng, arg, rlat, possible_cedges)
-
-            ## Sample recoalescence edge
-            ws = @alloc(Int, npossible_cedges)
-            cumweight = zero(Int)
-            for (k, e) ∈ enumerate(possible_cedges)
-                cumweight += latitude(arg, dst(e)) <= clat <= latitude(arg, src(e))
-                ws[k] = cumweight
-            end
-
-            cedge_idx = zero(Int)
-            let k = rand(rng, 1:cumweight)
-                cedge_idx = findfirst(==(k), ws)
-            end
-            add_logdensity!(arg, -log(cumweight))
-            cedge = possible_cedges[cedge_idx]
+            # clat = _sample_clat(rng, arg, rlat, possible_cedges, nextidx, buffer = buffer)
+            cedge, clat = _sample_cedge(rng, arg, rlat, possible_cedges, nextidx, buffer = buffer)
         end
 
         @debug "Constrained recombination event" redge cedge breakpoint rlat clat
