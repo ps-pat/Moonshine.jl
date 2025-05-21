@@ -407,6 +407,7 @@ function validate(arg::Arg; check_mutations = true)
 
     ## Non-root coalescence vertices ##
     for v ∈ Iterators.flatten((range(n + 1, 2n - 1), range(2n + 1, nv(arg), step = 2)))
+        v = VertexType(v)
         v == mrca(arg) && continue
 
         if length(children(arg, v)) != 2
@@ -455,6 +456,7 @@ function validate(arg::Arg; check_mutations = true)
 
     ## Internal vertices ##
     for v ∈ ivertices(arg)
+        v = VertexType(v)
         ref = mapreduce(&, children(arg, v)) do _child
             sequence(arg, _child) | ~ancestral_mask(arg, Edge(v => _child))
         end

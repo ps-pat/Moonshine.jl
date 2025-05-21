@@ -47,7 +47,7 @@ See also [`IntervalSets.AbstractInterval`](@extref) and [`Ω`](@ref).
 const AI = AbstractInterval
 
 """
-    const VertexType = Int
+    const VertexType = Int32
 Type of the vertices. Any `genealogy` that is an instance of
 [`AbstractGenealogy`](@ref) should be constructed so that `graph(genealogy)` is
 an instance of `AbstractGraphs{VertexType}`
@@ -55,7 +55,7 @@ an instance of `AbstractGraphs{VertexType}`
 
 --*Internal*--
 """
-const VertexType = Int
+const VertexType = Int32
 
 """
     const mmn_chunksize = 1

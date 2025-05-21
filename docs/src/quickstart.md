@@ -339,9 +339,9 @@ plot_latitudes(arg)
 
 !!! note "Julia👶: Macros"
     Julia has a very rich macro system, similar to Common Lisp's one. Macros can
-    be told apart from functions from the '@' prefix in their name. If you are
-    not familiar with Lisp, just keep in mind that needs not to be valid Julia
-    expressions.
+    be told apart from functions by the '@' prefix in their name. If you are
+    not familiar with Lisp, just keep in mind that their arguments do not need
+    to be valid Julia expressions.
 
     [Official documentation on macros](https://docs.julialang.org/en/v1/manual/metaprogramming/#man-macros)
 
