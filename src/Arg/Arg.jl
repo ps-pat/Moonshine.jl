@@ -159,7 +159,10 @@ function add_edge!(arg::Arg, e, ints::AIsType)
     add_edge!(graph(arg), e)
 end
 
-rem_edge!(arg::Arg, e) = rem_edge!(graph(arg), e)
+function rem_edge!(arg::Arg, e)
+    delete!(arg.ancestral_intervals, e)
+    rem_edge!(graph(arg), e)
+end
 
 function plot_layout(arg::Arg)
     initxs = rand(1:nleaves(arg), nv(arg))

@@ -121,12 +121,13 @@ function recombine!(arg, redge, cedge, breakpoint, rlat, clat, stack;
     rem_edge!(arg, redge)
 
     ## Replace recoalescence edge ##
-    root_recombination = !rem_edge!(arg, cedge)
+    root_recombination = !has_edge(arg, cedge)
     if root_recombination
         ωc = AIsType([Ω(0, ∞)])
         arg.mrca[] = cvertex
     else
         ωc = ancestral_intervals(arg, cedge)
+        rem_edge!(arg, cedge)
         let ωc_new = union(ωc, ωr_right)
             add_edge!(arg, Edge(src(cedge), cvertex), ωc_new)
         end
