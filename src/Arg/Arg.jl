@@ -203,23 +203,16 @@ ancestral_intervals(arg::Arg, v::VertexType) = ancestral_intervals!(AIsType(), a
 ancestral_mask!(η, arg::Arg, e::Edge{VertexType}; wipe = true) =
     ancestral_mask!(η, sam(arg), ancestral_intervals(arg, e), wipe = wipe)
 
-function ancestral_mask!(h, arg::Arg, v::VertexType;
-                         buffer = default_buffer(), wipe = true)
+function ancestral_mask!(h::Union{Sequence, AbstractVector{UInt64}}, arg::Arg, v::VertexType;
+                         wipe = true)
     ## Compute number of Ωs
     len = sum(c -> (length ∘ ancestral_intervals)(arg, Edge(v => c)),
               children(arg, v))
 
-    @no_escape buffer begin
-        ωs = @alloc(Ω, len)
-        k = 1
-        for c ∈ children(arg, v)
-            for ω ∈ ancestral_intervals(arg, Edge(v, c))
-                ωs[k] = ω
-                k += 1
-            end
-        end
-        ancestral_mask!(h, sam(arg), ωs, wipe = wipe)
-        nothing # Workaround, see Bumper.jl's issue #49
+    first_child, rest_child = Iterators.peel(children(arg, v))
+    ancestral_mask!(h, sam(arg), ancestral_intervals(arg, Edge(v => first_child)), wipe = wipe)
+    for c ∈ rest_child
+        ancestral_mask!(h, sam(arg), ancestral_intervals(arg, Edge(v => c)), wipe = false)
     end
 
     h
