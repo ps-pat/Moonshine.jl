@@ -351,12 +351,13 @@ function _sample_clat(rng, arg, minlat, redge, fedge, nextidx, stack;
 end
 
 """
-    rlat_interval(arg, e, nextidx, ubound)
+    $(FUNCTIONNAME)(arg, e, nextidx)
 
-Compute the valid recombination interval for an edge at a given position.
+Compute the minimum latitude for a recombination event rooted on `e`.
+
+--*Internal*--
 """
-function rlat_min end,
-function rlat_min! end
+function rlat_min end
 
 function rlat_min(arg, e, nextidx)
     nextpos = idxtopos(arg, nextidx)
