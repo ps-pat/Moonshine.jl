@@ -84,10 +84,15 @@ end
 
 export recombine!
 """
-    recombine!(arg, redge, cedge, breakpoint, rlat, clat)
+    $(FUNCTIONNAME)(arg, redge, cedge, breakpoint, rlat, clat[, stack]; buffer = default_buffer())
 
 Add a recombination event to an ARG.
+
+# Methods
+$(METHODLIST)
 """
+function recombine! end
+
 function recombine!(arg, redge, cedge, breakpoint, rlat, clat, stack;
                     buffer = default_buffer())
     ## Adjust recombination masks
@@ -149,6 +154,15 @@ function recombine!(arg, redge, cedge, breakpoint, rlat, clat, stack;
     push!(arg.recombination_mask, AIsType([Ω(0, breakpoint)]))
     push!(arg.recombination_mask, AIsType([Ω(breakpoint, ∞)]))
     arg
+end
+
+function recombine!(arg, redge, cedge, breakpoint, rlat, clat; buffer = default_buffer())
+    @no_escape buffer begin
+        store = @alloc(VertexType, nleaves(arg) + nrecombinations(arg))
+        stack = CheapStack(store)
+
+        recombine!(arg, redge, cedge, breakpoint, rlat, clat, stack, buffer = buffer)
+    end
 end
 
 """
