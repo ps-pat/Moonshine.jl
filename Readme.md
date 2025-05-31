@@ -2,6 +2,7 @@
 [![Documentation stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://moonshine.patrickfournier.ca/stable/)
 [![Documentation dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://moonshine.patrickfournier.ca/dev/)
 [![Aqua QA](https://raw.githubusercontent.com/JuliaTesting/Aqua.jl/master/badge.svg)](https://github.com/JuliaTesting/Aqua.jl)
+[![DOI](https://zenodo.org/badge/974384938.svg)](https://doi.org/10.5281/zenodo.15558973)
 
 ## Overview
 Moonshine.jl is a Julia framework for coalescent modelling oriented towards ancestral recombination graph (ARG) inference. It provides the [`AbstractGenealogy`](https://moonshine.patrickfournier.ca/stable/reference/AbstractGenealogy/#Moonshine.AbstractGenealogy) type which leverages [Graph.jl](https://github.com/JuliaGraphs/Graphs.jl) for convenient implementation of graph-theoretical models of molecular evolution.
