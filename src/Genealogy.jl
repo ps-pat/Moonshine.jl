@@ -695,9 +695,54 @@ $(METHODLIST)
 """
 function children end
 
-for (fun, list) ∈ Dict(:dads => Meta.quot(:badjlist),
-                         :children => Meta.quot(:fadjlist))
+export children3
+"""
+    $(FUNCTIONNAME)(genealogy, v, args...)
+
+Childrens of a vertex, ignoring marginally degree 2 vertices.
+
+All arguments are passed directly to [`children`](@ref).
+
+See also [`dads3`](@ref).
+
+!!! danger
+    Return a **reference** to the underlying adjacency lists. No touchy!
+
+# Methods
+$(METHODLIST)
+"""
+function children3 end
+
+export dads3
+"""
+    $(FUNCTIONNAME)(genealogy, v, args...)
+
+Parents of a vertex, ignoring marginally degree 2 vertices.
+
+All arguments are passed directly to [`dads`](@ref).
+
+See also [`children3`](@ref).
+
+!!! danger
+    Return a **reference** to the underlying adjacency lists. No touchy!
+
+# Methods
+$(METHODLIST)
+"""
+function dads3 end
+
+for (fun, list) ∈ Dict( :dads => Meta.quot(:badjlist), :children => Meta.quot(:fadjlist))
     @eval $fun(genealogy, v) = getfield(graph(genealogy), $list)[v]
+
+    fun3 = Symbol(string(fun) * '3')
+    @eval function $fun3(genealogy, v, args...)
+        neig = $fun(genealogy, v, args...)
+        @inbounds while (isone ∘ length)(neig)
+            neig = $fun(genealogy, first(neig), args...)
+        end
+
+        neig
+    end
 end
 
 export ancestors
