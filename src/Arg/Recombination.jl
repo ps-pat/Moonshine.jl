@@ -334,9 +334,10 @@ function _sample_clat(rng, arg, minlat, redge, fedge, nextidx, stack;
         n = nleaves(arg)
         λts = @alloc(Int, n)
         clats = @alloc(Float64, n)
+        Δclats = @alloc(Float64, n)
 
         while iszero(ret)
-            Δclats = rand(rng, pp, n)
+            rand!(rng, pp, Δclats)
             cumsum!(clats, Δclats)
             clats .+= minlat
 
