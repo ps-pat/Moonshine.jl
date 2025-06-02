@@ -180,10 +180,10 @@ end
 # Ancestrality Methods #
 ########################
 
-function ancestral_intervals!(ωs, arg::Arg, e::Edge; wipe = true, simplify = true)
+function ancestral_intervals!(ωs, arg::Arg, e::Edge; wipe = true)
     wipe && empty!(ωs)
 
-    union!(ωs, ancestral_intervals(arg, e), simplify = simplify)
+    union!(ωs, ancestral_intervals(arg, e))
 
     ωs
 end
@@ -195,10 +195,10 @@ function ancestral_intervals!(ωs, arg::Arg, v::VertexType; wipe = true)
     isleaf(arg, v) && return push!(ωs, Ω(0, ∞))
 
     for child ∈ children(arg, v)
-        ancestral_intervals!(ωs, arg, Edge(v => child), wipe = false, simplify = false)
+        ancestral_intervals!(ωs, arg, Edge(v => child), wipe = false)
     end
 
-    simplify!(ωs)
+    ωs
 end
 
 ancestral_intervals(arg::Arg, v::VertexType) = ancestral_intervals!(AIsType(), arg, v)

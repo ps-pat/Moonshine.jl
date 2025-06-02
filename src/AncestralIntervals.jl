@@ -163,20 +163,57 @@ end
 
 # -- Union -------------------------------------------------------------
 
-function union!(ai::AIs, ω::T; simplify = true) where T<:AI
-    push!(ai.data, ω)
-    simplify && simplify!(ai)
-    ai
+function union!(ais::AIs, x)
+    isempty(x) && return ais
+
+    if isempty(ais)
+        push!(ais, x)
+        return ais
+    end
+
+    ## Find the first and last interval of `ais` intersecting `x`
+    ai_left_idx = zero(Int)
+    ai_right_idx = typemax(Int)
+    for (k, ai) ∈ enumerate(ais)
+        isdisjoint(x, ai) && continue
+
+        ai_right_idx = k
+
+        if iszero(ai_left_idx)
+            ai_left_idx = k
+        end
+    end
+
+    ## If `x` is not connected to any interval in `ais`, insert it
+    if iszero(ai_left_idx)
+        idx = findfirst(ai -> leftendpoint(ai) > leftendpoint(x), ais)
+        if isnothing(idx)
+            push!(ais, x)
+            return ais
+        end
+        insert!(ais.data, idx, x)
+        return ais
+    end
+
+    ## If `x` is connected to at least one interval, compute union, insert and
+    ## clean up
+    l = min(leftendpoint(ais[ai_left_idx]), leftendpoint(x))
+    r = max(rightendpoint(ais[ai_right_idx]), rightendpoint(x))
+    ais[ai_left_idx] = (eltype)(ais)(l, r)
+    deleteat!(ais, (ai_left_idx+1):ai_right_idx)
+
+    ais
 end
 
-function union!(ωs1::AIs, ωs2::AIs; simplify = true)
-    append!(ωs1.data, ωs2.data)
-    simplify && simplify!(ωs1)
+function union!(ωs1::AIs, ωs2::AIs)
+    for ω2 ∈ ωs2
+        union!(ωs1, ω2)
+    end
+
     ωs1
 end
 
-union(ωs1::AIs, ωs2::AIs; simplify = true) =
-    union!(copy(ωs1), ωs2, simplify = simplify)
+union(ωs1::AIs, ωs2::AIs) = union!(copy(ωs1), ωs2)
 
 # -- Intersection ------------------------------------------------------
 
