@@ -401,45 +401,21 @@ function _find_actual_edge(arg, e, nextidx, lat)
     end
 end
 
-function _update_live_edges_wild!(live_edges, arg, newd, nextidx, breakpoint, es_idx;
-                                  buffer = default_buffer())
-    e = _update_live_edges_derived!(live_edges, arg, newd, nextidx, breakpoint, es_idx,
-                                    buffer = buffer)
-    e = Edge(src(e) => sibling(arg, dst(e)))
-
-    eidx = findfirst(==(e), live_edges)
-    isnothing(eidx) || popat!(live_edges, eidx)
-
-    live_edges
-end
-
-function _update_live_edges_derived!(live_edges, arg, newd, nextidx, breakpoint, es_idx;
-                                     buffer = default_buffer())
-    popat!(live_edges, last(es_idx))
-    popat!(live_edges, first(es_idx))
+function _update_live_edges!(live_edges, arg, newd, nextidx)
+    nextpos = idxtopos(arg, nextidx)
 
     lastd = newd
-    e = Edge((first ∘ dads)(arg, newd, breakpoint) => newd)
-    @no_escape buffer begin
-        ptr = convert(Ptr{VertexType}, @alloc_ptr(2 * sizeof(VertexType)))
-
-        @inbounds while !ismutation_edge(arg, e, nextidx)
-            let eidx = findfirst(==(e), live_edges)
-                if !isnothing(eidx)
-                    popat!(live_edges, eidx)
-                else
-                    ss = siblings!(ptr, arg, dst(e), breakpoint)
-                    if !isempty(ss)
-                        eidx = findfirst(==(Edge(src(e) => first(ss))), live_edges)
-                        isnothing(eidx) || popat!(live_edges, eidx)
-                    end
-                end
-            end
-
-            lastd = newd
-            newd = src(e)
-            e = Edge((first ∘ dads)(arg, newd, breakpoint) => newd)
+    e = Edge(dad(arg, newd) => newd) ## `newd` is a coalescence vertex
+    @inbounds while !ismutation_edge(arg, e, nextidx)
+        for (k, live_edge) ∈ enumerate(live_edges)
+            src(live_edge) == src(e) || continue
+            popat!(live_edges, k)
+            break
         end
+
+        lastd = newd
+        newd = src(e)
+        e = Edge((first ∘ dads)(arg, newd, nextpos) => newd)
     end
 
     e ∈ live_edges || push!(live_edges, e)
@@ -497,6 +473,7 @@ function sample_recombination_constrained!(rng, arg, breakpoint, winwidth,
         end
         add_logdensity!(arg, log(2) - log(n) - log(n - 1))
         e1, e2 = @views live_edges[es_idx]
+        deleteat!(live_edges, es_idx)
 
         ## Consider the possibility of a wild recombination
         eu = Edge(0 => 0) # Uncle edge
@@ -580,17 +557,12 @@ end
             possible_cedges = UnsafeArray{Edge{VertexType}, 1}(possible_cedges_ptr, (npossible_cedges,))
             # clat = _sample_clat(rng, arg, rlat, possible_cedges, nextidx, buffer = buffer)
             cedge, clat = _sample_cedge(rng, arg, rlat, possible_cedges, nextidx, buffer = buffer)
+            newd = nv(arg) + VertexType(2)
         end
 
         @debug "Constrained recombination event" redge cedge breakpoint rlat clat
         recombine!(arg, redge, cedge, breakpoint, rlat, clat, vstack, buffer = buffer)
-
-        if wildrec
-            _update_live_edges_wild!(live_edges, arg, newd, nextidx, breakpoint, es_idx)
-        else
-            newd = nv(arg)
-            _update_live_edges_derived!(live_edges, arg, newd, nextidx, breakpoint, es_idx)
-        end
+        _update_live_edges!(live_edges, arg, newd, nextidx)
     end
 
 
