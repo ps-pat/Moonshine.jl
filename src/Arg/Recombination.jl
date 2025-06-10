@@ -454,13 +454,19 @@ end
 Sample a recombination event constrained so as to reduce the number of
 mutations for a given marker by one.
 """
-function sample_recombination_constrained!(rng, arg, breakpoint, winwidth,
+function sample_recombination_constrained!(rng, arg, nextidx, winwidth,
                                            live_edges, estack, vstack;
                                            buffer = default_buffer())
     n = length(live_edges)
-    nextidx = postoidx(arg, breakpoint)
     nextpos = idxtopos(arg, nextidx)
-    window = breakpoint ± winwidth / 2
+    window = nextpos ± winwidth / 2
+
+    local breakpoint
+    let breakpoint_bounds = (idxtopos(arg, nextidx - 1), nextpos),
+        breakpoint_dist = Uniform(breakpoint_bounds...)
+        breakpoint = rand(rng, breakpoint_dist)
+        add_logdensity!(arg, breakpoint_dist, breakpoint)
+    end
 
     @no_escape buffer begin
         ## Sample live edges ##
@@ -684,25 +690,13 @@ function build!(rng, arg::Arg; winwidth = ∞, buffer = default_buffer(), noprog
         while !iszero(nextidx)
             update!(prog, nextidx)
 
-            nbp = length(live_edges) - 1
-
-            bp_lbound = isone(nextidx) ?
-                zero(eltype(positions(arg))) : idxtopos(arg, nextidx - 1)
-            bp_ubound = idxtopos(arg, nextidx)
-
-            bp_dist = Uniform(bp_lbound, bp_ubound)
-            breakpoints = (sort! ∘ rand)(rng, bp_dist, nbp)
-            arg.logdensity[] -= nbp * log(bp_ubound - bp_lbound)
-
-            for breakpoint ∈ breakpoints
-                sample_recombination_constrained!(rng, arg, breakpoint,
+            while !(isone ∘ length)(live_edges)
+                sample_recombination_constrained!(rng, arg, nextidx,
                                                   winwidth, live_edges,
                                                   estack, vstack,
                                                   buffer = buffer)
-                (isone ∘ length)(live_edges) && break
             end
 
-            previdx = nextidx
             nextidx, live_edges = next_inconsistent_idx(arg, nextidx + 1, estack,
                                                         mutations_edges = mutation_edges_buffer,
                                                         buffer = buffer)
