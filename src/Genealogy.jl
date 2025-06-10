@@ -1158,90 +1158,91 @@ Return a `Dict` that maps every edge of a genealogy to an integer in
 """
 edgesmap(genealogy) = Dict(reverse.(enumerate(edges(genealogy))))
 
-export nlive
-"""
-    $(SIGNATURES)
-
-Number of live edges in a (marginal) genealogy at a given latitude.
-
-`block_predicate` is passed directly to [`edges_interval`](@ref).
-
-See also [`nlive!`](@ref).
-"""
-function nlive(genealogy, lat::Real, ωs;
-               block_predicates = [], buffer = default_buffer())
-    ## The grand MRCA is live forever
-    lat > tmrca(genealogy) && return one(Int)
-
-    live = zero(Int)
-
-    @no_escape buffer begin
-        store = @alloc(Edge{VertexType}, nleaves(genealogy) + nrecombinations(genealogy))
-        visited = @alloc(Bool, nrecombinations(genealogy))
-        @inbounds @simd ivdep for e ∈ edges_interval(genealogy, ωs, store, visited, mrca(genealogy),
-                                                       lat, block_predicates = block_predicates)
-            live += latitude(genealogy, dst(e)) <= lat <= latitude(genealogy, src(e))
-        end
-    end
-
-    live
-end
-
 export nlive!
 """
-    $(FUNCTIONNAME)(counts, genealogy, lats, ωs[, stack]; block_predicates = [], buffer = default_buffer())
+    $(FUNCTIONNAME)(counts, genealogy, lats, ωs,[ root] stack; block_predicates = [], buffer = default_buffer())
 
 Number of live edges in a (marginal) genealogy at a given latitude.
 
-Counts are stored in `counts` which is filled with 0s initially. ̀`lats` must be
-the same size as `counts`.
+Counts are stored in `counts`, which is initially filled with zeros.
+
+Graph traversal is performed downward from `root`. It can be either a single
+vertex or a vector of vertices. If it is a vector, the counts from the traversal
+from each root are added together.
 
 `block_predicate` and `stack` are passed directly to [`edges_interval`](@ref).
-
-See also [`nlive`](@ref).
 
 # Methods
 $(METHODLIST)
 """
 function nlive! end
 
-function nlive!(counts, genealogy, lats::AbstractVector{<:Real}, ωs, stack;
-                block_predicates = [], buffer = default_buffer())
-    fill!(counts, 0)
+function _nlive!(counts, visited, genealogy, lats, ωs, root, stack,
+                 block_predicates, buffer)
+    ## `counts`, `totalcount_` and `visited` are expected to be initialized.
 
     ## The grand MRCA is live forever
-    first_above_tmrca_idx = findfirst(>(tmrca(genealogy)), lats)
-    if isnothing(first_above_tmrca_idx)
-        lastlat = lastindex(lats)
-    else
-        counts[first_above_tmrca_idx:end] .+= 1
-        lastlat = first_above_tmrca_idx - 1
+    minlat = Inf
+    @inbounds for (k, lat) ∈ enumerate(lats)
+        if lat < minlat
+            minlat = lat
+        end
+
+        lat <= tmrca(genealogy) && continue
+
+        counts[k] += 1
     end
 
-    iszero(lastlat) && return counts
+    minlat > tmrca(genealogy) && return
 
     @no_escape buffer begin
-        visited = @alloc(Bool, nrecombinations(genealogy))
-        @inbounds for e ∈ edges_interval(genealogy, ωs, stack, visited, mrca(genealogy), first(lats),
+        @inbounds for e ∈ edges_interval(genealogy, ωs, stack, visited, root, minlat,
                                            block_predicates = block_predicates)
-            @simd ivdep for k ∈ 1:lastlat
+            @simd ivdep for k ∈ eachindex(lats)
                 counts[k] +=
                 latitude(genealogy, dst(e)) <= lats[k] <= latitude(genealogy, src(e))
             end
+        end
+    end
+end
+
+function nlive!(counts, genealogy, lats, ωs,
+                root::AbstractVector{VertexType}, stack;
+                block_predicates = [], buffer = default_buffer())
+    fill!(counts, 0)
+
+    @no_escape buffer begin
+        visited = @alloc(Bool, nrecombinations(genealogy))
+        fill!(visited, false)
+
+        for root ∈ root
+            _nlive!(counts, visited, genealogy, lats, ωs, root, stack,
+                    block_predicates, buffer)
         end
     end
 
     counts
 end
 
-nlive!(counts, genealogy, lats::AbstractVector{<:Real}, ωs;
-       block_predicates = [], buffer = default_buffer()) =
+function nlive!(counts, genealogy, lats, ωs, root::VertexType, stack;
+                block_predicates = [], buffer = default_buffer())
+    fill!(counts, 0)
+
     @no_escape buffer begin
-        store = @alloc(Edge{VertexType}, nleaves(genealogy))
-        stack = CheapStack(store)
-        nlive!(counts, genealogy, lats, ωs, stack,
-               block_predicates = block_predicates, buffer = buffer)
+        visited = @alloc(Bool, nrecombinations(genealogy))
+        fill!(visited, false)
+
+        _nlive!(counts, visited, genealogy, lats, ωs, root, stack,
+                block_predicates, buffer)
     end
+
+    counts
+end
+
+nlive!(counts, genealogy, lats, ωs, stack; block_predicates = [],
+       buffer = default_buffer()) =
+    nlive!(counts, genealogy, lats, ωs, mrca(genealogy), stack,
+           block_predicates = block_predicates, buffer = buffer)
 
 export ismutation_edge
 """
