@@ -316,13 +316,9 @@ function _sample_cedge(rng, arg, rlat::T, possible_cedges, nextidx;
     cedge, clat
 end
 
-function _sample_clat(rng, arg, minlat, redge, fedge, nextidx, stack;
+function _sample_clat(rng, arg, minlat, fedge, nextidx, stack;
                       buffer = default_buffer())
     nextpos = idxtopos(arg, nextidx)
-
-    ## Homogeneous PP
-    λ = nv(arg) - nrecombinations(arg)
-    pp = Exponential(inv(λ))
 
     block_predicates = [
         e -> sequence(arg, dst(e))[nextidx],
@@ -331,34 +327,36 @@ function _sample_clat(rng, arg, minlat, redge, fedge, nextidx, stack;
 
     ret = zero(minlat)
     @no_escape buffer begin
-        n = nleaves(arg)
+        n = 100
         λts = @alloc(Int, n)
-        clats = @alloc(Float64, n)
-        Δclats = @alloc(Float64, n)
+        clat_shifts = @alloc(Float64, n)
+        c = (one ∘ eltype)(λts)
+        pp = Exponential()
 
         while iszero(ret)
-            rand!(rng, pp, Δclats)
-            cumsum!(clats, Δclats)
-            clats .+= minlat
+            rand!(rng, pp, clat_shifts)
 
-            nlive!(λts, arg, clats, nextpos, stack, block_predicates = block_predicates, buffer = buffer)
+            nlive!(λts, arg, clat_shifts .+ minlat, nextpos, stack,
+                   block_predicates = block_predicates, buffer = buffer)
 
-            for (k, (clat, λt)) ∈ (enumerate ∘ zip)(clats, λts)
-                add_logdensity!(arg, pp, Δclats[k])
-                Δt = clats[k] - (isone(k) ? minlat : clats[k - 1])
+            for (clat_shift, λt) ∈ zip(clat_shifts, λts)
+                add_logdensity!(arg, pp, clat_shift)
 
                 ## Acceptation
-                accept_dist = Bernoulli(λt / λ)
+                iszero(λt) && continue
+
+                r = exp((1 - λt) * clat_shift)
+                accept_dist = Bernoulli(r / c)
                 accept = rand(rng, accept_dist)
                 add_logdensity!(arg, accept_dist, accept)
 
                 if accept
-                    ret = clat
+                    ret = clat_shift + minlat
                     break
                 end
-            end
 
-            minlat = last(clats)
+                c = max(c, r)
+            end
         end
     end
 
@@ -533,7 +531,7 @@ end
             fedge =  Edge((first ∘ dads)(arg, src(eu)) => src(eu))
 
             ## Sample recoalescence location ##
-            clat = _sample_clat(rng, arg, rlat, redge, fedge, nextidx, estack, buffer = buffer)
+            clat = _sample_clat(rng, arg, rlat, fedge, nextidx, estack, buffer = buffer)
 
             if clat > tmrca(arg)
                 cedge = Edge(mrca(arg) => mrca(arg))
