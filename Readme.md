@@ -1,4 +1,5 @@
 # Moonshine.jl [![Julia](https://img.shields.io/badge/-Julia-9558B2?style=for-the-badge&logo=julia&logoColor=white)](https://julialang.org/)
+[![Project Status: Active – The project has reached a usable state and is being actively developed.](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
 [![Documentation stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://moonshine.patrickfournier.ca/stable/)
 [![Documentation dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://moonshine.patrickfournier.ca/dev/)
 [![Aqua QA](https://raw.githubusercontent.com/JuliaTesting/Aqua.jl/master/badge.svg)](https://github.com/JuliaTesting/Aqua.jl)
