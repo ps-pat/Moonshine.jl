@@ -281,8 +281,6 @@ for f ∈ (:union, :intersect)
 
     @eval $f(ωs::AIs, x::Union{<:AIs, AI}; simplify = true) =
         $f!(copy(ωs), x, simplify = simplify)
-
-    @eval $f(x::Union{<:AIs, AI}, ωs::AIs; simplify = true) = $f(ωs, x, simplify = simplify)
 end
 
 #          +----------------------------------------------------------+
