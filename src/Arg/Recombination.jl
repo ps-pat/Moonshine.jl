@@ -11,8 +11,6 @@ function _compute_sequence!(arg, v, mask)
         η.data.chunks .&= sequence(arg, child).data.chunks .| .~mask
     end
 
-    ancestral_mask!(mask, arg, v)
-    η.data.chunks .&= mask
     η
 end
 

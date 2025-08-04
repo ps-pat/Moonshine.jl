@@ -453,12 +453,14 @@ function validate(arg::Arg; check_mutations = true)
     ## Internal vertices ##
     for v ∈ ivertices(arg)
         v = VertexType(v)
+        h = sequence(arg, v) & ancestral_mask(arg, v)
+
         ref = mapreduce(&, children(arg, v)) do _child
             sequence(arg, _child) | ~ancestral_mask(arg, Edge(v => _child))
         end
         ref &= ancestral_mask(arg, v)
 
-        if sequence(arg, v) != ref
+        if h != ref
             @info "Inconsistent sequence" v sequence(arg, v) ref
             flag = false
         end
