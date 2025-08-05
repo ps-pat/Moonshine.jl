@@ -13,7 +13,7 @@ using GeometryBasics: Point
 
 using DataStructures: DefaultDict
 
-import Base: IteratorSize, eltype, length
+import Base: IteratorSize, eltype, length, isequal
 
 using NetworkLayout
 
@@ -1257,4 +1257,18 @@ function ismutation_edge(genealogy, e, idx)
 
     mask = one(UInt64) << (idxinchunk(Sequence, idx) - 1)
     !iszero((chunk1 ⊻ chunk2) & mask)
+end
+
+function isequal(v1::VertexType, v2::VertexType, genealogy::AbstractGenealogy;
+                 buffer = default_buffer())
+    h1, h2 = sequence(genealogy, v1), sequence(genealogy, v2)
+    nchunks = length(h1.data.chunks)
+
+    @no_escape buffer begin
+        m1, m2 = @alloc(UInt64, nchunks), @alloc(UInt64, nchunks)
+        ancestral_mask!(m1, sam(genealogy), ancestral_intervals(genealogy, v1))
+        ancestral_mask!(m2, sam(genealogy), ancestral_intervals(genealogy, v2))
+
+        isequal(h1, h2, m1, m2)
+    end
 end

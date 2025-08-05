@@ -59,6 +59,17 @@ end
 
 (==)(h1::Sequence, h2::Sequence) = h1.data == h2.data
 
+# isequal(h1::Sequence, h2::Sequence) = isequal(h1.data, h2.data)
+
+function isequal(h1::Sequence, h2::Sequence,
+                 m1::AbstractVector{UInt64}, m2::AbstractVector{UInt64})
+    @inbounds for k ∈ eachindex(m1)
+        mask = m1[k] & m2[k]
+        iszero((h1.data.chunks[k] ⊻ h2.data.chunks[k]) & mask) || return false
+    end
+
+    true
+end
 
 isempty(seq::Sequence) = isempty(seq.data)
 
