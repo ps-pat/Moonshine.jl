@@ -226,7 +226,7 @@ ancestral_mask(arg::Arg, x::Union{VertexType, Edge{VertexType}}) =
 
 recidx(arg, v) = (v - 2(nleaves(arg) - 1)) ÷ 2
 
-function ancestral_mask(e::Edge, arg)
+function recombination_mask(arg, e::Edge)
     s, d = src(e), dst(e)
 
     inc = s > otherdad(arg, s, d)
