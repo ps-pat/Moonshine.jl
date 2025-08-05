@@ -14,50 +14,28 @@ function _compute_sequence!(arg, v, mask)
     η
 end
 
-function _update_ai!(vstack, arg, e, ωs, oldhash)
-    oldhash = hash(oldhash, (hash ∘ ancestral_intervals)(arg, e))
-
-    ## Update ancestral interval of e
-    copy!(ancestral_intervals(arg, e), ωs)
-    empty!(ωs)
-
-    ## Update vstack
-    newhash = hash((cheap_hash ∘ sequence)(arg, dst(e)),
-                   (hash ∘ ancestral_intervals)(arg ,e))
-    if (oldhash) != newhash
-        push!(vstack, src(e))
-    end
-
-    ancestral_intervals(arg, e)
-end
-
 function update_upstream!(arg, v, stack; buffer = default_buffer())
     @no_escape buffer begin
         push!(stack, v)
 
         mask = @alloc(UInt, div(nmarkers(arg), blocksize(Sequence), RoundUp))
-        ωsv = (AIsType(), AIsType())
 
         while !isempty(stack)
             v = pop!(stack)
 
-            ## Update ancestral intervals of parental edges ##
-            ancestral_intervals!(first(ωsv), arg, v)
-
             if isrecombination(arg, v)
                 sequences(arg)[v] = sequence(arg, child(arg, v))
-
-                copy!(last(ωsv), first(ωsv))
 
                 ## If `v` is a recombination vertex, the ancestral interval of
                 ## one of its parental edge is the intersection of the
                 ## appropriate interval associated with the breakpoint with ωv.
 
-                @inbounds for (k, dad) ∈ enumerate(dads(arg, v))
+                @inbounds for dad ∈ dads(arg, v)
                     e = Edge(dad => v)
-                    intersect!(ωsv[k], ancestral_mask(e, arg), buffer = buffer)
-                    copy!(ancestral_intervals(arg, e), ωsv[k])
-                    empty!(ωsv[k])
+
+                    ancestral_intervals!(ancestral_intervals(arg, e), arg, v)
+                    intersect!(ancestral_intervals(arg, e), recombination_mask(arg, e), buffer = buffer)
+
                     push!(stack, src(e))
                 end
             else
@@ -72,7 +50,17 @@ function update_upstream!(arg, v, stack; buffer = default_buffer())
                 ## parental edges is simply ωv.
                 e = Edge(dad(arg, v) => v)
 
-                _update_ai!(stack, arg, e, first(ωsv), oldhash)
+                oldhash = hash(oldhash, (hash ∘ ancestral_intervals)(arg, e))
+
+                ## Update ancestral interval of e
+                ancestral_intervals!(ancestral_intervals(arg, e), arg, v)
+
+                ## Update stack
+                newhash = hash((cheap_hash ∘ sequence)(arg, dst(e)),
+                               (hash ∘ ancestral_intervals)(arg ,e))
+                if (oldhash) != newhash
+                    push!(stack, src(e))
+                end
             end
         end
     end
@@ -247,7 +235,7 @@ function iterate(iter::EdgesIntervalRec, state = 1)
             end
 
             if isrecombination(arg, d)
-                breakpoint ∈ ancestral_mask(Edge(s => d), arg) || continue
+                breakpoint ∈ recombination_mask(arg, Edge(s => d)) || continue
             end
 
             push!(buffer, newe)

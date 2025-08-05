@@ -226,7 +226,14 @@ ancestral_mask(arg::Arg, x::Union{VertexType, Edge{VertexType}}) =
 
 recidx(arg, v) = (v - 2(nleaves(arg) - 1)) ÷ 2
 
-function ancestral_mask(e::Edge, arg)
+export recombination_mask
+"""
+    $(SIGNATURES)
+
+    Intervals of the partition of [0, ∞) induced by a recombination event for
+    which an edge is ancestral.
+"""
+function recombination_mask(arg, e::Edge)
     s, d = src(e), dst(e)
 
     inc = s > otherdad(arg, s, d)
