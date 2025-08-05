@@ -59,7 +59,6 @@ end
 
 (==)(h1::Sequence, h2::Sequence) = h1.data == h2.data
 
-isequal(h1::Sequence, h2::Sequence) = isequal(h1.data, h2.data)
 
 isempty(seq::Sequence) = isempty(seq.data)
 
