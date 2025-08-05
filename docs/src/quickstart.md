@@ -14,13 +14,13 @@ Depth = 2:2
 ```
 
 The aim of this page is to present the package's main functionalities and guide
-you to inferring your first ancestral recombination graph. Moonshine allows you
+you in inferring your first ancestral recombination graph. Moonshine allows you
 to do things like implement your own exotic model of ancestry and even crazy
-stuff like treating ARGs as linear operators; tutorial on those more advanced
+stuff like analyzing ARGs as linear operators; tutorials on those more advanced
 topics will follow soon.
 
-As of writing these lines, Julia's domination in the field of molecular biology
-hasn't been achieved (yet). We understand that many users might have little to
+As of writing these lines, Julia's dominance in the field of molecular biology
+has not yet been achieved. We understand that many users might have little to
 no experience with it. This guide is written with that in mind. The aim is for
 an average Python user to have a satisfactory graph inference experience after
 what we expect to be a short and somewhat enjoyable read. In particular, short
@@ -39,30 +39,28 @@ of noteworthy departures from
 !!! note "Julia👶: Type vs Class"
     **{tl;dr} Types are classes (in the OOP sense)**
 
-    In Julia, the concept of *type* is very roughly equivalent to that of
+    In Julia, the concept of *type* is roughly equivalent to that of
     *class* in Python, C++ or MATLAB. Functionally, the expression "class `T`"
-    can often be substituted to "type `T`". That being said, Julia's types
+    can often be substituted for "type `T`". However, Julia's types
     underlie a generic function-based dispatch system and are more similar to
     R's S3 or Common Lisp's CLOS classes.
 
     [Official documentation on types](https://docs.julialang.org/en/v1/manual/types/)
 
 Since we are *inferring* rather than *simulating* ARGs, we need some way to
-store data about haplotypes of interest somehow. In Moonshine, the
-[`Sample`](@ref) type provides this functionality. Before getting in the
-nitty-gritty, a few things to keep in mind about the data itself:
+store data about haplotypes of interest. In Moonshine, the [`Sample`](@ref)
+type provides this functionality. Before getting into the nitty-gritty, a few
+things to keep in mind about the data itself:
 * only biallelic markers are supported;
 * there is currently no support for ploidy other than 1;
-* data should be phased (which is basically a consequence of the last
-  restriction);
-* wild (ancestral) allele should be known and encoded as 0 for every marker.
-These limitations, especially the one regarding ploidy, might change in the
-future.
+* data should be phased (which is basically a consequence of the last restriction);
+* the wild (ancestral) allele should be known and encoded as 0 for every marker.
+These limitations, especially the one regarding ploidy, might change in the future.
 
 A neat feature of Moonshine is its ability to transparently call
 [`msprime`](https://tskit.dev/msprime/docs/stable/intro.html) to generate a
-high quality sample. This should work out of the box: if you installed Moonshine
-as described in the
+high quality sample. This should work out of the box: if you installed
+Moonshine as described in the
 [README](https://codeberg.org/ptrk/Moonshine.jl/src/branch/master/Readme.md),
 you should have received a pre-packaged version of `msprime` at the same time.
 You only need to:
@@ -70,35 +68,37 @@ You only need to:
 2. import an RNG;
 3. instantiate the RNG;
 4. construct a sample.
-This can be done interactively via
-[the Julia REPL](https://docs.julialang.org/en/v1/stdlib/REPL/):
+This can be done interactively via [the Julia
+REPL](https://docs.julialang.org/en/v1/stdlib/REPL/):
 ```@repl quickstart
 using Moonshine
 using Random: Xoshiro
 rng = Xoshiro(42)
 s = Sample(rng, 10, 1e-8, 1e-8, 1e4, 1e6)
 ```
-The first line imports module `Moonshine` and expose all its exported symbols.
-The second line imports and exposes symbol `Xoshiro` from module `Random`. The
-third line instantiate the type `Xoshiro`, constructing an RNG seeded at 42. As
-you might have guess, the instance is stored in a variable called `rng`. The
-last line creates our sample, calling [`msprime.sim_ancestry`](https://tskit.dev/msprime/docs/stable/api.html#msprime.sim_ancestry) under the hood. The meaning of each *positional
-argument* is detailed in [`Sample`](@ref)'s documentation.
+The first line imports the `Moonshine` module and exposes its exported symbols.
+The second line imports and exposes the `Xoshiro` symbol from the `Random`
+module. The third line instantiates the `Xoshiro` type, creating an RNG seeded
+at 42. As you might have guessed, the instance is stored in a variable called
+`rng`. The last line creates the sample, calling
+[`msprime.sim_ancestry`](https://tskit.dev/msprime/docs/stable/api.html#msprime.sim_ancestry)
+under the hood. The meaning of each positional argument is detailed in
+[`Sample`](@ref)'s documentation.
 
 !!! note "Julia👶: Standard Library"
-    `Random` is part of Julia's standard library, so you do not have to
-    explicitly install it (although you still have to import it/its symbols). A
-    complete list of standard library's modules is available in the
+    `Random` is part of Julia's standard library, so you do not have to explicitly
+    install it (although you still have to import it and its symbols). A
+    complete list of the standard library’s modules is available in the
     [Official documentation](https://docs.julialang.org/en/v1/), section
     "Standard Library".
 
 If you have a decent terminal with good Unicode support, you should get an
-output similar to the one above. Otherwise, do yourself a favour a go download a
+output similar to the one above. Otherwise, do yourself a favor and download a
 modern terminal emulator
 ([list here](https://github.com/cdleon/awesome-terminals)).
 
-If you're new to Julia, yes we can be fast *and* look good. Sequences are
-displayed as unidimensional heatmaps for convenience. You can get a slightly
+If you're new to Julia, yes, we can be fast *and* look good. Sequences are
+displayed as one-dimensional heatmaps for convenience. You can get a slightly
 more detailed output using the [`plot_sequence`](@ref) method:
 ```@repl quickstart
 plot_sequence(s[1])
@@ -106,13 +106,13 @@ plot_sequence(s[1])
 The result is a little bit distorted (at least on my browser) but should look
 alright on your terminal. Notice how we extracted the first (arrays
 start at 1 over here) sequence? If you have a look at [`Sample`](@ref)'s
-documentation, you will notice two things. First, type `Sample` is a *subtype*
+documentation, you will notice two things. First, the `Sample` type is a *subtype*
 of *abstract* type `AbstractVector{Sequence}` (the
 `<: AbstractVector{Sequence}` bit). This is similar to *inheritance*: any
-argument of type `AbstractVector{Sequence}` (or a *supertype* thereof for that
+argument of type `AbstractVector{Sequence}` (or a *supertype* thereof, for that
 matter) is satisfiable by a `Sample` in a method call. Second, `Sample`
-implement two *interfaces*: the array interface and the iteration interface.
-This mean we can basically treat them as arrays (like we did) and as iterables
+implements two *interfaces*: the array interface and the iteration interface.
+This means we can basically treat them as arrays (like we did) and as iterables
 (using a `for` loop or a higher order function such as
 [`Base.argmax`](@extref)).
 
@@ -146,7 +146,7 @@ build!(rng, tree)
     generators. `tree`, however, is mutated, hence the bang! Conversely, you can
     generally assume bang-less functions not to mutate anything.
 
-I added the first line for repeatability; this is going to come in handy latter.
+I added the first line for repeatability; it will come in handy later.
 We can ignore it for now. Before explaining the building process any further,
 we take a quick break to talk about visualization. First, a neat little
 histogram of `tree`'s latitudes can be obtained via the
@@ -154,10 +154,10 @@ histogram of `tree`'s latitudes can be obtained via the
 ```@repl quickstart
 plot_latitudes(tree)
 ```
-While it's not going to win any beauty contest soon, its quick, easy, and since
-its plain text, you can literally do a copy & paste and text it to someone
+While it's not going to win any beauty contest soon, it's quick, easy, and since
+it's plain text, you can literally do a copy & paste and text it to someone
 special. That's for the latitudes, but what about the topology? You can plot
-that to, provided you installed two packages:
+that too, provided you installed two packages:
 * [GraphMakie](https://github.com/MakieOrg/GraphMakie.jl);
 * [GLMakie](https://docs.makie.org/stable/explanations/backends/glmakie) (or
   any other [Makie backend](https://docs.makie.org/v0.22/explanations/backends/backends)).
@@ -182,7 +182,7 @@ from Kingman's seminal paper. Moonshine's default distribution for coalescent
 trees is related to three things:
 1. the mutation rate;
 2. the Hamming distance between sequences;
-3. a bias parameter that favours coalescence between similar sequences.
+3. a bias parameter that favors coalescence between similar sequences.
 Mutation events induce a distance between haplotypes, namely the number of
 events necessary to turn one into another. For sequences of binary markers, this
 is simply
@@ -192,7 +192,7 @@ process with user-defined mutation rate and sample coalescence events
 accordingly. That being said, we might want to tweak the sampling distribution
 in certain scenarios. One simple example is that of the *infinite site model* in
 which each site is allowed to mutate at most once. This can be implemented via
-a degenerate Poisson process so to speak, where the distance between two
+a degenerate Poisson process, so to speak, where the distance between two
 haplotypes is 0 if they are identical and infinite otherwise. In order to enable
 the implementation of such models, distances can be biased via a user-defined
 parameter. A bias value of ``b`` will add ``bd`` to a distance ``d``.
@@ -217,13 +217,13 @@ save("assets/plot_genealogy_tree2.png", plot_genealogy(tree0), size = (800, 600)
 julia> plot_genealogy(tree0)
 ```
 ![](assets/plot_genealogy_tree2.png)
-Notice the difference from the previous plot, even tough we used the same sample
-and RNG? Alright, one last tree example. One common demand of spatial ARG
-inference algorithm is building a tree consistent with the leftmost marker. To
-accomplish that, we need to ditch Hamming distance since its consider *all*
-markers. Moonshine ships with the [`LeftM`](@ref) "distance" which is nothing
+Notice the difference from the previous plot, even though we used the same sample
+and RNG. Alright, one last tree example. A common requirement for spatial ARG
+inference algorithms is building a tree consistent with the leftmost marker. To
+accomplish that, we need to abandon Hamming distance, since it considers *all*
+markers. Moonshine ships with the [`LeftM`](@ref) "distance", which is nothing
 more than the discrete metric on the leftmost marker. First, let's have a look
-at the situation on `tree`. We can colour vertices according to the status of
+at the situation on `tree`. We can color vertices according to the status of
 their leftmost marker as follows:
 ```@setup quickstart
 let fig = plot_genealogy(tree, Ω(positions(tree)[1:2]...))
@@ -239,7 +239,7 @@ julia> plot_genealogy(tree, Ω(positions(tree)[1:2]...))
     If you've never encountered it before in another language, the ellipsis
     ("...") is an operator that performs an operation known as "splatting". It
     allows using elements of a collection as positional arguments in a
-    function call rather than passing the collection itself as a single
+    function call, rather than passing the collection itself as a single
     argument.
 
     For more details, see [`...`](@extref) in the official documentation.
@@ -249,9 +249,9 @@ In the method call above, [`Ω`](@ref) stands for a right semi-open interval:
 might have guessed, `positions(tree)[1:2]` returns the positions of the first
 two markers of `tree`. These are then splatted into `Ω` so that
 `Ω(positions(tree)[1:2]...)` represents ``[p_1, p_2)`` where ``p_k`` is the
-position of marker ``k``. Passing this interval as second argument to
+position of marker ``k``. Passing this interval as the second argument to
 `plot_genealogy` tells it to only consider edges, vertices and markers that are
-ancestral for it. In particular, vertices are coloured according to the status
+ancestral to it. In particular, vertices are colored according to the status
 of the markers included in the interval (which is only the first marker in our
 example): a vertex is red if all markers are derived, blue otherwise. This means
 there are three *mutation edges* with respect to the first marker in `tree`:
@@ -276,7 +276,7 @@ Before moving on to ARGs, I have to tell you about another handy constructor
 for [`Tree`](@ref). Since multiple single-use samples are pretty common, it can
 be somewhat cumbersome to explicitly construct them every time we want to build
 a tree. To make our lives a little easier, there is a constructor that
-transparently calls [`Sample`](@ref)'s random constructor and construct a new
+transparently calls [`Sample`](@ref)'s random constructor and constructs a new
 tree from the result. Long story short, we could have built `tree` more
 succinctly:
 ```@repl quickstart
@@ -287,14 +287,14 @@ build!(rng, tree_lazy)
 
 ## Ancestral Recombination Graphs: the [`Arg`](@ref) Type
 Instances of [`Tree`](@ref) are built on top of instances of [`Sample`](@ref).
-The idea behind this design is conceptual: coalescent trees contain all the
+The design behind this is conceptual: coalescent trees contain all the
 information present in the associated sample and more, namely a topology and
 coalescence times. Of course, as far as we are concerned, this is merely a
-convenient fiction as we have no first-hand knowledge of the tree: we literally
+convenient fiction since we have no direct knowledge of the tree: we literally
 inferred it from the sample! But don't think about that too much. After all, we
 are mathematicians (of sorts), so let's assume our trees are actual ancestries.
 We can further improve on them by sampling recombination events. Hence, it
-should come at no surprise that instances of [`Arg`](@ref), Moonshine's
+should come as no surprise that instances of [`Arg`](@ref), Moonshine's
 tailor-made type to represent ARGs, are built on top of instances of
 [`Tree`](@ref). You should be equally unsurprised when you learn that they can
 be constructed in much the same way as [`Tree`](@ref) were
@@ -312,19 +312,19 @@ plot its vertices' latitudes:
 ```@repl quickstart
 plot_latitudes(arg_tree)
 ```
-I won't `plot_genealogy` it though since as you might have noticed, this is quite a
-demanding process even for a 19-vertices tree.
+I won't `plot_genealogy` it, though, since, as you might have noticed, this is
+quite a demanding process even for a tree with 19 vertices.
 
-Moonshine ARG building algorithm is of the spatial (as opposed to temporal)
-kind: it iteratively adds recombination and recoalescence events to a tree
-until every marker in the initial sample mutates at most once in its history.
-The resulting graph is said to be *consistent* with the sample. As you've just
-witness, unlike similar algorithm, the initial tree is not required
-to be consistent with the leftmost marker. Moonshine really doesn't care what
-you throw at it as long as it is a valid ancestral recombination graph (or
-coalescent tree, of which they are special cases). This opens the door to things
-like MCMC sampling, which might get implemented in the future. For now, let's
-illustrate Moonshine's functionalities some more with something more
+Moonshine's ARG building algorithm is of the spatial (as opposed to temporal)
+kind: it iteratively adds recombination and recoalescence events to a tree until
+every marker in the initial sample mutates at most once in its history. The
+resulting graph is said to be *consistent* with the sample. As you have just
+witnessed, unlike similar algorithms, the initial tree is not required to be
+consistent with the leftmost marker. Moonshine really doesn't care what you
+throw at it, as long as it is a valid ancestral recombination graph (or
+coalescent tree, of which they are special cases). This opens the door to
+things like MCMC sampling, which might be implemented in the future. For now,
+let’s illustrate Moonshine’s functionalities further with something more
 substantial:
 ```@repl quickstart
 rng = Xoshiro(42)
@@ -338,24 +338,24 @@ plot_latitudes(arg)
 ```
 
 !!! note "Julia👶: Macros"
-    Julia has a very rich macro system, similar to Common Lisp's one. Macros can
-    be told apart from functions by the '@' prefix in their name. If you are
-    not familiar with Lisp, just keep in mind that their arguments do not need
+    Julia has a very rich macro system, similar to Common Lisp's. Macros can be
+    told appart from from functions by the '@' prefix in their names. If you
+    are not familiar with Lisp, just keep in mind that their arguments do not need
     to be valid Julia expressions.
 
     [Official documentation on macros](https://docs.julialang.org/en/v1/manual/metaprogramming/#man-macros)
 
 !!! note "Julia👶: begin...end"
-    Denote a block of code. Used above since the method of the
+    Denote a block of code. It was used above because the method of the
     [`Base.@time`](@extref) macro we are interested in only accepts a single
     argument.
 
     See [`begin`](@extref) in the official documentation.
 
 A couple of things to unpack here. First, notice the usage of the `@time` macro.
-In addition to total execution time, it also informs us about the number
-of memory allocation performed, the total memory usage (which is greater than
-the *peak* memory usage) and the percentage of execution time dedicated to
+In addition to the total execution time, it also informs us about the number
+of memory allocations performed, the total memory usage (which is greater than
+the peak memory usage), and the percentage of execution time dedicated to
 garbage collection. The next couple of lines are similar to the ones
 displayed for trees and tell us about the number of haplotypes ("leaves") and
 markers associated with `arg`. We can easily plot the distribution of
@@ -368,33 +368,33 @@ Another interesting and easily plottable feature are tMRCAs:
 ```@repl quickstart
 plot_tmrcas(arg, npoints = 300, noprogress = true)
 ```
-As you might have noticed, computing tMRCAs is *slow* process. The `npoints`
-arguments allows trading precision for speed, as it limits computation to a grid
-of approximately 200 points. By default, the tMRCA is evaluated at *every*
-breakpoint, which is *very* slow. You might also have noticed that computation
-is done concurrently: this helps speed up things a little. Finally, a progress
+As you may have noticed, computing tMRCAs is a *slow* process. The `npoints`
+argument allows trading precision for speed, as it limits computation to a grid
+of approximately 200 points. By default, the tMRCA is evaluated at every
+breakpoint, which is very slow. You may also have noticed that computation is
+done concurrently; this helps speed things up a little. Finally, a progress
 meter should be displayed. I disabled it via the `noprogress = true` parameter
 because my output is static, but there is probably no reason for you to do so.
 
 !!! note "Julia👶: Multi-Threading"
     Julia is built with multi-threading in mind. For instance, you can get the
     number of active threads via [`Base.Threads.nthreads`](@extref). To set
-    the number of thread, just invoke julia with the `-t N` switch where `N` is
+    the number of threads, just invoke Julia with the `-t N` switch, where `N` is
     the desired number.
 
 ---
 
-The algorithm use to build `arg` is exact in the sense that every new event is
-sampled conditional on the whole graph, or more precisely the subgraph that is
+The algorithm used to build `arg` is exact in the sense that each new event is
+sampled conditional on the entire graph, or more precisely the subgraph that is
 already built at the time of sampling. Of course, since we are also working
-conditional on a set of haplotypes, we have to put some additional restrictions
-on distributions compared sampler such as msprime. Moonshine is exact in the
-sense that there is no SMC-type trickery going on. That being said, we
-emphatically have nothing against Markovian approximation of the recombination.
-In fact, Moonshine is able to perform aforementioned trickery.
-[`build!`](@ref) accepts a keyword argument named `winwidth` which, as its name
-suggests, controls the window of positions considered when sampling an event. It
-is infinite by default, leading to "exact" sampling. Setting it to 0 leads to
+conditional on a set of haplotypes, we have to impose additional restrictions
+on the distributions compared to samplers such as msprime. Moonshine is exact
+in the sense that there is no SMC-type trickery involved. That being said, we
+emphatically have nothing against Markovian approximations of recombination. In
+fact, Moonshine is able to perform aformentioned trickery. [`build!`](@ref)
+accepts a keyword argument named `winwidth` which, as its name suggests,
+controls the window of positions considered when sampling an event. It is
+infinite by default, leading to "exact" sampling. Setting it to 0 leads to
 "approximate" SMC-type sampling with potentially significant speed gains. Let's
 do a quick comparison.
 ```@repl quickstart
@@ -411,9 +411,10 @@ arg_smc = Arg(tree_smc)
 @time build!(rng, arg_exact, noprogress = true)
 @time build!(rng, arg_smc, winwidth = 0, noprogress = true)
 ```
-As you can see, significant gains. Memory usage is a little bit higher for
-approximate sampling due to higher recombination event count ultimately leading
-to, well, more stuff to store in memory. We can actually verify that:
+As you can see, there are significant gains. Memory usage is a little higher
+for approximate sampling due to the increased number of recombination events,
+ultimately leading to, well, more stuff to store in memory. We can actually verify
+that:
 ```@repl quickstart
 nrecombinations(arg_exact)
 nrecombinations(arg_smc)
@@ -423,15 +424,15 @@ of approximation.
 
 ---
 
-[`Tree`](@ref), [`Arg`](@ref) and any properly designed
-subtype of [`AbstractGenealogy`](@ref) also implement the
-[`Graphs.AbstractGraph`](@extref) interface. This means complete compatibility
-with [Graphs.jl](https://juliagraphs.org/Graphs.jl/stable/) and, by extension,
-[julia's whole graph-theoretical ecosystem](https://juliagraphs.org/). As an
-example, let's pretend we are really interested in computing maximum flow
-between the first two vertices of `arg`. No need to full hacker mode: this
-can be done in a couple of lines by invoking
-[`GraphsFlows.maximum_flow`](@extref) from
+[`Tree`](@ref), [`Arg`](@ref) and any properly designed subtype of
+[`AbstractGenealogy`](@ref) also implement the
+[`Graphs.AbstractGraph`](@extref) interface. This ensures complete
+compatibility with [Graphs.jl](https://juliagraphs.org/Graphs.jl/stable/) and,
+by extension, [Julia's whole graph-theoretical
+ecosystem](https://juliagraphs.org/). As an example, let's pretend we are very
+interested in computing maximum flow between the first two vertices of `arg`.
+No need to resort to complex code: this can be done in a couple of lines by
+invoking [`GraphsFlows.maximum_flow`](@extref) from
 [GraphFlows.jl](https://juliagraphs.org/GraphsFlows.jl/dev/):
 ```@repl quickstart
 using Graphs, GraphsFlows, SparseArrays
@@ -450,11 +451,9 @@ droptol!(flowmat, (eps ∘ eltype)(flowmat)) # optional cleanup
     `∘` is obtained in the REPL via LaTeX-type syntax and tab completion: just
     type `\circ<TAB>`. Learn all about it in
     [the official documentation](https://docs.julialang.org/en/v1/manual/functions/#Function-composition-and-piping)
-In addition, Moonshine implement a variety of specialized
-coalescent theory-related methods. Those are described in the
-[AbstractGenealogy](@ref) section. Methods specific to coalescent trees and
-ancestral recombination graphs are also available and documented in
-[Tree & ARG](@ref). The API is not fully documented yet, but should be improved
-shortly.
-
+In addition, Moonshine implements a variety of specialized, coalescent
+theory-related methods. These are described in the [AbstractGenealogy](@ref)
+section. Methods specific to coalescent trees and ancestral recombination
+graphs are also available and documented in [Tree & ARG](@ref). The API is not
+fully documented yet, but will be improved shortly.
 That's about it for now. Go on and have fun coalescing!
