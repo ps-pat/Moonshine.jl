@@ -32,7 +32,3 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }}
-      - name: Generate the sitemap
-        uses: cicirello/generate-sitemap@v1
-        with:
-          base-url-path: https://moonshine.patrickfournier.ca/
