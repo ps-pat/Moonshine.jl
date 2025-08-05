@@ -298,7 +298,7 @@ Plot a genealogy.
 Only edges and vertices ancestral for `ω` are plotted.
 
 Implemented as an extension to `Moonshine.jl`. To use this method, you have to
-import [`GraphMakie`](@ref) (and a
+import [GraphMakie](https://github.com/MakieOrg/GraphMakie.jl) (and a
 [Makie](https://github.com/MakieOrg/Makie.jl) backend).
 
 See also [`plot_layout`](@ref).

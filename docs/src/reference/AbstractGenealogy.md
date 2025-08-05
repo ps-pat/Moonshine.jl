@@ -72,7 +72,6 @@ isivertex
 branchlength
 edges_interval
 edgesmap
-nlive
 nlive!
 ismutation_edge
 ```

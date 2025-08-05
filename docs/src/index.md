@@ -8,7 +8,7 @@ CurrentModule = Moonshine
     a work in progress.
 
     Expect nothing. Live frugally on surprise. Report any issue
-    [to the project's Codeberg repository](https://codeberg.org/ptrk/Moonshine.jl/issues).
+    [to the project's Github repository](https://github.com/ps-pat/Moonshine.jl/issues).
 
 Moonshine.jl is a Julia framework for
 [coalescent](https://en.wikipedia.org/wiki/Coalescent_theory) modelling oriented
