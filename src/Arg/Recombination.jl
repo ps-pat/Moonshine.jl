@@ -41,17 +41,12 @@ function update_upstream!(arg, v, stack; buffer = default_buffer())
         while !isempty(stack)
             v = pop!(stack)
 
-            ## Update sequence of `v` ##
-            h = sequence(arg, v)
-            oldhash = cheap_hash(h)
-            h.data.chunks .⊻= .~h.data.chunks
-            _compute_sequence!(arg, v, mask)
-            iszero(dad(arg, v)) && continue
-
             ## Update ancestral intervals of parental edges ##
             ancestral_intervals!(first(ωsv), arg, v)
 
             if isrecombination(arg, v)
+                sequences(arg)[v] = sequence(arg, child(arg, v))
+
                 copy!(last(ωsv), first(ωsv))
 
                 ## If `v` is a recombination vertex, the ancestral interval of
@@ -61,9 +56,18 @@ function update_upstream!(arg, v, stack; buffer = default_buffer())
                 @inbounds for (k, dad) ∈ enumerate(dads(arg, v))
                     e = Edge(dad => v)
                     intersect!(ωsv[k], ancestral_mask(e, arg), buffer = buffer)
-                    _update_ai!(stack, arg, e, ωsv[k], oldhash)
+                    copy!(ancestral_intervals(arg, e), ωsv[k])
+                    empty!(ωsv[k])
+                    push!(stack, src(e))
                 end
             else
+                ## Update sequence of `v` ##
+                h = sequence(arg, v)
+                oldhash = cheap_hash(h)
+                h.data.chunks .⊻= .~h.data.chunks
+                _compute_sequence!(arg, v, mask)
+                iszero(dad(arg, v)) && continue
+
                 ## If `v` is a coalescence vertex the ancestral interval of its
                 ## parental edges is simply ωv.
                 e = Edge(dad(arg, v) => v)
@@ -110,7 +114,7 @@ function recombine!(arg, redge, cedge, breakpoint, rlat, clat, stack;
     rvertex, cvertex = VertexType.(nv(arg) .+ (1, 2))
     add_vertices!(
         arg,
-        (Sequence(trues(nmarkers(arg))), Sequence(trues(nmarkers(arg)))),
+        (sequence(arg, dst(redge)), Sequence(trues(nmarkers(arg)))),
         (rlat, clat))
 
     ## Replace recombination edge ##
@@ -139,10 +143,9 @@ function recombine!(arg, redge, cedge, breakpoint, rlat, clat, stack;
     add_edge!(arg, Edge(cvertex, rvertex), ωr_right)
     add_edge!(arg, Edge(cvertex, dst(cedge)), ωc)
 
-    ## Compute sequence of new vertices ##
+    ## Compute sequence of recoalescence vertex ##
     @no_escape buffer begin
         mask = @alloc(UInt, div(nmarkers(arg), blocksize(Sequence), RoundUp))
-        _compute_sequence!(arg, rvertex, mask)
         _compute_sequence!(arg, cvertex, mask)
     end
 
@@ -517,7 +520,7 @@ function sample_recombination_constrained!(rng, arg, nextidx, winwidth,
                 t -= first(rints_width)
                 recroot_idx = t <= rints_width[2] ? 2 : 3
             end
-end
+        end
 
         add_logdensity!(arg, log(rints_width[recroot_idx]) - (log ∘ sum)(rints_width))
         wildrec = recroot_idx == 3
