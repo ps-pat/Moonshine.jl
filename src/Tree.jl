@@ -241,7 +241,7 @@ function _sample_toilet(rng, xs, potential, threshold_prop)
 end
 
 function build!(rng, tree::Tree;
-                Dist::Distance = Hamming{Int}(), bias0 = 0, threshold_prop = 1)
+                Dist::Distance = Hamming{Int}(), bias0 = 1, threshold_prop = 1)
     n = nleaves(tree)
     nv(tree) ≠ 2n - 1 || !iszero(ne(tree)) && error("Invalid tree")
     μ = mut_rate(tree, false)
