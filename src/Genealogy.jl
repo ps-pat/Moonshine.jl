@@ -346,6 +346,11 @@ $(METHODLIST)
 """
 function maxchildren end
 
+for suffix ∈ ("dads", "children")
+    f = Symbol("max", suffix)
+    @eval $f(_::T) where T = $f(T)
+end
+
 #############
 # Utilities #
 #############
@@ -859,34 +864,52 @@ let funtrans = Dict(:dads => :ancestors, :children => :descendants)
     end
 end
 
-export siblings
+export siblings!
 """
-    $(FUNCTIONNAME)(genealogy, v[, ωs])
-    $(FUNCTIONNAME)(genealogy, v[, ωs], buf_ptr)
+    $(FUNCTIONNAME)(x, genealogy, v[, u], args)
 
 Siblings of a vertex, that is the other vertices in the genealogy that share at
 least one parent, optionally restricted to a marginal genealogy.
 
-A pointer to some kind of buffer (an array for instance) can be provided to
-avoid allocation. In that case, an `UnsafeArray` wrapped around it will be
-returned.
-
 If you know in advance that `v` has a single sibling, you can use
 [`sibling`](@ref) instead.
+
+As a convenience, `siblings!` returns an
+[`UnsafeArray`](https://github.com/JuliaArrays/UnsafeArrays.jl) wrapping pointer
+`x`.
 
 See also [`child`](@ref), [`dad`](@ref), [`children`](@ref), [`dads`](@ref),
 [`descendants`](@ref) and [`ancestors`](@ref).
 
 # Methods
 $(METHODLIST)
-"""
-function siblings end
 
-function siblings!(x::Ptr, genealogy, v, args...)
+# Arguments
+* `x`: pointer to preallocated memory
+* `genealogy`: a genealogy
+* `v`: vertex for which siblings should be computed
+* `u`: parent with respect to which siblings should be computed
+* `args`: arguments for `dads`/`children` calls
+"""
+function siblings! end
+
+function siblings!(x::Ptr, genealogy, v, u, ancargs::Tuple)
     len = 0
 
-    for _dad ∈ dads(genealogy, v, args...)
-        for _child ∈ children(genealogy, _dad, args...)
+    for _child ∈ children(genealogy, u, ancargs...)
+        _child == v && continue
+        len += 1
+        unsafe_store!(x, _child, len)
+    end
+
+    UnsafeArray{VertexType, 1}(x, (len,))
+end
+
+function siblings!(x::Ptr, genealogy, v, ancargs::Tuple)
+    len = 0
+
+    for _dad ∈ dads(genealogy, v, ancargs...)
+        for _child ∈ children(genealogy, _dad, ancargs...)
             _child == v && continue
             len += 1
             unsafe_store!(x, _child, len)
@@ -896,42 +919,77 @@ function siblings!(x::Ptr, genealogy, v, args...)
     UnsafeArray{VertexType, 1}(x, (len,))
 end
 
-function siblings!(x::AbstractArray, genealogy, v, args...)
-    len = 0
+export siblings
+"""
+    $(FUNCTIONNAME)(genealogy, v[, u], args)
 
-    for _dad ∈ dads(genealogy, v, args...)
-        for _child ∈ children(genealogy, _dad, args...)
-            _child == v && continue
-            len += 1
-            x[len] = _child
-        end
-    end
+This is the allocating version of [`siblings!`](@ref).
 
-    resize!(x, len)
+Note that [`siblings!`](@ref) is way more efficient than its allocating
+counterpart. It should be used in any performance sensitive code. `siblings`
+is mainly intended for interactive use and quick-and-dirty testing.
+
+# Methods
+$(METHODLIST)
+
+# Arguments
+* `genealogy`: a genealogy
+* `v`: vertex for which siblings should be computed
+* `u`: parent with respect to which siblings should be computed
+* `args`: arguments for `dads`/`children` calls
+"""
+function siblings end
+
+function siblings(genealogy, v, u::VertexType, ancargs::Tuple)
+    ret = Vector{VertexType}(undef, maxdads(genealogy) * (maxchildren(genealogy) - 1))
+    len = length(siblings!(pointer(ret), genealogy, v, u, ancargs))
+    resize!(ret, len)
 end
 
-function siblings(genealogy, v, args...)
-    x = Vector{VertexType}(undef, 2)
-    siblings!(x, genealogy, v, args...)
+function siblings(genealogy, v, ancargs::Tuple)
+    ret = Vector{VertexType}(undef, maxdads(genealogy) * (maxchildren(genealogy) - 1))
+    len = length(siblings!(pointer(ret), genealogy, v, ancargs))
+    resize!(ret, len)
 end
 
 export sibling
 """
-    $(SIGNATURES)
+    $(FUNCTIONNAME)(genealogy, v[, u], args)
 
 Sibling of a vertex, that is the other vertex in the genealogy that have the
 same parent. It only makes sense to use this method if you know `v` has a
-single sibling. Otherwise use [`siblings`](@ref).
+single sibling. Otherwise use [`siblings!`](@ref).
 
 See also [`child`](@ref), [`dad`](@ref), [`children`](@ref), [`dads`](@ref),
 [`descendants`](@ref) and [`ancestors`](@ref).
+
+# Methods
+$(METHODLIST)
+
+# Arguments
+* `genealogy`: a genealogy
+* `v`: vertex for which siblings should be computed
+* `u`: parent with respect to which siblings should be computed
+* `args`: arguments for `dads`/`children` calls
 """
-function sibling(genealogy, v)
-    for _child ∈ children(genealogy, dad(genealogy, v))
+function sibling end
+
+function sibling(genealogy, v, args)
+    for _dad ∈ dad(genealogy, v, args...)
+        _sibling = sibling(genealogy, v, _dad, args)
+        _sibling == v && continue
+        iszero(_sibling) && continue
+        return _sibling
+    end
+    zero(v)
+end
+
+function sibling(genealogy, v, u, args)
+    for _child ∈ children(genealogy, u, args...)
         _child == v && continue
         return _child
     end
-    zero(VertexType)
+    zero(v)
 end
 
 export dad

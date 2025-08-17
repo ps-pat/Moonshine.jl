@@ -94,8 +94,9 @@ child
 children
 ancestors
 descendants
-sibling
+siblings!
 siblings
+sibling
 ancestral_mask
 ancestral_mask!
 tmrca
