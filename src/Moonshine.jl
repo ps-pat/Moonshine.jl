@@ -4,8 +4,6 @@ using StatsFuns: logtwo, log2π
 
 using IntervalSets
 
-using LoopVectorization
-
 using DoubleFloats: Double64
 
 using DataStructures: Stack, Queue

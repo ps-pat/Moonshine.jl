@@ -306,13 +306,17 @@ struct Hamming{T} <: Distance{T} end
 Hamming() = Hamming{Int64}()
 
 function distance(::Hamming{T}, h1::Sequence, h2::Sequence) where T
-    ## Works since unused bits of a BitArray are always set to 0.
     d = zero(T)
-    nblocks = (length(h1) - 1) ÷ blocksize(h1) + 1
+    nblocks = length(h1.data.chunks)
 
-    @tturbo for k ∈ 1:nblocks
-        d += convert(T, count_ones(h1.data.chunks[k] ⊻ h2.data.chunks[k]))
+    @inbounds @simd for k ∈ 1:(nblocks-1)
+        d += count_ones(h1.data.chunks[k] ⊻ h2.data.chunks[k])
     end
+
+    lastchunk = last(h1.data.chunks) ⊻ last(h2.data.chunks)
+    n_not0 = blocksize(h1) * nblocks - length(h1)
+    lastchunk &= 0xffffffffffffffff >> n_not0
+    d += count_ones(lastchunk)
 
     d
 end
