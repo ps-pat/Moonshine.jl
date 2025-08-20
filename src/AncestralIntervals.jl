@@ -202,7 +202,7 @@ function union!(ais::AIs, x)
     ais[ai_left_idx] = (eltype)(ais)(l, r)
     deleteat!(ais, (ai_left_idx+1):ai_right_idx)
 
-    ais
+    simplify!(ais)
 end
 
 function union!(ωs1::AIs, ωs2::AIs)
