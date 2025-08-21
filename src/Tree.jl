@@ -192,43 +192,43 @@ function _sample_toilet(rng, xs, potential, threshold_prop)
     logΣπ = zero(logπ)
     idx = zero(Int)
 
-    k = (zero ∘ eltype)(xs.iter)
-    it = iterate(xs)
-    while !isnothing(it)
-        x, k = it
-
+    k = firstindex(xs)
+    while k <= lastindex(xs)
+        x = xs[k]
         logπ = potential(x)
-        isinf(logπ) && @goto iterate_loop1
 
-        logΣπ = logπ
-        z = logπ - log(randexp(rng))
-        idx = k - 1
+        if isfinite(logπ)
+            logΣπ = logπ
+            z = logπ - log(randexp(rng))
+            idx = k
 
-        @label iterate_loop1
-        it = iterate(xs, k)
-        break
+            k += 1
+            break
+        end
+
+        k += 1
     end
 
-    while !isnothing(it)
-        x, k = it
-
-        logπ_new = potential(x)
-        isinf(logπ_new) && @goto iterate_loop2
-
-        πmin, πmax = minmax(logπ_new, logΣπ)
-        logΣπ = πmax + (log1p ∘ exp)(πmin - πmax)
-
-        newz = logπ_new - log(randexp(rng))
-        newz <= z && @goto iterate_loop2
-
-        logπ = logπ_new
-        z = newz
-        idx = k - 1
-
+    while k <= lastindex(xs)
         k <= threshold || break
 
-        @label iterate_loop2
-        it = iterate(xs, k)
+        x = xs[k]
+        logπ_new = potential(x)
+
+        if isfinite(logπ_new)
+            πmin, πmax = minmax(logπ_new, logΣπ)
+            logΣπ = πmax + (log1p ∘ exp)(πmin - πmax)
+
+            newz = logπ_new - log(randexp(rng))
+            if newz >= z
+                logπ = logπ_new
+                z = newz
+                idx = k
+            end
+
+        end
+
+        k += 1
     end
 
     if iszero(idx) # All potentials were infinite
@@ -245,7 +245,6 @@ function build!(rng, tree::Tree;
     n = nleaves(tree)
     nv(tree) ≠ 2n - 1 || !iszero(ne(tree)) && error("Invalid tree")
     μ = mut_rate(tree, false)
-    η0 = zeros(Sequence, nmarkers(tree))
 
     live = collect(leaves(tree))
     for nlive ∈ range(length(live), 2, step = -1)
@@ -270,7 +269,7 @@ function build!(rng, tree::Tree;
             end
 
         v2_idx, logprob = _sample_toilet(rng,
-                                         sequences(tree, live[1:nlive]),
+                                         sequences(tree, view(live, 1:nlive)),
                                          potential2,
                                          threshold_prop)
         v2 = live[v2_idx]

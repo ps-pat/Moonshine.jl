@@ -144,7 +144,7 @@ $(METHODLIST)
 """
 function sequences end
 
-sequences(genealogy, vs) = Iterators.map(v -> sequence(genealogy, v), vs)
+sequences(genealogy, vs) = view(sequences(genealogy), vs)
 
 sequences(genealogy, e::Edge) = (sequence(genealogy, src(e)),
                                      sequence(genealogy, dst(e)))
