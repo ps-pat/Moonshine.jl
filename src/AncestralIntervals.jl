@@ -189,10 +189,10 @@ function union!(ais::AIs, x)
         idx = findfirst(ai -> leftendpoint(ai) > leftendpoint(x), ais)
         if isnothing(idx)
             push!(ais, x)
-            return ais
+            return simplify!(ais)
         end
         insert!(ais.data, idx, x)
-        return ais
+        return simplify!(ais)
     end
 
     ## If `x` is connected to at least one interval, compute union, insert and
