@@ -1102,60 +1102,74 @@ $(METHODLIST)
 
 --*Internal*--
 """
-struct EdgesInterval{T, I, E}
+struct EdgesInterval{X, T, I, E, P}
     "Genealogy to iterate over"
     genealogy::T
     "Interval to consider"
     ωs::I
     "Edges buffer"
-    buffer::CheapStack{E}
+    stack::CheapStack{E}
     "True is associated recombination vertex has been visited previously"
     visited::UnsafeArray{Bool, 1}
+    "Parameters for the block predicate"
+    bp_pars::P
     "Only consider edges located above this latitude"
     min_latitude::Float64
-    "Edges for which one of the predicates is true are blocked"
-    block_predicates::Vector{FunctionWrapper{Bool, Tuple{E}}}
 end
 
-function EdgesInterval(genealogy::T, ωs::I, stack::CheapStack{E}, visited,
-                       root = mrca(genealogy), min_latitude = zero(Float64),
-                       block_predicates = []) where {T, I, E}
+function EdgesInterval{X}(genealogy::T, ωs::I, stack::CheapStack{E}, visited,
+                          bp_pars::P = (),
+                          root = mrca(genealogy),
+                          min_latitude = zero(Float64)) where {X, T, I, E, P}
     fill!(visited, false)
+
+    ret = EdgesInterval{X, T, I, E, P}(genealogy, ωs, stack, visited, bp_pars,
+                                       convert(Float64, min_latitude))
 
     for d ∈ children(genealogy, root, ωs)
         e = Edge(root => d)
-        any(p -> p(e), block_predicates) || push!(stack, e)
+        block_predicate(ret, e) && push!(stack, e)
     end
 
-    EdgesInterval{T, I, E}(genealogy, ωs, stack, visited,
-                           convert(Float64, min_latitude), block_predicates)
+    ret
 end
 
+EdgesInterval(genealogy, ωs, stack::CheapStack, visited, bp_pars = (),
+              root = mrca(genealogy), min_latitude = zero(Float64)) =
+    EdgesInterval{Val(:noblock)}(genealogy, ωs, stack, visited, bp_pars,
+                                 root, min_latitude)
+
+EdgesInterval{X}(genealogy::T, ωs::I, store::AbstractArray{E}, visited,
+                 bp_pars::P = (),
+                 root = mrca(genealogy),
+                 min_latitude = zero(Float64)) where {X, T, I, E, P} =
+    EdgesInterval{X}(genealogy, ωs, CheapStack(store), visited, bp_pars,
+                     root, min_latitude)
+
 EdgesInterval(genealogy::T, ωs::I, store::AbstractArray{E}, visited,
-              root = mrca(genealogy), min_latitude = zero(Float64),
-              block_predicates = []) where {T, I, E} =
-    EdgesInterval(genealogy, ωs, CheapStack(store), visited,
-                  root, min_latitude, block_predicates)
+              bp_pars::P = (),
+              root = mrca(genealogy),
+              min_latitude = zero(Float64)) where {T, I, E, P} =
+    EdgesInterval{Val(:noblock)}(genealogy, ωs, store, visited, bp_pars,
+                                 root, min_latitude)
 
 IteratorSize(::T) where T<:EdgesInterval = Base.SizeUnknown()
 IteratorSize(::Type{<:EdgesInterval}) = Base.SizeUnknown()
 
 eltype(::EdgesInterval) = Edge{VertexType}
 
-_block(iter::EdgesInterval, e) = any(p -> p(e), iter.block_predicates)
+block_predicate(_...) = true
 
 function iterate(iter::EdgesInterval, state = 1)
-    buffer = iter.buffer
-    isempty(buffer) && return nothing
+    stack = iter.stack
+    isempty(stack) && return nothing
 
     genealogy = iter.genealogy
     ωs = iter.ωs
     visited = iter.visited
     min_latitude = iter.min_latitude
-    n = nleaves(genealogy)
-    block = e -> _block(iter, e)
 
-    e = pop!(buffer)
+    e = pop!(stack)
     s = dst(e)
     latok = latitude(genealogy, s) >= min_latitude
 
@@ -1166,11 +1180,11 @@ function iterate(iter::EdgesInterval, state = 1)
 
         ## Recombination vertex, no need to check ancestrality of downstream
         ## edge
-        latok && push!(buffer, Edge(s => child(genealogy, s)))
+        latok && push!(stack, Edge(s => child(genealogy, s)))
     elseif latok
         for d ∈ children(genealogy, s, ωs)
             newe = Edge(s => d)
-            block(newe) || push!(buffer, newe)
+            block_predicate(iter, newe) && push!(stack, newe)
         end
     end
 
@@ -1192,10 +1206,9 @@ $(METHODLIST)
 """
 function edges_interval end
 
-edges_interval(genealogy, ωs, buffer, visited,
-               root = mrca(genealogy), min_latitude = zero(Float64);
-               block_predicates = []) =
-    EdgesInterval(genealogy, ωs, buffer, visited, root, min_latitude, block_predicates)
+edges_interval(genealogy, ωs, buffer, visited;
+               root = mrca(genealogy), min_latitude = zero(Float64)) =
+    EdgesInterval(genealogy, ωs, buffer, visited, (), root, min_latitude)
 
 function edges_interval(genealogy, ωs)
     ωs_e = AIsType()
@@ -1235,9 +1248,8 @@ $(METHODLIST)
 """
 function nlive! end
 
-function _nlive!(counts, visited, genealogy, lats, ωs, root, stack,
-                 block_predicates, buffer)
-    ## `counts`, `totalcount_` and `visited` are expected to be initialized.
+function nlive!(counts, genealogy, lats, edges_iterator)
+    fill!(counts, 0)
 
     ## The grand MRCA is live forever
     minlat = Inf
@@ -1253,54 +1265,15 @@ function _nlive!(counts, visited, genealogy, lats, ωs, root, stack,
 
     minlat > tmrca(genealogy) && return
 
-    @no_escape buffer begin
-        @inbounds for e ∈ edges_interval(genealogy, ωs, stack, visited, root, minlat,
-                                           block_predicates = block_predicates)
-            @simd ivdep for k ∈ eachindex(lats)
-                counts[k] +=
-                latitude(genealogy, dst(e)) <= lats[k] <= latitude(genealogy, src(e))
-            end
-        end
-    end
-end
-
-function nlive!(counts, genealogy, lats, ωs,
-                root::AbstractVector{VertexType}, stack;
-                block_predicates = [], buffer = default_buffer())
-    fill!(counts, 0)
-
-    @no_escape buffer begin
-        visited = @alloc(Bool, nrecombinations(genealogy))
-        fill!(visited, false)
-
-        for root ∈ root
-            _nlive!(counts, visited, genealogy, lats, ωs, root, stack,
-                    block_predicates, buffer)
+    for e ∈ edges_iterator
+        @simd for k ∈ eachindex(lats)
+            counts[k] +=
+            latitude(genealogy, dst(e)) <= lats[k] <= latitude(genealogy, src(e))
         end
     end
 
     counts
 end
-
-function nlive!(counts, genealogy, lats, ωs, root::VertexType, stack;
-                block_predicates = [], buffer = default_buffer())
-    fill!(counts, 0)
-
-    @no_escape buffer begin
-        visited = @alloc(Bool, nrecombinations(genealogy))
-        fill!(visited, false)
-
-        _nlive!(counts, visited, genealogy, lats, ωs, root, stack,
-                block_predicates, buffer)
-    end
-
-    counts
-end
-
-nlive!(counts, genealogy, lats, ωs, stack; block_predicates = [],
-       buffer = default_buffer()) =
-    nlive!(counts, genealogy, lats, ωs, mrca(genealogy), stack,
-           block_predicates = block_predicates, buffer = buffer)
 
 export ismutation_edge
 """

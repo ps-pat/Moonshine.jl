@@ -305,30 +305,40 @@ function _sample_cedge(rng, arg, rlat::T, possible_cedges, nextidx;
     cedge, clat
 end
 
+const EdgesIntervalArgCoal = EdgesInterval{Val{:argcoal}}
+
+function block_predicate(iter::EdgesIntervalArgCoal, e)
+    arg, nextidx, fedge = iter.bp_pars
+    sequence(arg, dst(e))[nextidx] && return false
+    e == fedge && return false
+    true
+end
+
 function _sample_clat(rng, arg, minlat, fedge, nextidx, stack;
                       buffer = default_buffer())
     nextpos = idxtopos(arg, nextidx)
-
-    block_predicates = [
-        e -> sequence(arg, dst(e))[nextidx],
-        e -> e == fedge
-    ]
 
     ret = zero(minlat)
     @no_escape buffer begin
         n = 100
         λts = @alloc(Int, n)
-        clat_shifts = @alloc(Float64, n)
+        clats = @alloc(Float64, n)
+        visited = @alloc(Bool, nrecombinations(arg))
         c = (one ∘ eltype)(λts)
         pp = Exponential()
 
         while iszero(ret)
-            rand!(rng, pp, clat_shifts)
+            rand!(rng, pp, clats)
+            clats .+= minlat
 
-            nlive!(λts, arg, clat_shifts .+ minlat, nextpos, stack,
-                   block_predicates = block_predicates, buffer = buffer)
+            edges_iterator = EdgesIntervalArgCoal(arg, nextpos, stack, visited,
+                                                  (arg, nextidx, fedge),
+                                                  mrca(arg),
+                                                  minimum(clats))
+            nlive!(λts, arg, clats, edges_iterator)
 
-            for (clat_shift, λt) ∈ zip(clat_shifts, λts)
+            for (clat, λt) ∈ zip(clats, λts)
+                clat_shift = clat - minlat
                 add_logdensity!(arg, pp, clat_shift)
 
                 ## Acceptation
@@ -412,19 +422,16 @@ end
 function _sample_cedge_wild(rng, arg, lat, fedge, nextidx, redge::T, stack;
                             buffer = default_buffer()) where T
     nextpos = idxtopos(arg, nextidx)
-
-    block_predicates = [
-        e -> sequence(arg, dst(e))[nextidx],
-        e -> e == fedge
-    ]
+    len = 0
 
     @no_escape buffer begin
         cedges_ptr = convert(Ptr{T}, @alloc_ptr(ne(arg) * sizeof(T)))
-        len = 0
 
         visited = @alloc(Bool, nrecombinations(arg))
-        @inbounds for e ∈ edges_interval(arg, nextpos, stack, visited, mrca(arg), lat,
-                                           block_predicates = block_predicates)
+        edges_iterator = EdgesIntervalArgCoal(arg, nextpos, stack, visited,
+                                              (arg, nextidx, fedge), mrca(arg), lat)
+
+        for e ∈ edges_iterator
             latitude(arg, dst(e)) <= lat <= latitude(arg, src(e)) || continue
 
             len += 1
@@ -432,9 +439,11 @@ function _sample_cedge_wild(rng, arg, lat, fedge, nextidx, redge::T, stack;
         end
 
         cedges = UnsafeArray{T, 1}(cedges_ptr, (len,))
-        arg.logdensity[] -= log(len)
-        sample(rng, cedges)
+        e = sample(rng, cedges)
     end
+
+    add_logdensity!(arg, -log(len))
+    e
 end
 
 """
@@ -534,6 +543,7 @@ function sample_recombination_constrained!(rng, arg, nextidx, winwidth,
                 cedge = _sample_cedge_wild(rng, arg, clat, fedge, nextidx, redge,
                                            estack, buffer = buffer)
             end
+
         else
             recroot, coalroot = isone(recroot_idx) ? (e1, e2) : (e2, e1)
             redge = _find_actual_edge(arg, recroot, nextidx, rlat)
@@ -548,7 +558,6 @@ function sample_recombination_constrained!(rng, arg, nextidx, winwidth,
                 unsafe_store!(possible_cedges_ptr, e, npossible_cedges)
             end
             possible_cedges = UnsafeArray{Edge{VertexType}, 1}(possible_cedges_ptr, (npossible_cedges,))
-            # clat = _sample_clat(rng, arg, rlat, possible_cedges, nextidx, buffer = buffer)
             cedge, clat = _sample_cedge(rng, arg, rlat, possible_cedges, nextidx, buffer = buffer)
             newd = nv(arg) + VertexType(2)
         end
