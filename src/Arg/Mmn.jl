@@ -184,5 +184,5 @@ function next_inconsistent_idx(arg, idx, stack;
         mask = typemax(mmn_chunktype)
     end
 
-    0, Edge{VertexType}[]
+    0, first(mutations_edges)
 end
