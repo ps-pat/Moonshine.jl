@@ -83,7 +83,6 @@ idxtopos
 postoidx
 nmarkers
 nmutations
-nmutations!
 ```
 
 #### Ancestrality
