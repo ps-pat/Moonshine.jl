@@ -2,6 +2,7 @@ module MoonshineMakie
 
 using Moonshine
 import Moonshine: plot_genealogy
+using Moonshine: ancestral_mask
 
 using Graphs
 

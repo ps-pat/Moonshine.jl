@@ -203,27 +203,6 @@ end
 
 ancestral_intervals(arg::Arg, v::VertexType) = ancestral_intervals!(AIsType(), arg, v)
 
-ancestral_mask!(η, arg::Arg, e::Edge{VertexType}; wipe = true) =
-    ancestral_mask!(η, sam(arg), ancestral_intervals(arg, e), wipe = wipe)
-
-function ancestral_mask!(h::Union{Sequence, AbstractVector{UInt64}}, arg::Arg, v::VertexType;
-                         wipe = true)
-    ## Compute number of Ωs
-    len = sum(c -> (length ∘ ancestral_intervals)(arg, Edge(v => c)),
-              children(arg, v))
-
-    first_child, rest_child = Iterators.peel(children(arg, v))
-    ancestral_mask!(h, sam(arg), ancestral_intervals(arg, Edge(v => first_child)), wipe = wipe)
-    for c ∈ rest_child
-        ancestral_mask!(h, sam(arg), ancestral_intervals(arg, Edge(v => c)), wipe = false)
-    end
-
-    h
-end
-
-ancestral_mask(arg::Arg, x::Union{VertexType, Edge{VertexType}}) =
-    ancestral_mask!(Sequence(falses(nmarkers(arg))), arg, x)
-
 recidx(arg, v) = (v - 2(nleaves(arg) - 1)) ÷ 2
 
 export recombination_mask
@@ -463,7 +442,7 @@ function validate(arg::Arg; check_mutations = true)
         h = sequence(arg, v) & ancestral_mask(arg, v)
 
         ref = mapreduce(&, children(arg, v)) do _child
-            sequence(arg, _child) | ~ancestral_mask(arg, Edge(v => _child))
+            sequence(arg, _child) | .~ancestral_mask(arg, Edge(v => _child))
         end
         ref &= ancestral_mask(arg, v)
 

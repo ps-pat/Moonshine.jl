@@ -234,103 +234,30 @@ end
 #          |                          Masks                           |
 #          +----------------------------------------------------------+
 
-"""
-    $(FUNCTIONNAME)(h, sample, idx; wipe = true)
-
-Construct a mask for a range of markers.
-
-If `wipe = true`, `h` is wiped beforehand.
-
-See also [`wipe!`](@ref).
-
-# Methods
-$(METHODLIST)
-
---*Internal*--
-"""
-function mask!(h::AbstractVector{UInt64}, sample::Sample, idx::AbstractUnitRange;
-               wipe = true)
-    wipe && wipe!(h)
-
-    chunks_idx = chunkidx(Sequence, idx.start), chunkidx(Sequence, idx.stop)
-
-    ## Evrything is in reverse in line with the way data is stored in
-    ## BitVectors.
-
-    ## First chunk
-    @inbounds let nleading0 = idxinchunk(Sequence, idx.start) - 1,
-        ntrailing0 = blocksize(Sequence) - (first(chunks_idx) == last(chunks_idx) ?
-            idxinchunk(Sequence, idx.stop) : blocksize(Sequence))
-
-        mask = typemax(UInt)
-        mask >>>= ntrailing0
-        mask &= typemax(UInt) << nleading0
-
-        h[first(chunks_idx)] |= mask
-    end
-
-    ## Early termination in case only one chunk needs to be modified
-    first(chunks_idx) == last(chunks_idx) && return h
-
-    ## Middle chunks
-    @inbounds let nchunks = last(chunks_idx) - first(chunks_idx) - 1,
-        extra_chunks = nchunks % simd_chunksize,
-        lane = VecRange{simd_chunksize}(0)
-
-        for k ∈ range(first(chunks_idx) + 1, last(chunks_idx) - 1 - extra_chunks, step = simd_chunksize)
-            h[lane + k] |= typemax(UInt)
-        end
-
-        for k ∈ range(last(chunks_idx) - extra_chunks, last(chunks_idx) - 1)
-            h[k] |= typemax(UInt)
-        end
-    end
-
-    ## Last chunk
-    @inbounds let ntrailing0 = blocksize(Sequence) - idxinchunk(Sequence, idx.stop)
-        mask = typemax(UInt)
-        mask >>>= ntrailing0
-
-        h[last(chunks_idx)] |= mask
-    end
-
-    h
-end
-
-function ancestral_mask!(v::AbstractVector{UInt64}, sample::Sample, ω::Ω;
-                         wipe = true)
-    wipe && wipe!(v)
+function ancestral_mask!(mask, sample::Sample, ω::Ω; wipe = true)
+    wipe && wipe!(mask)
 
     idx = postoidx(sample, ω)
-    (iszero ∘ length)(idx) && return v
+    (iszero ∘ length)(idx) && return mask
 
-    mask!(v, sample, idx, wipe = false)
+    ancestral_mask!(mask, nmarkers(sample), idx, wipe = false)
 end
 
-function ancestral_mask!(η::Sequence, sample::Sample, ω::Ω; wipe = true)
-    wipe && wipe!(η)
-    η.data[postoidx(sample, ω)] .= true
-    η
-end
+ancestral_mask(sample::Sample, ω::Ω) =
+    ancestral_mask!(BitVector(undef, nmarkers(sample)), sample, ω)
 
-function ancestral_mask!(η, sample::Sample, ωs; wipe = true)
-    wipe && wipe!(η)
+function ancestral_mask!(mask, sample::Sample, ωs; wipe = true)
+    wipe && wipe!(mask)
 
     for ω ∈ ωs
-        ancestral_mask!(η, sample, ω, wipe = false)
+        ancestral_mask!(mask, sample, ω, wipe = false)
     end
 
-    η
+    mask
 end
 
-ancestral_mask(sample::Sample, x) =
-    ancestral_mask!(Sequence(falses(nmarkers(sample))), sample, x, wipe = false)
-
-function ancestral_mask!(η, sample::Sample, pos::AbstractFloat; wipe = true)
-    wipe && wipe!(η)
-    η[postoidx(sample, pos)] = true
-    η
-end
+ancestral_mask(sample::Sample, ωs) =
+    ancestral_mask!(BitVector(undef, nmarkers(sample)), sample, ωs)
 
 wipe!(h) = fill!(h, 0)
 

@@ -246,6 +246,109 @@ function sum(h::Sequence)
     ret
 end
 
+"""
+    $(FUNCTIONNAME)(mask, h, idx; wipe = true)
+    $(FUNCTIONNAME)(mask, sample, ω; wipe = true)
+    $(FUNCTIONNAME)(mask, genealogy, x; wipe = true)
+
+`&`-mask for non-ancestral markers.
+Construct a mask for a range of markers in a given haplotype.
+
+The first form returns a mask that `&` markers outside of the range `idx` to 0
+when applied to `h.data.chunks`. `h` can either be a sequence or an integer
+meant to be the number of markers in a sequence. The second forms acts
+similarly for an interval (or set of intervals). If `x` is a vertex, the third
+form returns a mask that `&` the markers of the associated haplotype not
+ancestral for it to 0. The ancestral intervals of `x` is defined as the union
+of its downstream edges' intervals. Behaviour is similar if `x` is an edge, but
+the mask is meant for the intersection of chunks between its adjacent vertices.
+
+If `wipe = true`, `mask` is wiped beforehand.
+
+For convenience, each method has an allocating counterpart; see
+[`ancestral_mask`](@ref).
+
+See also [`wipe!`](@ref).
+
+# Methods
+$(METHODLIST)
+
+--*Internal*--
+"""
+function ancestral_mask! end
+
+function ancestral_mask!(mask, h::Int, idx; wipe = true)
+    bs = blocksize(Sequence)
+    nchunks = div(h, bs, RoundUp)
+
+    wipe && wipe!(mask)
+
+    chunks_idx = chunkidx(Sequence, idx.start), chunkidx(Sequence, idx.stop)
+
+    first(chunks_idx) > last(chunks_idx) && return mask
+
+    ## Evrything is in reverse in line with the way data is stored in
+    ## BitVectors.
+
+    ## First chunk
+    ormask = typemax(UInt)
+    let nleading0 = idxinchunk(Sequence, idx.start) - 1,
+        ntrailing0 = bs - (first(chunks_idx) == last(chunks_idx) ?
+            idxinchunk(Sequence, idx.stop) : bs)
+
+        ormask >>>= ntrailing0
+        ormask &= typemax(UInt) << nleading0
+
+        mask[first(chunks_idx)] |= ormask
+    end
+
+    ## Early termination in case only one chunk needs to be modified
+    first(chunks_idx) == last(chunks_idx) && return mask
+
+    ## Middle chunks
+    let nchunks = last(chunks_idx) - first(chunks_idx) - 1,
+        extra_chunks = nchunks % simd_chunksize,
+        lane = VecRange{simd_chunksize}(0)
+
+        for k ∈ range(first(chunks_idx) + 1, last(chunks_idx) - 1 - extra_chunks, step = simd_chunksize)
+            mask[lane + k] |= typemax(UInt)
+        end
+
+        for k ∈ range(last(chunks_idx) - extra_chunks, last(chunks_idx) - 1)
+            mask[k] |= typemax(UInt)
+        end
+    end
+
+    ## Last chunk
+    ormask = typemax(UInt)
+    let ntrailing0 = bs - idxinchunk(Sequence, idx.stop)
+        ormask >>>= ntrailing0
+
+        mask[last(chunks_idx)] |= ormask
+    end
+
+    mask
+end
+
+ancestral_mask!(mask, h::Sequence, idx; wipe = true) =
+    ancestral_mask!(mask, length(h), idx, wipe = wipe)
+
+"""
+Allocating version of [`ancestral_mask!`](@ref)
+
+# Methods
+$(METHODLIST)
+
+--*Internal*--
+"""
+function ancestral_mask end
+
+ancestral_mask(h::Sequence, idx) =
+    ancestral_mask!(similar(h.data.chunks), h, idx)
+
+ancestral_mask(h::Int, idx) =
+    ancestral_mask!(BitVector(undef, h), h, idx)
+
 #############
 # Distances #
 #############

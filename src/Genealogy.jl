@@ -382,36 +382,41 @@ for (f, arg) ∈ (:idxtopos => :idx, :postoidx => :pos)
     @eval $f(genealogy::AbstractGenealogy, $arg) = $f(sam(genealogy), $arg)
 end
 
-export ancestral_mask
-"""
-    $(FUNCTIONNAME)(reference, x; ωs_buf = Set{Ω}())
+ancestral_mask!(mask, genealogy::AbstractGenealogy, e::Edge; wipe = true) =
+    ancestral_mask!(
+        mask,
+        sam(genealogy),
+        ancestral_intervals(genealogy, e),
+        wipe = wipe)
 
-Mask non ancestral positions to 0. If `wipe = true`, all markers in `η` will be
-initialized to 0.
+function ancestral_mask(genealogy::AbstractGenealogy, e::Edge)
+    h = sequence(genealogy, dst(e))
+    ancestral_mask!(similar(h.data.chunks), genealogy, e)
+end
 
-# Methods
-$(METHODLIST)
-"""
-function ancestral_mask end
+function ancestral_mask!(mask, genealogy::AbstractGenealogy, v::VertexType; wipe = true)
+    wipe && wipe!(mask)
 
-ancestral_mask(genealogy::AbstractGenealogy, x) =
-    ancestral_mask!(Sequence(falses(nmarkers(genealogy))), genealogy, x,
-                    wipe = false)
+    for child ∈ children(genealogy, v)
+        e = Edge(v => child)
+        ancestral_mask!(mask, genealogy, e, wipe = false)
+    end
 
-export ancestral_mask!
-"""
-    $(FUNCTIONNAME)(η, reference, x; ωs_buf = Set{Ω}(), wipe = true)
+    mask
+end
 
-Mask non ancestral positions to 0. If `wipe = true`, all markers in `η` will be
-initialized to 0.
+function ancestral_mask(genealogy::AbstractGenealogy, v::VertexType)
+    h = sequence(genealogy, v)
+    ancestral_mask!(similar(h.data.chunks), genealogy, v)
+end
 
-# Methods
-$(METHODLIST)
-"""
-function ancestral_mask! end
+ancestral_mask!(mask, genealogy::AbstractGenealogy, x) =
+    ancestral_mask!(mask, sam(genealogy), x)
 
-ancestral_mask!(η, genealogy::AbstractGenealogy, x; wipe = true) =
-    ancestral_mask!(η, sam(genealogy), x, wipe = wipe)
+function ancestral_mask(genealogy::AbstractGenealogy, x)
+    h = sequence(genealogy, 1)
+    ancestral_mask!(similar(h.data.chunks), genealogy, x)
+end
 
 ###################
 # Pretty printing #
