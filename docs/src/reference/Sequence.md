@@ -17,6 +17,8 @@ idxinchunk
 chunkidx
 wipe!
 plot_sequence
+ancestral_mask!
+ancestral_mask
 ```
 
 ## Distances
