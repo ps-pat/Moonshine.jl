@@ -1033,49 +1033,52 @@ end
 
 export nmutations
 """
-    $(FUNCTIONNAME)(genealogy[, e])
-
-Number of mutation on a genealogy. If an edge is specified, return the
-number of mutations on that edge.
-
-See also [`nmutations!`](@ref) for a non-allocating alternative.
-
-# Methods
-$(METHODLIST)
-"""
-function nmutations end
-
-export nmutations!
-"""
     $(SIGNATURES)
 
 Number of mutation on a genealogy. If an edge is specified, return the
 number of mutations on that edge.
-
-See also [`nmutations`](@ref).
 """
-function nmutations!(mask, genealogy, e)
-    ret = zero(Int)
-    ancestral_mask!(mask, genealogy, e)
+function nmutations end
 
-    nchunks = (length(positions(genealogy)) - 1) ÷ blocksize(Sequence) + 1
-    η1, η2 = sequences(genealogy, e)
-    @inbounds for k ∈ range(1, length = nchunks)
-        ret += count_ones((η1.data.chunks[k] ⊻ η2.data.chunks[k]) & mask.data.chunks[k])
+function nmutations(h1::Sequence, h2, mask)
+    ret = zero(Int)
+
+    @inbounds @simd for k ∈ eachindex(h1.data.chunks)
+        x = h1.data.chunks[k] ⊻ h2.data.chunks[k]
+        x &= mask[k]
+        ret += count_ones(x)
     end
 
     ret
 end
 
-function nmutations(genealogy)
-    mask = Sequence(undef, nmarkers(genealogy))
-    mapreduce(e -> nmutations!(mask, genealogy, e), +, edges(genealogy),
-              init = zero(Int))
+function nmutations(h1::Sequence, h2)
+    ret = zero(Int)
+
+    @inbounds @simd for k ∈ eachindex(h1.data.chunks)
+        x = h1.data.chunks[k] ⊻ h2.data.chunks[k]
+        ret += count_ones(x)
+    end
+
+    ret
 end
 
-function nmutations(genealogy, e)
-    mask = Sequence(undef, nmarkers(genealogy))
-    nmutations!(mask, genealogy, e)
+function nmutations(genealogy::AbstractGenealogy, e; buffer = default_buffer())
+    nchunks = div(nmarkers(genealogy), blocksize(Sequence), RoundUp)
+    local ret
+
+    @no_escape buffer begin
+        mask = @alloc(UInt, nchunks)
+        ancestral_mask!(mask, genealogy, e)
+        ret = nmutations(sequences(genealogy, e)..., mask)
+    end
+
+    ret
+end
+
+function nmutations(genealogy; buffer = default_buffer())
+    mapreduce(e -> nmutations(genealogy, e, buffer = buffer), +, edges(genealogy),
+              init = zero(Int))
 end
 
 ## Edge functions.

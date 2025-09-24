@@ -165,9 +165,19 @@ end
 ~(sequence::Sequence) = Sequence(broadcast(~, sequence.data))
 
 for fun ∈ [:&, :|, :xor]
-    @eval function $fun(sequence1::Sequence, sequence2::Sequence)
-        Sequence(broadcast($fun, sequence1.data, sequence2.data))
+    @eval function ($fun)(h1::Sequence, h2)
+        h = Sequence(undef, length(h1))
+        @inbounds @simd for k ∈ eachindex(h.data.chunks)
+            h.data.chunks[k] = ($fun)(h1.data.chunks[k], h2[k])
+        end
+
+        h
     end
+
+    @eval ($fun)(h1, h2::Sequence) = ($fun)(h2, h1)
+
+    @eval ($fun)(h1::Sequence, h2::Sequence) = ($fun)(h1, h2.data.chunks)
+
 end
 
 for fun ∈ [:<<, :>>, :>>>]
