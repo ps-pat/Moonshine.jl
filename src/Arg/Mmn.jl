@@ -100,6 +100,8 @@ function next_inconsistent_idx(arg, idx, stack;
     mask = typemax(mmn_chunktype)
     mask <<= idxinchunk(chunksize, idx) - 1
 
+    _ne = ne(arg) - nrecombinations(arg)
+
     @inbounds while idx <= nmarkers(arg)
         empty!.(mutations_edges)
 
@@ -118,14 +120,17 @@ function next_inconsistent_idx(arg, idx, stack;
 
         @inbounds @no_escape buffer begin
             visited = @alloc(Bool, nrecombinations(arg))
-            ei_ptr = unsafe_convert(Ptr{Edge{VertexType}},
-                                    @alloc_ptr(ne(arg) * sizeof(Edge{VertexType})))
+            ei_ptr = unsafe_convert(
+                Ptr{Edge{VertexType}},
+                @alloc_ptr(_ne * sizeof(Edge{VertexType})))
 
-            padded_ne = ne(arg) + (simd_vecsize - ne(arg) % simd_vecsize)
-            chunks_s_ptr = unsafe_convert(Ptr{mmn_chunktype},
-                                          @alloc_ptr(padded_ne * sizeof(mmn_chunktype)))
-            chunks_d_ptr = unsafe_convert(Ptr{mmn_chunktype},
-                                          @alloc_ptr(padded_ne * sizeof(mmn_chunktype)))
+            padded_ne = _ne + (simd_vecsize - _ne % simd_vecsize)
+            chunks_s_ptr = unsafe_convert(
+                Ptr{mmn_chunktype},
+                @alloc_ptr(padded_ne * sizeof(mmn_chunktype)))
+            chunks_d_ptr = unsafe_convert(
+                Ptr{mmn_chunktype},
+                @alloc_ptr(padded_ne * sizeof(mmn_chunktype)))
 
             ## Collect edges
             ne_interval = zero(Int)
@@ -145,8 +150,8 @@ function next_inconsistent_idx(arg, idx, stack;
 
             ## Traverse marginal graph and compute mutation sequences
             padded_ne = ne_interval + (simd_vecsize - ne_interval % simd_vecsize)
-            chunks_s = UnsafeArray{eltype(chunks_s_ptr), 1}(chunks_s_ptr, (padded_ne,))
-            chunks_d = UnsafeArray{eltype(chunks_d_ptr), 1}(chunks_d_ptr, (padded_ne,))
+            chunks_s = UnsafeArray(chunks_s_ptr, (padded_ne,))
+            chunks_d = UnsafeArray(chunks_d_ptr, (padded_ne,))
             let lane = VecRange{simd_vecsize}(0)
                 @inbounds for k ∈ 1:simd_vecsize:padded_ne
                     chunks_s[lane + k] ⊻= chunks_d[lane + k]
