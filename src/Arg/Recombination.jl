@@ -446,6 +446,47 @@ function _sample_cedge_wild(rng, arg, lat, fedge, nextidx, redge::T, stack;
     e
 end
 
+function _breakpoint_bounds(arg, rightidx, redge, cedge, buffer)
+    hr, hc = sequence(arg, dst(redge)).data.chunks, sequence(arg, dst(cedge)).data.chunks
+    nchunks = length(hr)
+    bs = blocksize(Sequence)
+
+    @inbounds @no_escape buffer begin
+        m = @alloc(UInt, nchunks)
+        if has_edge(arg, cedge)
+            ancestral_mask!(m, arg, cedge)
+        else
+            fill!(m, 0xffffffffffffffff)
+        end
+
+        iidx = idxinchunk(Sequence, rightidx)
+        cidx = chunkidx(Sequence, rightidx)
+
+        c = hr[cidx] ⊻ hc[cidx]
+        c &= m[cidx]
+        c |= ~m[cidx]
+        c &= 0xffffffffffffffff >> (bs - iidx + 1)
+        Δidx_chunk = leading_zeros(c) - bs + iidx
+        Δidx = Δidx_chunk
+
+        if Δidx_chunk == iidx
+            Δidx_chunk = bs
+        end
+        while Δidx_chunk == bs && cidx > 1
+            cidx -= 1
+
+            c = hr[cidx] ⊻ hc[cidx]
+            c &= m[cidx]
+            c |= ~m[cidx]
+
+            Δidx_chunk = leading_zeros(c)
+            Δidx += Δidx_chunk
+        end
+    end
+
+    idxtopos(arg, rightidx - Δidx), idxtopos(arg, rightidx)
+end
+
 """
     sample_recombination_constrained!(rng, arg, breakpoint, winwidth, live_edges; buffer = default_buffer())
 
@@ -458,13 +499,6 @@ function sample_recombination_constrained!(rng, arg, nextidx, winwidth,
     n = length(live_edges)
     nextpos = idxtopos(arg, nextidx)
     window = nextpos ± winwidth / 2
-
-    local breakpoint
-    let breakpoint_bounds = (idxtopos(arg, nextidx - 1), nextpos),
-        breakpoint_dist = Uniform(breakpoint_bounds...)
-        breakpoint = rand(rng, breakpoint_dist)
-        add_logdensity!(arg, breakpoint_dist, breakpoint)
-    end
 
     @no_escape buffer begin
         ## Sample live edges ##
@@ -480,17 +514,17 @@ function sample_recombination_constrained!(rng, arg, nextidx, winwidth,
         ## Consider the possibility of a wild recombination
         eu = Edge(0 => 0) # Uncle edge
         newd = zero(VertexType)
-        let dads_e1 = dads(arg, src(e1), breakpoint),
-            dads_e2 = dads(arg, src(e2), breakpoint)
+        let dads_e1 = dads(arg, src(e1), nextpos),
+            dads_e2 = dads(arg, src(e2), nextpos)
 
             if !isempty(dads_e1) && first(dads_e1) == src(e2)
-                sibling_e1 = sibling(arg, dst(e1), src(e1), (breakpoint,))
+                sibling_e1 = sibling(arg, dst(e1), src(e1), (nextpos,))
                 if !iszero(sibling_e1)
                     eu = Edge(src(e1) => sibling_e1)
                     newd = src(e2)
                 end
             elseif !isempty(dads_e2) && first(dads_e2) == src(e1)
-                sibling_e2 = sibling(arg, dst(e2), src(e2), (breakpoint,))
+                sibling_e2 = sibling(arg, dst(e2), src(e2), (nextpos,))
                 if !iszero(sibling_e2)
                     eu = Edge(src(e2) => sibling_e2)
                     newd = src(e1)
@@ -561,6 +595,12 @@ function sample_recombination_constrained!(rng, arg, nextidx, winwidth,
             cedge, clat = _sample_cedge(rng, arg, rlat, possible_cedges, nextidx, buffer = buffer)
             newd = nv(arg) + VertexType(2)
         end
+
+        ## Sample breakpoint ##
+        breakpoint_bounds = _breakpoint_bounds(arg, nextidx, redge, cedge, buffer)
+        breakpoint_dist = Uniform(breakpoint_bounds...)
+        breakpoint = rand(rng, breakpoint_dist)
+        add_logdensity!(arg, breakpoint_dist, breakpoint)
 
         @debug "Constrained recombination event" redge cedge breakpoint rlat clat
         recombine!(arg, redge, cedge, breakpoint, rlat, clat, vstack, buffer = buffer)
