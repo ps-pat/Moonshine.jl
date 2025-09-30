@@ -165,15 +165,16 @@ Extend ancestral interval of a recombination vertex upstream edges:
 This is mainly intended to be used within
 [`sample_recombination_constrained!`](@ref).
 """
-function extend_recombination!(arg, edge, otherdad, breakpoint; buffer = default_buffer())
+function gene_conversion!(arg, edge, otherdad, breakpoint, vstack;
+    buffer = default_buffer())
     d = dst(edge)
 
-    union!(ancestral_mask(edge, arg), Ω(breakpoint, ∞))
+    union!(recombination_mask(arg, edge), Ω(breakpoint, ∞))
 
     edge = Edge(otherdad => d)
-    intersect!(ancestral_mask(edge, arg), Ω(0, breakpoint))
+    intersect!(recombination_mask(arg, edge), Ω(0, breakpoint))
 
-    update_upstream!(arg, d, buffer = buffer)
+    update_upstream!(arg, d, vstack, buffer = buffer)
 end
 
 #          +----------------------------------------------------------+
@@ -402,7 +403,7 @@ function _update_live_edges!(live_edges, arg, newd, nextidx)
     nextpos = idxtopos(arg, nextidx)
 
     lastd = newd
-    e = Edge(dad(arg, newd) => newd) ## `newd` is a coalescence vertex
+    e = Edge((first ∘ dads)(arg, newd, nextpos) => newd)
     @inbounds while !ismutation_edge(arg, e, nextidx)
         for (k, live_edge) ∈ enumerate(live_edges)
             src(live_edge) == src(e) || continue
@@ -493,9 +494,11 @@ end
 Sample a recombination event constrained so as to reduce the number of
 mutations for a given marker by one.
 """
-function sample_recombination_constrained!(rng, arg, nextidx, winwidth,
-                                           live_edges, estack, vstack;
-                                           buffer = default_buffer())
+function sample_recombination_constrained!(
+    rng, arg, nextidx, winwidth,
+    live_edges, estack, vstack;
+    buffer = default_buffer(),
+    conversion = true)
     n = length(live_edges)
     nextpos = idxtopos(arg, nextidx)
     window = nextpos ± winwidth / 2
@@ -577,7 +580,6 @@ function sample_recombination_constrained!(rng, arg, nextidx, winwidth,
                 cedge = _sample_cedge_wild(rng, arg, clat, fedge, nextidx, redge,
                                            estack, buffer = buffer)
             end
-
         else
             recroot, coalroot = isone(recroot_idx) ? (e1, e2) : (e2, e1)
             redge = _find_actual_edge(arg, recroot, nextidx, rlat)
@@ -602,8 +604,18 @@ function sample_recombination_constrained!(rng, arg, nextidx, winwidth,
         breakpoint = rand(rng, breakpoint_dist)
         add_logdensity!(arg, breakpoint_dist, breakpoint)
 
-        @debug "Constrained recombination event" redge cedge breakpoint rlat clat
-        recombine!(arg, redge, cedge, breakpoint, rlat, clat, vstack, buffer = buffer)
+        if conversion && src(cedge) ∈ dads(arg, dst(redge)) && isrecombination(arg, dst(redge))
+            @debug "Gene conversion event" redge cedge breakpoint wildrec
+            gene_conversion!(arg, Edge(src(cedge) => dst(redge)), src(redge),
+                             breakpoint, vstack, buffer = buffer)
+            if !wildrec
+                newd = src(cedge)
+            end
+        else
+            @debug "Constrained recombination event" redge cedge breakpoint rlat clat
+            recombine!(arg, redge, cedge, breakpoint, rlat, clat, vstack, buffer = buffer)
+        end
+
         _update_live_edges!(live_edges, arg, newd, nextidx)
     end
 
@@ -709,7 +721,11 @@ end
 #          |                       ARG Building                       |
 #          +----------------------------------------------------------+
 
-function build!(rng, arg::Arg; winwidth = ∞, buffer = default_buffer(), noprogress = false)
+function build!(rng, arg::Arg;
+    winwidth = ∞,
+    buffer = default_buffer(),
+    noprogress = false,
+    conversion = true)
     progenabled = nleaves(arg) * nmarkers(arg) >= 10000000
     prog = Progress(nmarkers(arg), enabled = progenabled && !noprogress)
 
@@ -729,10 +745,12 @@ function build!(rng, arg::Arg; winwidth = ∞, buffer = default_buffer(), noprog
             update!(prog, nextidx)
 
             while !(isone ∘ length)(live_edges)
-                sample_recombination_constrained!(rng, arg, nextidx,
-                                                  winwidth, live_edges,
-                                                  estack, vstack,
-                                                  buffer = buffer)
+                sample_recombination_constrained!(
+                    rng, arg, nextidx,
+                    winwidth, live_edges,
+                    estack, vstack,
+                    buffer = buffer,
+                    conversion = conversion)
             end
 
             nextidx, live_edges = next_inconsistent_idx(arg, nextidx + 1, estack,
