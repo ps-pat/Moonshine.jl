@@ -1,20 +1,24 @@
-function mutationsidx!(res, mask, arg, e, firstchunk, firstidx, lastchunk;
-                       ωs_buf = AIsType())
+function mutationsidx!(res, arg, e, firstchunk, firstidx, lastchunk; buffer = AIsType())
     η1, η2 = sequences(arg, e)
-    ancestral_mask!(mask, arg, e)
     marker_mask = one(UInt64) << (firstidx - 1)
     idx = one(Int)
 
-    @inbounds for k ∈ range(firstchunk, lastchunk)
-        xored_chunk = (η1.data.chunks[k] ⊻ η2.data.chunks[k]) & mask.data.chunks[k]
+    @no_escape buffer begin
+        mask = @alloc(UInt, length(η1.data.chunks))
+        ancestral_mask!(mask, arg, e)
 
-        while !iszero(marker_mask)
-            iszero(xored_chunk & marker_mask) || push!(res[idx], e)
-            idx += 1
-            marker_mask <<= 1
+        @inbounds for k ∈ range(firstchunk, lastchunk)
+            xored_chunk =
+                (η1.data.chunks[k] ⊻ η2.data.chunks[k]) & mask[k]
+
+            while !iszero(marker_mask)
+                iszero(xored_chunk & marker_mask) || push!(res[idx], e)
+                idx += 1
+                marker_mask <<= 1
+            end
+
+            marker_mask = one(UInt64)
         end
-
-        marker_mask = one(UInt64)
     end
 
     res
@@ -34,14 +38,12 @@ function mutation_edges!(mutations, arg, ω::Ω; buffer = default_buffer())
         resize!(mutations[k], 0)
     end
 
-    mask = Sequence(undef, nmarkers(arg))
-    ωs_buf = AIsType()
     @no_escape buffer begin
         store = @alloc(Edge{VertexType}, nleaves(arg) + nrecombinations(arg))
         visited = @alloc(Bool, nrecombinations(arg))
         @inbounds for e ∈ edges_interval(arg, ω, store, visited)
-            mutationsidx!(mutations, mask, arg, e, firstchunk, firstidx, lastchunk,
-                          ωs_buf = ωs_buf)
+            mutationsidx!(mutations, arg, e, firstchunk, firstidx, lastchunk,
+                          buffer = buffer)
         end
     end
 
