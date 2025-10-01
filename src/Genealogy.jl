@@ -1,7 +1,5 @@
-using Graphs
-
 using Bumper: UnsafeArrays
-using Graphs: AbstractSimpleGraph
+using Graphs: AbstractSimpleGraph, SimpleEdge, AbstractEdgeIter
 
 import Graphs: edges, vertices, ne, nv,
                eltype, edgetype, is_directed,
@@ -1091,6 +1089,75 @@ end
 """
     $(TYPEDEF)
 
+Abstract type for iterators over the edges of a marginal graph.
+"""
+abstract type AbstractEIterMGraph <: AbstractEdgeIter end
+
+eltype(::AbstractEIterMGraph) = Edge{VertexType}
+
+IteratorSize(::T) where T<:AbstractEIterMGraph = Base.SizeUnknown()
+IteratorSize(::Type{<:AbstractEIterMGraph}) = Base.SizeUnknown()
+
+block_predicate(::Any, e) = true
+
+"""
+    $(TYPEDEF)
+
+Top down marginal graph edges iterator.
+"""
+abstract type AbstractEIterTD <: AbstractEIterMGraph end
+
+function EIterTD(EITD, genealogy, ωs, stack::CheapStack, visited,
+    bp_pars, root)
+    fill!(visited, false)
+
+    ret = EITD(genealogy, ωs, stack, visited, bp_pars)
+
+    for d ∈ children(genealogy, root, ωs)
+        e = Edge(root => d)
+        block_predicate(ret, e) && push!(stack, e)
+    end
+
+    ret
+end
+
+EIterTD(EITD, genealogy, ωs, store::AbstractArray, visited, bp_pars,
+    root) =
+    EIterTD(EITD, genealogy, ωs, CheapStack(store), visited, bp_pars, root)
+
+function iterate(iter::AbstractEIterTD, state = 1)
+    stack = iter.stack
+    isempty(stack) && return nothing
+
+    genealogy = iter.genealogy
+    ωs = iter.ωs
+    visited = iter.visited
+
+    e = pop!(stack)
+    s = dst(e)
+    ok = block_predicate(iter, e)
+
+    if isrecombination(genealogy, s)
+        ridx = recidx(genealogy, s)
+        visited[ridx] && return e, state + 1
+        visited[ridx] = true
+
+        ## Recombination vertex, no need to check ancestrality of downstream
+        ## edge
+        ok && push!(stack, Edge(s => child(genealogy, s)))
+    elseif ok
+        for d ∈ children(genealogy, s, ωs)
+            newe = Edge(s => d)
+            block_predicate(iter, newe) && push!(stack, newe)
+        end
+    end
+
+    e, state + 1
+end
+
+"""
+    $(TYPEDEF)
+
 Flexible edge iterators that supports various constraints.
 
 Possible constraints are any combination of the following:
@@ -1110,7 +1177,7 @@ $(METHODLIST)
 
 --*Internal*--
 """
-struct EdgesInterval{X, T, I, E, P}
+struct EdgesInterval{T, I, E} <: AbstractEIterTD
     "Genealogy to iterate over"
     genealogy::T
     "Interval to consider"
@@ -1119,85 +1186,15 @@ struct EdgesInterval{X, T, I, E, P}
     stack::CheapStack{E}
     "True is associated recombination vertex has been visited previously"
     visited::UnsafeArray{Bool, 1}
-    "Parameters for the block predicate"
-    bp_pars::P
     "Only consider edges located above this latitude"
     min_latitude::Float64
 end
 
-function EdgesInterval{X}(genealogy::T, ωs::I, stack::CheapStack{E}, visited,
-                          bp_pars::P = (),
-                          root = mrca(genealogy),
-                          min_latitude = zero(Float64)) where {X, T, I, E, P}
-    fill!(visited, false)
+EdgesInterval(genealogy, ωs, stack, visited, min_latitude, root) =
+    EIterTD(EdgesInterval, genealogy, ωs, stack, visited, min_latitude, root)
 
-    ret = EdgesInterval{X, T, I, E, P}(genealogy, ωs, stack, visited, bp_pars,
-                                       convert(Float64, min_latitude))
-
-    for d ∈ children(genealogy, root, ωs)
-        e = Edge(root => d)
-        block_predicate(ret, e) && push!(stack, e)
-    end
-
-    ret
-end
-
-EdgesInterval(genealogy, ωs, stack::CheapStack, visited, bp_pars = (),
-              root = mrca(genealogy), min_latitude = zero(Float64)) =
-    EdgesInterval{Val(:noblock)}(genealogy, ωs, stack, visited, bp_pars,
-                                 root, min_latitude)
-
-EdgesInterval{X}(genealogy::T, ωs::I, store::AbstractArray{E}, visited,
-                 bp_pars::P = (),
-                 root = mrca(genealogy),
-                 min_latitude = zero(Float64)) where {X, T, I, E, P} =
-    EdgesInterval{X}(genealogy, ωs, CheapStack(store), visited, bp_pars,
-                     root, min_latitude)
-
-EdgesInterval(genealogy::T, ωs::I, store::AbstractArray{E}, visited,
-              bp_pars::P = (),
-              root = mrca(genealogy),
-              min_latitude = zero(Float64)) where {T, I, E, P} =
-    EdgesInterval{Val(:noblock)}(genealogy, ωs, store, visited, bp_pars,
-                                 root, min_latitude)
-
-IteratorSize(::T) where T<:EdgesInterval = Base.SizeUnknown()
-IteratorSize(::Type{<:EdgesInterval}) = Base.SizeUnknown()
-
-eltype(::EdgesInterval) = Edge{VertexType}
-
-block_predicate(_...) = true
-
-function iterate(iter::EdgesInterval, state = 1)
-    stack = iter.stack
-    isempty(stack) && return nothing
-
-    genealogy = iter.genealogy
-    ωs = iter.ωs
-    visited = iter.visited
-    min_latitude = iter.min_latitude
-
-    e = pop!(stack)
-    s = dst(e)
-    latok = latitude(genealogy, s) >= min_latitude
-
-    if isrecombination(genealogy, s)
-        ridx = recidx(genealogy, s)
-        visited[ridx] && return e, state + 1
-        visited[ridx] = true
-
-        ## Recombination vertex, no need to check ancestrality of downstream
-        ## edge
-        latok && push!(stack, Edge(s => child(genealogy, s)))
-    elseif latok
-        for d ∈ children(genealogy, s, ωs)
-            newe = Edge(s => d)
-            block_predicate(iter, newe) && push!(stack, newe)
-        end
-    end
-
-    e, state + 1
-end
+block_predicate(it::EdgesInterval, e) =
+    latitude(it.genealogy, src(e)) >= it.min_latitude
 
 export edges_interval
 """
@@ -1216,7 +1213,7 @@ function edges_interval end
 
 edges_interval(genealogy, ωs, buffer, visited;
                root = mrca(genealogy), min_latitude = zero(Float64)) =
-    EdgesInterval(genealogy, ωs, buffer, visited, (), root, min_latitude)
+    EdgesInterval(genealogy, ωs, buffer, visited, convert(Float64, min_latitude), root)
 
 function edges_interval(genealogy, ωs)
     ωs_e = AIsType()

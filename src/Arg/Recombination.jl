@@ -306,11 +306,26 @@ function _sample_cedge(rng, arg, rlat::T, possible_cedges, nextidx;
     cedge, clat
 end
 
-const EdgesIntervalArgCoal = EdgesInterval{Val{:argcoal}}
+struct EdgesIntervalArgCoal{T, I, E, P} <: AbstractEIterTD
+    "Genealogy to iterate over"
+    genealogy::T
+    "Interval to consider"
+    ωs::I
+    "Edges buffer"
+    stack::CheapStack{E}
+    "True is associated recombination vertex has been visited previously"
+    visited::UnsafeArray{Bool, 1}
+    "Parameters for the block predicate"
+    bp_pars::P
+end
+
+EdgesIntervalArgCoal(arg, ωs, stack, visited, bp_pars, root) =
+    EIterTD(EdgesIntervalArgCoal, arg, ωs, stack, visited, bp_pars, root)
 
 function block_predicate(iter::EdgesIntervalArgCoal, e)
-    arg, nextidx, fedge = iter.bp_pars
+    arg, nextidx, fedge, min_latitude = iter.bp_pars
     sequence(arg, dst(e))[nextidx] && return false
+    latitude(iter.genealogy, src(e)) >= min_latitude
     e == fedge && return false
     true
 end
@@ -333,9 +348,8 @@ function _sample_clat(rng, arg, minlat, fedge, nextidx, stack;
             clats .+= minlat
 
             edges_iterator = EdgesIntervalArgCoal(arg, nextpos, stack, visited,
-                                                  (arg, nextidx, fedge),
-                                                  mrca(arg),
-                                                  minimum(clats))
+                                                  (arg, nextidx, fedge, minimum(clats)),
+                                                  mrca(arg))
             nlive!(λts, arg, clats, edges_iterator)
 
             for (clat, λt) ∈ zip(clats, λts)
@@ -430,7 +444,7 @@ function _sample_cedge_wild(rng, arg, lat, fedge, nextidx, redge::T, stack;
 
         visited = @alloc(Bool, nrecombinations(arg))
         edges_iterator = EdgesIntervalArgCoal(arg, nextpos, stack, visited,
-                                              (arg, nextidx, fedge), mrca(arg), lat)
+                                              (arg, nextidx, fedge, lat), mrca(arg))
 
         for e ∈ edges_iterator
             latitude(arg, dst(e)) <= lat <= latitude(arg, src(e)) || continue
