@@ -92,6 +92,16 @@ isrecombination(::Arg, v, n) = iseven(v) && v >= 2n
 
 isrecombination(arg::Arg, v) = isrecombination(arg, v, nleaves(arg))
 
+function iscoalescence(arg::Arg, v)
+    n = nleaves(arg)
+
+    v <= n && return false
+    v < 2n && return true
+    isodd(v) && return true
+
+    false
+end
+
 function recombinations(arg::Arg)
     isempty(arg.recombination_mask) && return StepRange{Int, Int}(0, 1, 0)
 

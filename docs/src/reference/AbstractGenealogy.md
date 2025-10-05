@@ -49,6 +49,11 @@ ancestral_intervals!
 mrca
 ```
 
+#### Coalescences
+```@doc
+iscoalescence
+```
+
 #### Recombinations
 ```@docs
 recombinations

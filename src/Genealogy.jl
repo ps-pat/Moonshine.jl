@@ -259,7 +259,7 @@ export isrecombination
 """
     $(FUNCTIONNAME)(genealogy, v)
 
-Returns true if vertex `v` is a recombination for `genealogy`.
+Returns true if vertex `v` is a recombination vertex for `genealogy`.
 
 Default implementation always returns `false`.
 
@@ -269,6 +269,17 @@ $(METHODLIST)
 function isrecombination end
 
 @generated isrecombination(::Any, ::Any) = false
+
+export iscoalescence
+"""
+    $(FUNCTIONNAME)(genealogy, v)
+
+Returns true if vertex `v` is a coalescence vertex for `genealogy`.
+
+# Methods
+$(METHODLIST)
+"""
+function iscoalescence end
 
 """
     $(FUNCTIONNAME)(genealogy)

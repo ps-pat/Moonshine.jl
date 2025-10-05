@@ -84,6 +84,8 @@ mrca(tree::Tree, ::Any) = mrca(tree)
 
 @generated maxchildren(::Type{Tree}) = 2
 
+iscoalescence(tree::Tree, v) = nleaves(tree) < v <= nv(tree)
+
 ###########################
 # AbstractGraph Interface #
 ###########################
