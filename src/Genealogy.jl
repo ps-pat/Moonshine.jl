@@ -105,7 +105,7 @@ Default implementations assume that the first `nleaves(genealogy)` vertices
 are the leaves of the genealogy. If this is the case for your type, you do not
 need to implement this method.
 """
-leaves(genealogy) = Base.OneTo(nleaves(genealogy))
+leaves(genealogy) = Iterators.map(VertexType, Base.OneTo(nleaves(genealogy)))
 
 export ivertices
 """
@@ -1146,19 +1146,76 @@ function iterate(iter::AbstractEIterTD, state = 1)
 
     e = pop!(stack)
     s = dst(e)
-    ok = block_predicate(iter, e)
 
     if isrecombination(genealogy, s)
-        ridx = recidx(genealogy, s)
+        ridx = _recidx(genealogy, s)
         visited[ridx] && return e, state + 1
         visited[ridx] = true
 
         ## Recombination vertex, no need to check ancestrality of downstream
         ## edge
-        ok && push!(stack, Edge(s => child(genealogy, s)))
-    elseif ok
+        newe = Edge(s => child(genealogy, s))
+        block_predicate(iter, newe) && push!(stack, newe)
+    else
         for d ∈ children(genealogy, s, ωs)
             newe = Edge(s => d)
+            block_predicate(iter, newe) && push!(stack, newe)
+        end
+    end
+
+    e, state + 1
+end
+
+"""
+    $(TYPEDEF)
+
+Bottom up marginal graph edges iterator.
+"""
+abstract type AbstractEIterBU <: AbstractEIterMGraph end
+
+function EIterBU(EIBU, genealogy, ωs, stack::CheapStack, visited, roots, bp_pars...)
+    fill!(visited, false)
+
+    ret = EIBU(genealogy, ωs, stack, visited, bp_pars)
+
+    for root ∈ roots
+        for d ∈ dads(genealogy, root, ωs)
+            e = Edge(d => root)
+            block_predicate(ret, e) && push!(stack, e)
+        end
+    end
+
+    ret
+end
+
+EIterBU(EIBU, genealogy, ωs, store::AbstractArray, visited, roots, bp_pars...) =
+    EIterBU(EIBU, genealogy, ωs, CheapStack(store), visited, roots, bp_pars...)
+
+function iterate(iter::AbstractEIterBU, state = 1)
+    stack = iter.stack
+    isempty(stack) && return nothing
+
+    genealogy = iter.genealogy
+    ωs = iter.ωs
+    visited = iter.visited
+
+    e = pop!(stack)
+    s = src(e)
+
+    if iscoalescence(genealogy, s)
+        cidx = _coalidx(genealogy, s)
+        visited[cidx] && return e, state + 1
+        visited[cidx] = true
+
+        ## Coalescence vertex, no need to check ancestrality of upstream edge
+        d = dad(genealogy, s)
+        if !iszero(d)
+            newe = Edge(d => s)
+            block_predicate(iter, newe) && push!(stack, newe)
+        end
+    else
+        for d ∈ dads(genealogy, s, ωs)
+            newe = Edge(d => s)
             block_predicate(iter, newe) && push!(stack, newe)
         end
     end

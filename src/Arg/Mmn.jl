@@ -24,6 +24,31 @@ function mutationsidx!(res, arg, e, firstchunk, firstidx, lastchunk; buffer = AI
     res
 end
 
+struct EdgesIterMMN{T, I, E} <: AbstractEIterBU
+    "Genealogy to iterate over"
+    genealogy::T
+    "Interval to consider"
+    ωs::I
+    "Edges buffer"
+    stack::CheapStack{E}
+    "True is associated recombination vertex has been visited previously"
+    visited::UnsafeArray{Bool, 1}
+    "Chunk on which to block when equal to 0"
+    chunk0::Tuple{Int}
+end
+
+EdgesIterMMN(arg, ωs, stack, visited, roots, chunk0) =
+    EIterBU(EdgesIterMMN, arg, ωs, stack, visited, roots, chunk0)
+
+function block_predicate(it::EdgesIterMMN, e)
+    d = dst(e)
+    chunks = reinterpret(mmn_chunktype, sequence(it.genealogy, d).data.chunks)
+    idx = first(it.chunk0)
+    iszero(chunks[idx]) && return false
+
+    true
+end
+
 export mutation_edges!, mutation_edges
 function mutation_edges!(mutations, arg, ω::Ω; buffer = default_buffer())
     ## Compute the chunks and indices.
@@ -121,7 +146,7 @@ function next_inconsistent_idx(arg, idx, stack;
         base_ω = Ω(ωlbound, ωubound)
 
         @inbounds @no_escape buffer begin
-            visited = @alloc(Bool, nrecombinations(arg))
+            visited = @alloc(Bool, nv(arg) - nleaves(arg) - nrecombinations(arg))
             ei_ptr = unsafe_convert(
                 Ptr{Edge{VertexType}},
                 @alloc_ptr(_ne * sizeof(Edge{VertexType})))
@@ -136,7 +161,8 @@ function next_inconsistent_idx(arg, idx, stack;
 
             ## Collect edges
             ne_interval = zero(Int)
-            for e ∈ edges_interval(arg, base_ω, stack, visited)
+            edges_iterator = EdgesIterMMN(arg, base_ω, stack, visited, leaves(arg), idx_chunk)
+            @inbounds for e ∈ edges_iterator
                 s_ptr = unsafe_convert(Ptr{mmn_chunktype},
                                        pointer(sequence(arg, src(e)).data.chunks))
                 d_ptr = unsafe_convert(Ptr{mmn_chunktype},

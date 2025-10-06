@@ -213,7 +213,15 @@ end
 
 ancestral_intervals(arg::Arg, v::VertexType) = ancestral_intervals!(AIsType(), arg, v)
 
-recidx(arg, v) = (v - 2(nleaves(arg) - 1)) ÷ 2
+_recidx(arg, v) = (v - 2(nleaves(arg) - 1)) ÷ 2
+
+function _coalidx(arg, v)
+    n = nleaves(arg)
+    if v > 2n
+        v -= _recidx(arg, v)
+    end
+    v - n
+end
 
 export recombination_mask
 """
@@ -226,7 +234,7 @@ function recombination_mask(arg, e::Edge)
     s, d = src(e), dst(e)
 
     inc = s > otherdad(arg, s, d)
-    arg.recombination_mask[2recidx(arg, d) - 1 + inc]
+    arg.recombination_mask[2_recidx(arg, d) - 1 + inc]
 end
 
 export breakpoints

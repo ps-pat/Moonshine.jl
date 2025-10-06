@@ -87,13 +87,13 @@ function recombine!(arg, redge, cedge, breakpoint, rlat, clat, stack;
                     buffer = default_buffer())
     ## Adjust recombination masks
     if isrecombination(arg, dst(redge)) && src(redge) < otherdad(arg, redge)
-        idx = 2recidx(arg, dst(redge)) - 1
+        idx = 2_recidx(arg, dst(redge)) - 1
         arg.recombination_mask[idx], arg.recombination_mask[idx + 1] =
             arg.recombination_mask[idx + 1], arg.recombination_mask[idx]
     end
 
     if isrecombination(arg, dst(cedge)) && src(cedge) < otherdad(arg, cedge)
-        idx = 2recidx(arg, dst(cedge)) - 1
+        idx = 2_recidx(arg, dst(cedge)) - 1
         arg.recombination_mask[idx], arg.recombination_mask[idx + 1] =
             arg.recombination_mask[idx + 1], arg.recombination_mask[idx]
     end
@@ -223,7 +223,7 @@ function iterate(iter::EdgesIntervalRec, state = 1)
     e = pop!(buffer)
     s = dst(e)
     if isrecombination(arg, s)
-        ridx = recidx(arg, s)
+        ridx = _recidx(arg, s)
         visited[ridx] && return e, state + 1
         visited[ridx] = true
     end
@@ -744,8 +744,8 @@ function build!(rng, arg::Arg;
     prog = Progress(nmarkers(arg), enabled = progenabled && !noprogress)
 
     @no_escape buffer begin
-        estore = @alloc(Edge{VertexType}, max(100, nleaves(arg)))
-        vstore = @alloc(VertexType, max(100, nleaves(arg)))
+        estore = @alloc(Edge{VertexType}, ne(arg))
+        vstore = @alloc(VertexType, convert(Int, nv(arg)))
         estack = CheapStack(estore)
         vstack = CheapStack(vstore)
 
