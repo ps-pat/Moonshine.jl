@@ -62,7 +62,7 @@ push!(s::CheapStack) = s
 function push!(s::CheapStack, x)
     s.ptr[] += 1
 
-    @inline s.store[s.ptr[]] = x
+    @inbounds s.store[s.ptr[]] = x
 
     s
 end
