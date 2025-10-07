@@ -744,8 +744,8 @@ function build!(rng, arg::Arg;
     prog = Progress(nmarkers(arg), enabled = progenabled && !noprogress)
 
     @no_escape buffer begin
-        estore = @alloc(Edge{VertexType}, ne(arg))
-        vstore = @alloc(VertexType, convert(Int, nv(arg)))
+        estore = @alloc(Edge{VertexType}, max(100, ne(arg)))
+        vstore = @alloc(VertexType, max(100, convert(Int, nv(arg))))
         estack = CheapStack(estore)
         vstack = CheapStack(vstore)
 
