@@ -1,3 +1,9 @@
+## [0.3.1] - 2025-10-07
+
+### 🐛 Bug Fixes
+
+- *(ARG construction)* Increase size of edges & vertices stacks
+- `@inline` -> `@inbounds`
 ## [0.3.0] - 2025-10-06
 
 ### 🚀 Features
