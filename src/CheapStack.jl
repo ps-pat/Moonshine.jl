@@ -51,7 +51,7 @@ first(s::CheapStack) = s.store[s.ptr[]]
 length(s::CheapStack) = s.ptr[]
 
 function pop!(s::CheapStack)
-    @inline ret = s.store[s.ptr[]]
+    @inbounds ret = s.store[s.ptr[]]
     s.ptr[] -= 1
 
     ret
