@@ -78,6 +78,69 @@ end
     true
 end
 
+function _compute_idx(tt, u, v, predicate)
+    n, neig = tt.nleaves, tt.neig
+
+    uidx = _is_tt_leaf(tt, u) ? u : 3u - 2n
+    if predicate(tt, u)
+        uidx -= 2
+        if neig[uidx] != v
+            uidx -= 1
+        end
+    end
+
+    uidx
+end
+
+@inbounds function add_recombination_vertex!(tt::ThreeTree, redge)
+    n, neig = tt.nleaves, tt.neig
+
+    rvertex_idx = length(neig) + 1
+    rvertex =  n + div(rvertex_idx - n, 3, RoundUp)
+
+    s, d = src(redge), dst(redge)
+    sidx = _compute_idx(tt, s, d, _is_tt_coalescence)
+    didx = _compute_idx(tt, d, s, _is_tt_recombination)
+
+    push!(neig, s, 0, d)
+    neig[sidx] = rvertex
+    neig[didx] = rvertex
+
+    true
+end
+
+@inbounds function add_recoalescence_vertex!(tt::ThreeTree, cedge, rvertex)
+    n, neig = tt.nleaves, tt.neig
+
+    cvertex_idx = length(neig) + 1
+    cvertex =  n + div(cvertex_idx - n, 3, RoundUp)
+
+    s, d = src(cedge), dst(cedge)
+    sidx = s ∈ vertices(tt) ?
+        _compute_idx(tt, s, d, _is_tt_coalescence) : (zero ∘ eltype)(tt)
+    didx = _compute_idx(tt, d, s, _is_tt_recombination)
+
+    push!(neig, d, rvertex)
+    neig[3rvertex - 2n - 1] = cvertex
+    neig[didx] = cvertex
+    if iszero(sidx)
+        push!(neig, 0)
+    else
+        push!(neig, s)
+        neig[didx] = cvertex
+    end
+
+    true
+end
+
+function add_rr_event!(tt::ThreeTree, redge, cedge)
+    add_recombination_vertex!(tt, redge)
+    rvertex = nv(tt)
+    add_recoalescence_vertex!(tt, cedge, rvertex)
+
+    true
+end
+
 # AbstractGraphs Interface
 
 is_directed(::Type{<:ThreeTree}) = true
