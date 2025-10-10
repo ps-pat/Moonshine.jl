@@ -1,7 +1,5 @@
 using Graphs
 
-import Graphs: add_edge!
-
 using Random
 
 using StatsBase: sample, FrequencyWeights
@@ -40,7 +38,7 @@ Arguments are the same as for [`Sample`](@ref).
 """
 struct Tree <: AbstractGenealogy
     "Tree's topology"
-    graph::SimpleDiGraph{VertexType}
+    graph::ThreeTree{VertexType}
     "Vertices' latitudes"
     latitudes::Vector{Float64}
     "Vertices' haplotypes"
@@ -57,7 +55,7 @@ function Tree(sample::Sample)
     sequences = Vector{Sequence}(undef, 2n - 1)
     sequences[1:n] .= sample.H
 
-    Tree(SimpleDiGraph{VertexType}(2n - 1),
+    Tree(ThreeTree(VertexType(n)),
          zeros(Float64, n - 1),
          sequences,
          sample, Ref(zero(Double64)))
@@ -85,13 +83,6 @@ mrca(tree::Tree, ::Any) = mrca(tree)
 @generated maxchildren(::Type{Tree}) = 2
 
 iscoalescence(tree::Tree, v) = nleaves(tree) < v <= nv(tree)
-
-###########################
-# AbstractGraph Interface #
-###########################
-
-add_edge!(tree::Tree, e) = add_edge!(graph(tree), e)
-add_edge!(tree::Tree, v1, v2) = add_edge!(graph(tree), v1, v2)
 
 ###########
 # Methods #
@@ -245,7 +236,6 @@ end
 function build!(rng, tree::Tree;
                 Dist::Distance = Hamming{Int}(), bias0 = 1, threshold_prop = 1)
     n = nleaves(tree)
-    nv(tree) ≠ 2n - 1 || !iszero(ne(tree)) && error("Invalid tree")
     μ = mut_rate(tree, false)
 
     live = collect(leaves(tree))
@@ -285,8 +275,7 @@ function build!(rng, tree::Tree;
         add_logdensity!(tree, Δcoal_dist, Δ)
 
         ## Add coalescence event to tree
-        add_edge!(tree, v, v1)
-        add_edge!(tree, v, v2)
+        add_coalescence_vertex!(tree.graph, v1, v2)
 
         sequences(tree)[v] = sequence(tree, v1) & sequence(tree, v2)
 

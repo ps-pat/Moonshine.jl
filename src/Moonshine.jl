@@ -114,6 +114,7 @@ include("AncestralIntervals.jl")
 const AIsType = AIs{Vector{Ω}}
 include("Sample.jl")
 include("Genealogy.jl")
+include("ThreeTree.jl")
 include("Tree.jl")
 include("Arg/Arg.jl")
 include("genealogy_common.jl")
