@@ -36,6 +36,7 @@ makedocs(sitename = "Moonshine.jl",
              "Sequence" => "reference/Sequence.md",
              "Sample" => "reference/Sample.md",
              "CheapStack" => "reference/CheapStack.md",
+             "ThreeTree" => "reference/ThreeTree.md",
              "Global Values" => "reference/globals.md",
              "Utilities" => "reference/utilities.md"]])
 

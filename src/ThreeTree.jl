@@ -5,8 +5,36 @@ import Graphs:
     nv, has_vertex,
     SimpleEdge, edges, edgetype, has_edge, ne, rem_edge!
 
+"""
+    $(TYPEDEF)
+
+Simple data structure that can be used to record the topology of an ancestral
+recombination graph.
+
+The first `nleaves` entries of `neig` contain the parent vertices of the leaves.
+The following `3nleaves - 3` store information about coalescence vertices.
+The remaining entries store data about recombination and coalescence vertices
+in an alternating fashion.
+
+The first two entries of a triple corresponding to a coalescence/recoalescence
+vertex contain its downstream vertices, and the remaining entry contains its
+parent. The order is reversed for recombination vertices.
+
+Types [`Tree`](@ref) and [`Arg`](@ref) use this data structure.
+
+# Fields
+$(TYPEDFIELDS)
+
+# Constructors
+
+$(METHODLIST)
+
+--*Internal*--
+"""
 struct ThreeTree{T<:Integer} <: AbstractSimpleGraph{T}
+    "Number of leaves (vertices with outdegree 0)"
     nleaves::T
+    "Neighborhood data"
     neig::Vector{T}
 end
 
