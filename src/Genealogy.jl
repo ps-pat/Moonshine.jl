@@ -750,8 +750,8 @@ $(METHODLIST)
 """
 function dads3 end
 
-for (fun, list) ∈ Dict( :dads => Meta.quot(:badjlist), :children => Meta.quot(:fadjlist))
-    @eval $fun(genealogy, v) = getfield(graph(genealogy), $list)[v]
+for (fun, neig) ∈ Dict(:dads => :inneighbors, :children => :outneighbors)
+    @eval $fun(genealogy, v) = $neig(genealogy, v)
 
     fun3 = Symbol(string(fun) * '3')
     @eval function $fun3(genealogy, v, args...)
