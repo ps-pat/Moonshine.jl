@@ -1,7 +1,5 @@
 using Graphs
 
-import Graphs: add_vertices!, add_edge!, rem_edge!
-
 using Random
 
 using StatsBase: samplepair, ProbabilityWeights, fit, Histogram
@@ -41,7 +39,7 @@ $(METHODLIST)
 """
 struct Arg <: AbstractGenealogy
     "Graph's topology"
-    graph::SimpleDiGraph{VertexType}
+    graph::ThreeTree{VertexType}
     "Vertices' latitudes"
     latitudes::Vector{Float64}
     "∩-mask for ancestral intervals"
@@ -157,22 +155,6 @@ end
 ###########################
 # AbstractGraph Interface #
 ###########################
-
-function add_vertices!(arg::Arg, H, lats)
-    append!(latitudes(arg), lats)
-    append!(sequences(arg), H)
-    add_vertices!(graph(arg), length(H))
-end
-
-function add_edge!(arg::Arg, e, ints::AIsType)
-    arg.ancestral_intervals[e] = ints
-    add_edge!(graph(arg), e)
-end
-
-function rem_edge!(arg::Arg, e)
-    delete!(arg.ancestral_intervals, e)
-    rem_edge!(graph(arg), e)
-end
 
 function plot_layout(arg::Arg)
     initxs = rand(1:nleaves(arg), nv(arg))

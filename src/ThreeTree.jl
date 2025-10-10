@@ -85,7 +85,7 @@ function _compute_idx(tt, u, v, predicate)
     if predicate(tt, u)
         uidx -= 2
         if neig[uidx] != v
-            uidx -= 1
+            uidx += 1
         end
     end
 
@@ -116,8 +116,8 @@ end
     cvertex =  n + div(cvertex_idx - n, 3, RoundUp)
 
     s, d = src(cedge), dst(cedge)
-    sidx = s ∈ vertices(tt) ?
-        _compute_idx(tt, s, d, _is_tt_coalescence) : (zero ∘ eltype)(tt)
+    sidx = s == d ?
+        (zero ∘ eltype)(tt) : _compute_idx(tt, s, d, _is_tt_coalescence)
     didx = _compute_idx(tt, d, s, _is_tt_recombination)
 
     push!(neig, d, rvertex)
@@ -127,7 +127,7 @@ end
         push!(neig, 0)
     else
         push!(neig, s)
-        neig[didx] = cvertex
+        neig[sidx] = cvertex
     end
 
     true
@@ -200,12 +200,12 @@ function edges(tt::ThreeTree)
 
     ## Coalescence vertices
     coal_range = range(n + one(n), length = VertexType(n - 1))
-    recoal_range = range(VertexType(2n + 1), nv(tt), step = 2)
+    recoal_range = range(VertexType(2n + 1), nv(tt), step = VertexType(2))
     coal_it = Iterators.flatten((coal_range, recoal_range))
     coal = Iterators.flatmap(build_edges, coal_it)
 
     ## Recombination vertices
-    rec_it = range(VertexType(2n), nv(tt), step = 2)
+    rec_it = range(VertexType(2n), nv(tt), step = VertexType(2))
     rec = Iterators.flatmap(build_edges, rec_it)
 
     Iterators.filter(e -> !(iszero ∘ src)(e) && (!iszero ∘ dst)(e),

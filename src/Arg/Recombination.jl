@@ -98,38 +98,41 @@ function recombine!(arg, redge, cedge, breakpoint, rlat, clat, stack;
             arg.recombination_mask[idx + 1], arg.recombination_mask[idx]
     end
 
-    ## Add recombination and recoalescence vertices to arg ##
+    ## Add recombination and recoalescence vertices to arg
     rvertex, cvertex = VertexType.(nv(arg) .+ (1, 2))
-    add_vertices!(
-        arg,
-        (sequence(arg, dst(redge)), Sequence(trues(nmarkers(arg)))),
-        (rlat, clat))
 
-    ## Replace recombination edge ##
+    ## Store latitudes and haplotypes associated with new vertices
+    push!(latitudes(arg), rlat, clat)
+    push!(sequences(arg), sequence(arg, dst(redge)), Sequence(trues(nmarkers(arg))))
+
+    ## Ancestral intervals of `rvertex`'s parental edges
     ωr = ancestral_intervals(arg, redge)
     ωr_left, ωr_right = copy(ωr), copy(ωr)
     intersect!(ωr_left, Ω(0, breakpoint))
     intersect!(ωr_right, Ω(breakpoint, ∞))
 
-    add_edge!(arg, Edge(rvertex, dst(redge)), ωr)
-    add_edge!(arg, Edge(src(redge), rvertex), ωr_left)
-    rem_edge!(arg, redge)
+    arg.ancestral_intervals[Edge(rvertex, dst(redge))] = ωr
+    arg.ancestral_intervals[Edge(src(redge), rvertex)] = ωr_left
+    delete!(arg.ancestral_intervals, redge)
 
-    ## Replace recoalescence edge ##
+    ## Ancestral intervals of `cvertex`'s adjacent edges
     root_recombination = !has_edge(arg, cedge)
     if root_recombination
         ωc = AIsType([Ω(0, ∞)])
         arg.mrca[] = cvertex
     else
         ωc = ancestral_intervals(arg, cedge)
-        rem_edge!(arg, cedge)
+        delete!(arg.ancestral_intervals, cedge)
         let ωc_new = union(ωc, ωr_right)
-            add_edge!(arg, Edge(src(cedge), cvertex), ωc_new)
+            arg.ancestral_intervals[Edge(src(cedge), cvertex)] = ωc_new
         end
     end
 
-    add_edge!(arg, Edge(cvertex, rvertex), ωr_right)
-    add_edge!(arg, Edge(cvertex, dst(cedge)), ωc)
+    arg.ancestral_intervals[Edge(cvertex, rvertex)] = ωr_right
+    arg.ancestral_intervals[Edge(cvertex, dst(cedge))] = ωc
+
+    ## Update topology
+    add_rr_event!(graph(arg), redge, cedge)
 
     ## Compute sequence of recoalescence vertex ##
     @no_escape buffer begin

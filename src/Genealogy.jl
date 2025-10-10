@@ -478,7 +478,7 @@ for (fun, ret) ∈ Dict(:eltype => VertexType,
 end
 
 let genealogy_edge = Expr(:(::), :e, Edge),
-    genealogy_vertex = Expr(:(::), :v, VertexType)
+    genealogy_vertex = Expr(:(::), :v, Integer)
 
     for (fun, a) ∈ Dict(:has_edge => genealogy_edge,
                         :has_vertex => genealogy_vertex,
