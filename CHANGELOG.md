@@ -1,3 +1,24 @@
+## [0.3.2] - 2025-10-11
+
+### 🐛 Bug Fixes
+
+- `@inline` -> `@inbounds`
+- Do not assume `fadjlist`/`badjlist` attributes in `AbstractGenealogy` subtypes
+
+### 📚 Documentation
+
+- *(ThreeTree)* Documentation for type `ThreeTree`
+
+### ⚡ Performance
+
+- *(ThreeTree)* Implement type `ThreeTree`
+- *(Tree)* Encode `Tree` topologies with `ThreeTree`
+- *(ThreeTree)* Add recombination/recoalescence methods for `ThreeTree`
+- *(Arg)* Encode `Arg` topologies with `ThreeTree`
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump Julia version to 1.12.0
 ## [0.3.1] - 2025-10-07
 
 ### 🐛 Bug Fixes

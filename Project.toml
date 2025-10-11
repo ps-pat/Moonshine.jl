@@ -1,7 +1,7 @@
 name = "Moonshine"
 uuid = "99b31415-443e-43a2-8bf4-ca532bb4a161"
 authors = [ "Patrick Fournier <p_fournier@hushmail.com>" ]
-version = "0.3.1"
+version = "0.3.2"
 
 [deps]
 Bumper = "8ce10254-0962-460f-a3d8-1f77fea1446e"
