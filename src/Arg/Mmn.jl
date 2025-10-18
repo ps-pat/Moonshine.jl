@@ -34,17 +34,17 @@ struct EdgesIterMMN{T, I, E} <: AbstractEIterBU
     "True is associated recombination vertex has been visited previously"
     visited::UnsafeArray{Bool, 1}
     "Chunk on which to block when equal to 0"
-    chunk0::Tuple{Int}
+    block_parameters::Tuple{Int, mmn_chunktype}
 end
 
-EdgesIterMMN(arg, ωs, stack, visited, roots, chunk0) =
-    EIterBU(EdgesIterMMN, arg, ωs, stack, visited, roots, chunk0)
+EdgesIterMMN(arg, ωs, stack, visited, roots, chunk0, mask) =
+    EIterBU(EdgesIterMMN, arg, ωs, stack, visited, roots, chunk0, mask)
 
-function block_predicate(it::EdgesIterMMN, e)
-    d = dst(e)
-    chunks = reinterpret(mmn_chunktype, sequence(it.genealogy, d).data.chunks)
-    idx = first(it.chunk0)
-    iszero(chunks[idx]) && return false
+@inbounds function block_predicate(it::EdgesIterMMN, e)
+    chunk0, mask = it.block_parameters
+    h = sequence(it.genealogy, dst(e))
+    chunk = reinterpret(mmn_chunktype, h.data.chunks)[chunk0]
+    iszero(chunk & mask) && return false
 
     true
 end
@@ -161,7 +161,8 @@ function next_inconsistent_idx(arg, idx, stack;
 
             ## Collect edges
             ne_interval = zero(Int)
-            edges_iterator = EdgesIterMMN(arg, base_ω, stack, visited, leaves(arg), idx_chunk)
+            edges_iterator = EdgesIterMMN(arg, base_ω, stack, visited, leaves(arg),
+                                          idx_chunk, mask)
             @inbounds for e ∈ edges_iterator
                 s_ptr = unsafe_convert(Ptr{mmn_chunktype},
                                        pointer(sequence(arg, src(e)).data.chunks))
