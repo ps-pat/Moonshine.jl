@@ -154,9 +154,15 @@ See also [`chunkidx`](@ref).
 """
 function idxinchunk end
 
-for (fun, op) ∈ Dict(:chunkidx => :div, :idxinchunk => :mod)
+function chunkidx(n, x)
+    d = div(x, n)
+    d + (d * n != x)
+end
+
+idxinchunk(n, x) = mod1(x, n)
+
+for (fun, op) ∈ Dict(:chunkidx => :fld1, :idxinchunk => :mod1)
     @eval begin
-        $fun(n::Int, x) = $op(x - 1, n) + 1
         $fun(::Type{Sequence}, x) = $fun(blocksize(Sequence), x)
         $fun(::Sequence, x) = $fun(Sequence, x)
     end
