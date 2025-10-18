@@ -182,11 +182,9 @@ function inneighbors(tt::ThreeTree, v::Integer)
     if _is_tt_recombination(tt, v)
         ptr -= 2(sizeof ∘ eltype)(neig)
         len += 1
-    end
-
-    ## Root
-    (iszero ∘ unsafe_load)(ptr) &&
+    elseif (iszero ∘ unsafe_load)(ptr)
         return UnsafeArray(convert(Ptr{eltype(neig)}, C_NULL), (0,))
+    end
 
     UnsafeArray(ptr, (len,))
 end
