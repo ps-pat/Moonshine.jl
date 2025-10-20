@@ -539,16 +539,12 @@ function sample_recombination_constrained!(
 
             if !isempty(dads_e1) && first(dads_e1) == src(e2)
                 sibling_e1 = sibling(arg, dst(e1), src(e1), (nextpos,))
-                if !iszero(sibling_e1)
-                    eu = Edge(src(e1) => sibling_e1)
-                    newd = src(e2)
-                end
+                eu = Edge(src(e1) => sibling_e1)
+                newd = src(e2)
             elseif !isempty(dads_e2) && first(dads_e2) == src(e1)
                 sibling_e2 = sibling(arg, dst(e2), src(e2), (nextpos,))
-                if !iszero(sibling_e2)
-                    eu = Edge(src(e2) => sibling_e2)
-                    newd = src(e1)
-                end
+                eu = Edge(src(e2) => sibling_e2)
+                newd = src(e1)
             end
         end
 
