@@ -211,7 +211,7 @@ function nv(tt::ThreeTree)
     convert(VertexType, ret)
 end
 
-has_vertex(tt::ThreeTree, v) = 1 <= v <= nv(tt)
+has_vertex(tt::ThreeTree, v::Integer) = 1 <= v <= nv(tt)
 
 ne(tt::ThreeTree) = (3nv(tt) - 1) ÷ 2 - tt.nleaves
 
