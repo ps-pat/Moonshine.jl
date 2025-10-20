@@ -6,7 +6,7 @@
 [![DOI](https://zenodo.org/badge/974384938.svg)](https://doi.org/10.5281/zenodo.15558973)
 
 ## Overview
-Moonshine.jl is a Julia framework for coalescent modelling oriented towards ancestral recombination graph (ARG) inference. It provides the [`AbstractGenealogy`](https://moonshine.patrickfournier.ca/stable/reference/AbstractGenealogy/#Moonshine.AbstractGenealogy) type which leverages [Graph.jl](https://github.com/JuliaGraphs/Graphs.jl) for convenient implementation of graph-theoretical models of molecular evolution.
+Moonshine.jl is a Julia framework for coalescent modelling oriented towards ancestral recombination graph (ARG) inference. It provides the [`AbstractGenealogy`](https://moonshine.patrickfournier.ca/stable/reference/AbstractGenealogy/#Moonshine.AbstractGenealogy) type which leverages [Graphs.jl](https://github.com/JuliaGraphs/Graphs.jl) for convenient implementation of graph-theoretical models of molecular evolution.
 
 ## Installation
 As usual, from julia's REPL, enter [Pkg mode](https://docs.julialang.org/en/v1/stdlib/REPL/#Pkg-mode) by pressing `]`. Then,
