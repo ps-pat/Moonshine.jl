@@ -164,6 +164,8 @@ function next_inconsistent_idx(arg, idx, stack;
             edges_iterator = EdgesIterMMN(arg, base_ω, stack, visited, leaves(arg),
                                           idx_chunk, mask)
             @inbounds for e ∈ edges_iterator
+                isrecombination(arg, src(e)) && continue
+
                 s_ptr = unsafe_convert(Ptr{mmn_chunktype},
                                        pointer(sequence(arg, src(e)).data.chunks))
                 d_ptr = unsafe_convert(Ptr{mmn_chunktype},
