@@ -1,3 +1,15 @@
+## [0.3.3] - 2025-10-20
+
+### 🐛 Bug Fixes
+
+- *(mmn)* Skip recombination edges
+
+### ⚡ Performance
+
+- *(ThreeTree)* Remove useless root test from inneighbors
+- *(mmn)* Optimize `block_predicate(::EdgesIterMMN, e)`
+- *(Sequence)* Use `mod1` and (specialized) `fld1` for `idxinchunk`/`chunkidx`
+
 ## [0.3.2] - 2025-10-11
 
 ### 🐛 Bug Fixes
@@ -19,12 +31,14 @@
 ### ⚙️ Miscellaneous Tasks
 
 - Bump Julia version to 1.12.0
+
 ## [0.3.1] - 2025-10-07
 
 ### 🐛 Bug Fixes
 
 - *(ARG construction)* Increase size of edges & vertices stacks
 - `@inline` -> `@inbounds`
+
 ## [0.3.0] - 2025-10-06
 
 ### 🚀 Features
@@ -52,3 +66,4 @@
 - *(mmn)* Exclude outedges of recombination vertices from mmn algorithm
 - Early termination for `isdisjoint`
 - *(mmn)* Implements bottom-up marginal graph traversal with early termination
+
