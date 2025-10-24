@@ -1,7 +1,7 @@
 name = "Moonshine"
 uuid = "99b31415-443e-43a2-8bf4-ca532bb4a161"
-authors = [ "Patrick Fournier <p_fournier@hushmail.com>" ]
 version = "0.3.3"
+authors = ["Patrick Fournier <p_fournier@hushmail.com>"]
 
 [deps]
 Bumper = "8ce10254-0962-460f-a3d8-1f77fea1446e"
@@ -20,6 +20,7 @@ JSON = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
 LayeredLayouts = "f4a74d36-062a-4d48-97cd-1356bad1de4e"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 NetworkLayout = "46757867-2c16-5918-afeb-47bfcb05e46a"
+Preferences = "21216c6a-2e73-6563-6e65-726566657250"
 ProgressMeter = "92933f4c-e287-5a05-a399-4b506db050ca"
 PythonCall = "6099a3de-0909-46bc-b1f4-468b9a2dfc0d"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
@@ -58,6 +59,7 @@ JSON = "0.21.4"
 LayeredLayouts = "0.2.10"
 LinearAlgebra = "1.11"
 NetworkLayout = "0.4.10"
+Preferences = "1.5.0"
 ProgressMeter = "1.10.4"
 PythonCall = "0.9.24"
 Random = "1.8"

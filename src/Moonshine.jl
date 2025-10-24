@@ -26,6 +26,8 @@ using Distributions
 
 using DocStringExtensions
 
+using Preferences
+
 #          +----------------------------------------------------------+
 #          |                        Constants.                        |
 #          +----------------------------------------------------------+
@@ -53,7 +55,7 @@ an instance of `AbstractGraphs{VertexType}`
 
 --*Internal*--
 """
-const VertexType = Int32
+const VertexType = @load_preference("VertexType", Int32)
 
 """
     const mmn_chunksize = 1
@@ -61,7 +63,7 @@ Size (in *bytes*) of a chunk of markers in [`next_inconsistent_idx`](@ref).
 
 --*Internal*--
 """
-const mmn_chunksize = 1
+const mmn_chunksize = @load_preference("mmn_chunksize", 1)
 
 """
     const mmn_chunktype = (eval ∘ Symbol)("UInt" * string(8mmn_chunksize))
