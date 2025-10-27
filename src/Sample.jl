@@ -124,6 +124,30 @@ function Sample(rng::AbstractRNG, n, μ, ρ, Ne, sequence_length)
     Sample(pyconvert(TreeSequence, mutated_ts))
 end
 
+function Sample(mat::BitMatrix, positions::AbstractVector{<:Real}, μ, ρ, Ne)
+    nmarkers, n = size(mat)
+    chunks = mat.chunks
+
+    H = Vector{Sequence}(undef, n)
+    for k ∈ eachindex(H)
+        firstidx = (k - 1) * nmarkers + 1
+        first_chunkidx = chunkidx(64, firstidx)
+        first_idxinchunk = idxinchunk(64, firstidx)
+        ntocopy = nmarkers + first_idxinchunk - 1
+
+        ## TODO: lazy, optimize sometime
+        data = BitVector(undef, ntocopy)
+        unsafe_copyto!(data.chunks, 1, chunks, first_chunkidx, length(data.chunks))
+        data <<= first_idxinchunk - 1
+        resize!(data, nmarkers)
+        H[k] = Sequence(data)
+    end
+
+    sequence_length = last(positions) - first(positions) + 1
+    Sample(H, μ = μ, ρ = ρ, Ne = Ne,
+           sequence_length = sequence_length, positions = positions)
+end
+
 ###################
 # Pretty printing #
 ###################
@@ -131,7 +155,8 @@ end
 function show(io::IO, m::MIME"text/plain", sample::Sample)
     invoke(show, Tuple{IO, MIME"text/plain", AbstractVector}, io, m, sample)
 
-    print(io, "\nlength = " * string(sample.sequence_length) *
+    print(io, "\nsize = " * (string ∘ length)(sample) *
+              ", length = " * string(sample.sequence_length) *
               ", μ = " * string(sample.μ) *
               ", ρ = " * string(sample.ρ) *
               ", Ne = " * string(sample.Ne))
