@@ -1,5 +1,6 @@
 using PythonCall
 using PythonCall: pyconvert_return, pyconvert_add_rule
+import PythonCall: Py
 
 import JSON
 
