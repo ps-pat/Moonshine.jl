@@ -1,0 +1,38 @@
+# This CITATION.cff file was generated with cffinit.
+# Visit https://bit.ly/cffinit to generate yours today!
+
+cff-version: 1.2.0
+title: Moonshine.jl
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
+type: software
+authors:
+  - orcid: 'https://orcid.org/0000-0003-1992-2155'
+    given-names: Patrick
+    family-names: Fournier
+    email: p_fournier@hushmail.com
+    affiliation: Université du Québec à Montréal
+  - given-names: Fabrice
+    family-names: Larribe
+    email: larribe.fabrice@uqam.ca
+    affiliation: Université du Québec à Montréal
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.15558973
+    description: Zenodo
+  - type: swh
+    value: 'swh:1:dir:8508188d2d0951e033bdf97393183526586e47eb'
+repository-code: 'https://github.com/ps-pat/Moonshine.jl'
+url: 'https://moonshine.patrickfournier.ca'
+abstract: >-
+  Ancestral Recombination Graph Modelling & Inference in
+  Julia.
+keywords:
+  - Julia
+  - Ancestral Recombination Graph
+  - ARG Inference
+  - Coalescent Theory
+  - Genetics
+  - Computational Genomics
+license: GPL-3.0
