@@ -25,9 +25,16 @@ $(TYPEDFIELDS)
 $(METHODLIST)
 
 where:
+* `H`: haplotypes
+* `μ` (-1): mutation rate
+* `ρ` (-1): recombination rate
+* `Ne` (1): effective population size
+* `positions`: position of markers
+* `sequence_length` (`maximum(positions)`): sequence length
 * `n`: number of sequences
 * `rng`: random number generator
 * `ts`: [Tree Sequence](https://tskit.dev/tskit/docs/latest/python-api.html#the-treesequence-class)
+* `mat`: matrix of haplotypes (haplotypes -> columns)
 """
 struct Sample <: AbstractVector{Sequence}
     "Vector of haplotypes"
