@@ -54,9 +54,9 @@ struct Sample <: AbstractVector{Sequence}
 end
 
 function Sample(H::AbstractVector{Sequence};
-                μ = 1e-8, ρ = 0, Ne = 10_000,
-                sequence_length = length(H) + 1,
-                positions = 1:length(H))
+                μ = -1, ρ = -1, Ne = 1,
+                positions = 1:(length ∘ first)(H),
+                sequence_length = maximum(positions))
     ## Compute coefficients.
     n = length(positions)
     sum_positions = sum(positions)
@@ -131,7 +131,8 @@ function Sample(rng::AbstractRNG, n, μ, ρ, Ne, sequence_length)
     Sample(pyconvert(TreeSequence, mutated_ts))
 end
 
-function Sample(mat::BitMatrix, positions::AbstractVector{<:Real}, μ, ρ, Ne)
+function Sample(mat::BitMatrix, positions::AbstractVector{<:Real};
+                μ = -1, ρ = -1, Ne = 1)
     nmarkers, n = size(mat)
     chunks = mat.chunks
 
