@@ -1,8 +1,36 @@
+## [0.3.4] - 2025-11-16
+
+### 🚀 Features
+
+- Use preferences for some constants
+- *(Sample)* `BitMatrix` constructor
+
+### 🐛 Bug Fixes
+
+- `PythonCall` warning
+
+### 📚 Documentation
+
+- *(Readme)* Fix typo in Readme.md
+- Bump Julia & `Documenter.jl`
+- Add `CITATION.cff`
+- *(Sample)* Improve documentation of `Sample`'s constructors.
+
+### ⚡ Performance
+
+- *(Arg)* Remove useless test in `sample_recombination_constrained!`
+
+### ⚙️ Miscellaneous Tasks
+
+- *(Sample)* Change `Sample` constructors default values for genetic parameters
+- Bump dependencies
+
 ## [0.3.3] - 2025-10-20
 
 ### 🐛 Bug Fixes
 
 - *(mmn)* Skip recombination edges
+- *(ThreeTree)* Method ambiguity: `has_vertex(::ThreeTree, ...)`
 
 ### ⚡ Performance
 
