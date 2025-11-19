@@ -339,9 +339,8 @@ function _sample_clat(rng, arg, minlat, fedge, nextidx, stack;
 
     ret = zero(minlat)
     @no_escape buffer begin
-        n = 100
-        λts = @alloc(Int, n)
-        clats = @alloc(Float64, n)
+        λts = @alloc(Int, clat_batchsize)
+        clats = @alloc(Float64, clat_batchsize)
         visited = @alloc(Bool, nrecombinations(arg))
         c = (one ∘ eltype)(λts)
         pp = Exponential()
