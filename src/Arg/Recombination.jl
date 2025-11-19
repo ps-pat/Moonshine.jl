@@ -344,6 +344,9 @@ function _sample_clat(rng, arg, minlat, fedge, nextidx, stack;
         visited = @alloc(Bool, nrecombinations(arg))
         c = (one ∘ eltype)(λts)
         pp = Exponential()
+        bestlat = (zero ∘ eltype)(clats)
+        bestp = zero(Float64)
+        k = 1
 
         while iszero(ret)
             rand!(rng, pp, clats)
@@ -361,17 +364,29 @@ function _sample_clat(rng, arg, minlat, fedge, nextidx, stack;
                 ## Acceptation
                 iszero(λt) && continue
 
-                r = exp((1 - λt) * clat_shift)
-                accept_dist = Bernoulli(r / c)
-                accept = rand(rng, accept_dist)
-                add_logdensity!(arg, accept_dist, accept)
+                accept = false
+                r = λt * exp((1 - λt) * clat_shift)
+                if r <= c
+                    p = r / c
+                    accept_dist = Bernoulli(p)
+                    accept = rand(rng, accept_dist)
+                    add_logdensity!(arg, accept_dist, accept)
+
+                    if p > bestp
+                        bestp = p
+                        bestlat = clat_shift + minlat
+                    end
+                end
 
                 if accept
                     ret = clat_shift + minlat
                     break
+                elseif k >= clat_shortcut
+                    ret = bestlat
+                    break
                 end
 
-                c = max(c, r)
+                k += 1
             end
         end
     end

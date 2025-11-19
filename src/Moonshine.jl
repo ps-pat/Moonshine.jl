@@ -102,6 +102,17 @@ Customizable via Preferences.
 """
 const clat_batchsize = @load_preference("clat_batchsize", 100)
 
+"""
+    clat_shortcut = 500
+
+Maximum number of candidate recoalescence latitudes.
+
+Customizable via Preferences.
+
+--*Internal*--
+"""
+const clat_shortcut = @load_preference("clat_shortcut", 500)
+
 #          +----------------------------------------------------------+
 #          |                     Global variables                     |
 #          +----------------------------------------------------------+
