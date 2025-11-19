@@ -21,14 +21,15 @@ writter = Documenter.HTMLWriter.HTML(
     size_threshold = nothing)
 
 makedocs(sitename = "Moonshine.jl",
-         format = writter,
+         format = Documenter.HTML(;collapselevel = 1),
          doctest = true,
          plugins = [links],
          repo = Remotes.GitHub("ps-pat", "Moonshine.jl"),
          pages = [
          "Home" => "index.md",
-         "QuickStart" => "quickstart.md",
          "Design & conventions" => "design.md",
+         "Guides" => [
+             "QuickStart" => "quickstart.md"],
          "Reference" => [
              "AbstractGenealogy" => "reference/AbstractGenealogy.md",
              "Tree & ARG" => "reference/Tree_Arg.md",
