@@ -1,3 +1,14 @@
+## [0.3.5] - 2025-11-19
+
+### 🚀 Features
+
+- *(Arg)* Customizable batch size for recoalescence latitude sampling
+- *(Arg)* Shortcut recoalescence latitude sampling
+
+### 📚 Documentation
+
+- Collapsible menus
+
 ## [0.3.4] - 2025-11-16
 
 ### 🚀 Features
