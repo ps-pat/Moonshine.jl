@@ -74,8 +74,7 @@ for G ∈ (:Tree, :Arg)
 
 # -- MRCA --------------------------------------------------------------
 
-    @eval function mrca($Gargname::$G, vs::AbstractVector, x;
-                        buffer = default_buffer())
+    @eval function mrca($Gargname::$G, vs, x; buffer = default_buffer())
         μ = mrca($Gargname)
         iszero(μ) && return μ
 
@@ -98,9 +97,6 @@ for G ∈ (:Tree, :Arg)
         μ
     end
 
-    @eval mrca($Gargname::$G, vs::AbstractVector) = mrca($Gargname, vs, -∞..∞)
-
-    @eval tmrca($Gargname::$G, vs::AbstractVector, ωs) =
+    @eval tmrca($Gargname::$G, vs, ωs) =
         latitude($Gargname, mrca($Gargname, vs, ωs))
 end
-

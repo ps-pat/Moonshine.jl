@@ -76,7 +76,7 @@ describe(::Tree, long = true) = long ? "Coalescent Tree" : "Tree"
 
 mrca(tree::Tree) = nv(tree)
 
-mrca(tree::Tree, ::Any) = mrca(tree)
+mrca(tree::Tree, _...) = mrca(tree)
 
 @generated maxdads(::Type{Tree}) = 1
 
