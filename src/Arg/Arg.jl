@@ -308,6 +308,7 @@ function plot_tmrcas(arg::Arg;
     idx = StepRange(1, stride, lastidx)
 
     grid = [0.; collect(breakpoints(arg))[idx]]
+    sort!(grid)
     times = similar(grid, Float64)
 
     @showprogress enabled = !noprogress Threads.@threads :greedy for k ∈ eachindex(grid)
