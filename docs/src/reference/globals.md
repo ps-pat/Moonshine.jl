@@ -11,6 +11,5 @@ mmn_chunktype
 simd_vecsize
 simd_chunksize
 default_colormap
-clat_batchsize
-clat_shortcut
+clat_gridsize
 ```
