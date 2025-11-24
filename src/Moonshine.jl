@@ -92,26 +92,16 @@ Number of chunks of markers that fit in a SIMD registry.
 const simd_chunksize = simd_vecsize ÷ 8
 
 """
-    const clat_batchsize = 100
+    const clat_gridsize = 25
 
-Size of batches for recoalescence latitude sampling.
-
-Customizable via Preferences.
-
---*Internal*--
-"""
-const clat_batchsize = @load_preference("clat_batchsize", 100)
-
-"""
-    clat_shortcut = 500
-
-Maximum number of candidate recoalescence latitudes.
+Size of the grid for the quadrature step in the recoalescence latitude sampling.
+procedure.
 
 Customizable via Preferences.
 
 --*Internal*--
 """
-const clat_shortcut = @load_preference("clat_shortcut", 500)
+const clat_gridsize = @load_preference("clat_gridsize", 25)
 
 #          +----------------------------------------------------------+
 #          |                     Global variables                     |

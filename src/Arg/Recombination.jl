@@ -335,59 +335,43 @@ end
 
 function _sample_clat(rng, arg, minlat, fedge, nextidx, stack;
                       buffer = default_buffer())
-    nextpos = idxtopos(arg, nextidx)
+    local ret
+    @inbounds @no_escape buffer begin
+        ## Compute quadrature latitudes & weights
+        ws = @alloc(Float64, clat_gridsize)
+        clats = @alloc(Float64, clat_gridsize)
 
-    ret = zero(minlat)
-    @no_escape buffer begin
-        λts = @alloc(Int, clat_batchsize)
-        clats = @alloc(Float64, clat_batchsize)
+        rg = logrange(minlat, tmrca(arg), clat_gridsize + 1)
+        lat_prev, lat_it = Iterators.peel(rg)
+        for (k, lat) ∈ enumerate(lat_it)
+            clats[k] = lat_prev # "left" endpoint accounts for forbidden edges
+            ws[k] = lat - lat_prev
+            lat_prev = lat
+        end
+
+        ## Evaluate intensity function
         visited = @alloc(Bool, nrecombinations(arg))
-        c = (one ∘ eltype)(λts)
+        edges_iterator = EdgesIntervalArgCoal(arg, idxtopos(arg, nextidx), stack, visited,
+                                              (arg, nextidx, fedge, first(clats)),
+                                              mrca(arg))
+        λts = @alloc(Int, clat_gridsize)
+        nlive!(λts, arg, clats, edges_iterator)
+
+        ## Sample latitude and pull back to ARG scale
         pp = Exponential()
-        bestlat = (zero ∘ eltype)(clats)
-        bestp = zero(Float64)
-        k = 1
+        lat1 = rand(rng, pp)
+        add_logdensity!(arg, pp, lat1)
+        Λ = 0
+        for (w, λt, rightlat) ∈ zip(ws, λts, rg[2:end])
+            Λ += w * λt
+            lat1 > Λ && continue
 
-        while iszero(ret)
-            rand!(rng, pp, clats)
-            clats .+= minlat
+            ret = rightlat + (lat1 - Λ) / λt
+            break
+        end
 
-            edges_iterator = EdgesIntervalArgCoal(arg, nextpos, stack, visited,
-                                                  (arg, nextidx, fedge, minimum(clats)),
-                                                  mrca(arg))
-            nlive!(λts, arg, clats, edges_iterator)
-
-            for (clat, λt) ∈ zip(clats, λts)
-                clat_shift = clat - minlat
-                add_logdensity!(arg, pp, clat_shift)
-
-                ## Acceptation
-                iszero(λt) && continue
-
-                accept = false
-                r = λt * exp((1 - λt) * clat_shift)
-                if r <= c
-                    p = r / c
-                    accept_dist = Bernoulli(p)
-                    accept = rand(rng, accept_dist)
-                    add_logdensity!(arg, accept_dist, accept)
-
-                    if p > bestp
-                        bestp = p
-                        bestlat = clat_shift + minlat
-                    end
-                end
-
-                if accept
-                    ret = clat_shift + minlat
-                    break
-                elseif k >= clat_shortcut
-                    ret = bestlat
-                    break
-                end
-
-                k += 1
-            end
+        if lat1 > Λ
+            ret = tmrca(arg) + lat1 - Λ
         end
     end
 
