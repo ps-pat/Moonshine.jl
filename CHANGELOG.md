@@ -1,3 +1,14 @@
+## [0.3.6] - 2025-11-24
+
+### 🐛 Bug Fixes
+
+- Signatures of `mrca`/`tmrca`
+- Sort `plot_tmrcas` grid
+
+### ⚡ Performance
+
+- *(Arg)* Implement wild recoalescence latitude sampling via time-scale transformation
+
 ## [0.3.5] - 2025-11-19
 
 ### 🚀 Features
