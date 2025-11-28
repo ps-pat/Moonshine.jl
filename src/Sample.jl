@@ -54,7 +54,7 @@ struct Sample <: AbstractVector{Sequence}
 end
 
 function Sample(H::AbstractVector{Sequence};
-                μ = -1, ρ = -1, Ne = 1,
+                μ = 1e-8, ρ = 0, Ne = 10_000,
                 positions = 1:(length ∘ first)(H),
                 sequence_length = maximum(positions))
     ## Compute coefficients.
@@ -132,7 +132,7 @@ function Sample(rng::AbstractRNG, n, μ, ρ, Ne, sequence_length)
 end
 
 function Sample(mat::BitMatrix, positions::AbstractVector{<:Real};
-                μ = -1, ρ = -1, Ne = 1)
+                μ = 1e8, ρ = 0, Ne = 10_000)
     nmarkers, n = size(mat)
     chunks = mat.chunks
 
