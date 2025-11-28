@@ -1,3 +1,13 @@
+## [0.3.7] - 2025-11-28
+
+### 🚀 Features
+
+- *(Arg)* Improve derived recoalescence edge & latitude sampling
+
+### 📚 Documentation
+
+- Remove `clat_shortcut`, replace `clat_batchsize` by `clat_gridsize`
+
 ## [0.3.6] - 2025-11-24
 
 ### 🐛 Bug Fixes
