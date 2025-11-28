@@ -1,0 +1,4 @@
+#documenter-page > pre:nth-child(19) code.nohighlight:nth-child(2),
+#documenter-page > pre:nth-child(63) code.nohighlight:nth-child(2) {
+    line-height: 1;
+}
