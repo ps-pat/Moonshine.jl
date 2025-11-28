@@ -253,57 +253,31 @@ end
 #          |                Constrained Recombinations                |
 #          +----------------------------------------------------------+
 
-function _sample_cedge(rng, arg, rlat::T, possible_cedges, nextidx;
-                       buffer = default_buffer()) where T
-    cedge = zero(VertexType)
-    clat = zero(T)
-
+function _sample_cedge(rng, arg, rlat, idx, window, coalroot, estack, buffer)
     @no_escape buffer begin
-        ## Compute minimum latitudes & domain bounds
-        domain_lbound = typemax(T)
-        domain_ubound = typemin(T)
-        min_latitudes = @alloc(T, length(possible_cedges))
-        @inbounds for (k, e) ∈ enumerate(possible_cedges)
-            max_latitude = latitude(arg, src(e))
-            if domain_ubound < max_latitude
-                domain_ubound = max_latitude
-            end
+        cedges = @alloc(Edge{VertexType}, ne(arg))
+        ws_ptr = convert(Ptr{Float64}, @alloc_ptr(ne(arg) * sizeof(Float64)))
 
-            min_latitudes[k] = max(rlat, rlat_min(arg, e, nextidx))
-            if domain_lbound > min_latitudes[k]
-                domain_lbound = min_latitudes[k]
-            end
+        ncedges = 0
+        visited = @alloc(Bool, nrecombinations(arg))
+        for e ∈ EdgesIntervalRec(arg, window, estack, visited,
+                                 idxtopos(arg, idx), idx, src(coalroot), rlat)
+            ncedges += 1
+            cedges[ncedges] = e
+            w = latitude(arg, src(e)) - max(rlat, latitude(arg, dst(e)))
+            unsafe_store!(ws_ptr, w, ncedges)
         end
 
-        ## Sample latitude
-        ws = @alloc(Int, length(possible_cedges))
-        pp_dist = Uniform(domain_lbound, domain_ubound)
-        λbound = length(possible_cedges)
-        clat = (zero ∘ eltype)(pp_dist)
-        λt = zero(Int)
-        accept = false
-        @inbounds while !accept
-            clat = rand(rng, pp_dist)
-            add_logdensity!(arg, pp_dist, clat)
+        ws = ProbabilityWeights(UnsafeArray{Float64, 1}(ws_ptr, (ncedges,)))
+        cedge_idx = sample(rng, ws)
+        w = ws[cedge_idx]
+        add_logdensity!(arg, log(w) - (log ∘ sum)(ws))
+        cedge = cedges[cedge_idx]
 
-            ## `count` causes weird type instability for some reason
-            λt = zero(Int)
-            @simd ivdep for k ∈ eachindex(possible_cedges)
-                λt += min_latitudes[k] <= clat <= latitude(arg, src(possible_cedges[k]))
-                ws[k] = λt
-            end
-
-            accept_dist = Bernoulli(λt / λbound)
-            accept = rand(rng, accept_dist)
-            add_logdensity!(arg, accept_dist, accept)
-        end
-
-        cedge_idx = zero(Int)
-        let k = rand(rng, 1:λt)
-            cedge_idx = findfirst(==(k), ws)
-        end
-        add_logdensity!(arg, -log(λt))
-        cedge = _find_actual_edge(arg, possible_cedges[cedge_idx], nextidx, clat)
+        clat_dist = Beta(2, 2)
+        clat = rand(rng, clat_dist)
+        clat *= w
+        clat = latitude(arg, src(cedge)) - clat
     end
 
     cedge, clat
@@ -594,18 +568,7 @@ function sample_recombination_constrained!(
         else
             recroot, coalroot = isone(recroot_idx) ? (e1, e2) : (e2, e1)
             redge = _find_actual_edge(arg, recroot, nextidx, rlat)
-
-            ## Sample recoalescence location ##
-            visited = @alloc(Bool, nrecombinations(arg))
-            possible_cedges_ptr = convert(Ptr{Edge{VertexType}},
-                                          @alloc_ptr(ne(arg) * sizeof(Edge{VertexType})))
-            npossible_cedges = zero(Int)
-            for e ∈ EdgesIntervalRec(arg, window, estack, visited, nextpos, nextidx, src(coalroot), rlat)
-                npossible_cedges += 1
-                unsafe_store!(possible_cedges_ptr, e, npossible_cedges)
-            end
-            possible_cedges = UnsafeArray{Edge{VertexType}, 1}(possible_cedges_ptr, (npossible_cedges,))
-            cedge, clat = _sample_cedge(rng, arg, rlat, possible_cedges, nextidx, buffer = buffer)
+            cedge, clat = _sample_cedge(rng, arg, rlat, nextidx, window, coalroot, estack, buffer)
             newd = nv(arg) + VertexType(2)
         end
 

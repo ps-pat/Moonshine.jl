@@ -28,6 +28,8 @@ using DocStringExtensions
 
 using Preferences
 
+using StatsBase: ProbabilityWeights
+
 #          +----------------------------------------------------------+
 #          |                        Constants.                        |
 #          +----------------------------------------------------------+
