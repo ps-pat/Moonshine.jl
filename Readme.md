@@ -17,6 +17,16 @@ pkg> add Moonshine
 ## Documentation
 This readme is austere by design. [Full Documentation](https://moonshine.patrickfournier.ca/stable/) as well as a [quickstart tutorial](https://moonshine.patrickfournier.ca/stable/quickstart) are available on a dedicated website. The tutorial is targeted towards experienced as well as first-time julia users.
 
+## Roadmap
+- [ ] Fix unconstrained recombinations-and-recoalescence sampling
+- [ ] Export ARGs as [`succinct tree sequence`](https://tskit.dev/tutorials/what_is.html)
+- [ ] Support for missing data
+- [ ] Implement `SC`-style type 2 recombination events
+### Documentation
+- [ ] Complete API documentation
+- [ ] Add examples
+- [ ] Write guide on how to import data from `VCF` files
+
 ## People
 * [Patrick Fournier](https://www.patrickfournier.ca) (p_fournier@hushmail.com)
 * [Fabrice Larribe](http://fabricelarribe.uqam.ca) (larribe.fabrice@uqam.ca)
