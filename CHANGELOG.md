@@ -1,8 +1,23 @@
+## [0.3.8] - 2026-01-06
+
+### 🎨 Styling
+
+- Formatting of `Project.toml`
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump compat entries
+- Bump dependencies
+
 ## [0.3.7] - 2025-11-28
 
 ### 🚀 Features
 
 - *(Arg)* Improve derived recoalescence edge & latitude sampling
+
+### 🐛 Bug Fixes
+
+- *(Sample)* Revert to old default values for `Sample` constructors
 
 ### 📚 Documentation
 
