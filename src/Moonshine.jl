@@ -134,7 +134,6 @@ include("ThreeTree.jl")
 include("Tree.jl")
 include("Arg/Arg.jl")
 include("genealogy_common.jl")
-include("ArgDensity.jl")
 include("Distributions.jl")
 include("ImportanceSampling.jl")
 
