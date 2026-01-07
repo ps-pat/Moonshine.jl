@@ -107,7 +107,7 @@ function recombinations(arg::Arg)
     step = 2
     stop = nv(arg)
 
-    StepRange{Int, Int}(start, step, stop)
+    StepRange{VertexType, VertexType}(start, step, stop)
 end
 
 nrecombinations(arg::Arg) = ne(arg) - nv(arg) + 1
