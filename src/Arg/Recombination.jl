@@ -332,7 +332,7 @@ function _sample_clat(rng, arg, minlat, fedge, nextidx, stack;
         nlive!(λts, arg, clats, edges_iterator)
 
         ## Sample latitude and pull back to ARG scale
-        pp = Exponential()
+        pp = Exponential(effective_pop_size(arg))
         lat1 = rand(rng, pp)
         add_logdensity!(arg, pp, lat1)
         Λ = 0

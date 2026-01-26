@@ -298,26 +298,46 @@ wipe!(h) = fill!(h, 0)
 #          |              Mutation & Recombination Rates              |
 #          +----------------------------------------------------------+
 
+export effective_pop_size
+"""
+    $(FUNCTIONNAME)(sample, haploid=true)
+
+Effective population size. If `haploid=true`, it is multiplied by 2; the
+resulting value is the *haploid* effective population size (assuming the stored
+value is for diploids).
+"""
+function effective_pop_size end
+
 export mut_rate
 """
-    $(FUNCTIONNAME)(sample, scaled = true)
+    $(FUNCTIONNAME)(sample, haploid=true)
 
-(Scaled) mutation rate.
+Mutation rate. If `haploid=true`, it is multiplied by 2; the resulting value is
+the *haploid* mutation rate (assuming the stored value is for diploids).
 """
 function mut_rate end
 
 export rec_rate
 """
-    $(FUNCTIONNAME)(sample, scaled = true)
+    $(FUNCTIONNAME)(sample, haploid=true)
 
-(Scaled) recombination rate.
+Recombination rate. If `haploid=true`, it is multiplied by 2; the resulting
+value is the *haploid* recombination rate (assuming the stored value is for
+diploids).
 """
 function rec_rate end
 
-for (f, symb) ∈ Dict(:mut_rate => :(:μ), :rec_rate => :(:ρ))
-    @eval function $f(sample::Sample, scaled = true)
-        ret = getfield(sample, $symb)
-        scaled || return ret
-        4 * ret * sample.Ne * sample.sequence_length
+let d = Dict(
+    :mut_rate => :(:μ),
+    :rec_rate => :(:ρ),
+    :effective_pop_size => :(:Ne)
+    )
+    for (f, symb) ∈ d
+        @eval export $f
+
+        @eval function $f(sample::Sample, haploid = true)
+            ret = getfield(sample, $symb)
+            haploid ? 2ret : ret
+        end
     end
 end

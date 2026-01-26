@@ -237,6 +237,7 @@ function build!(rng, tree::Tree;
                 Dist::Distance = Hamming{Int}(), bias0 = 1, threshold_prop = 1)
     n = nleaves(tree)
     μ = mut_rate(tree, false)
+    Ne = effective_pop_size(tree)
 
     live = collect(leaves(tree))
     for nlive ∈ range(length(live), 2, step = -1)
@@ -270,7 +271,7 @@ function build!(rng, tree::Tree;
         add_logdensity!(tree, logprob)
 
         ## Sample coalescence latitude
-        Δcoal_dist = Exponential(inv(nlive))
+        Δcoal_dist = Exponential(Ne / ((nlive + 1) * nlive))
         Δ = rand(rng, Δcoal_dist)
         add_logdensity!(tree, Δcoal_dist, Δ)
 

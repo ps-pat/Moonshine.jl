@@ -65,11 +65,10 @@ for G ∈ (:Tree, :Arg)
     ## Other methods.
     @eval isempty($Gargname::$G) = isempty(getfield($Gargname, :sequences))
 
-    for par ∈ ("mut", "rec")
-        f = Symbol(par * "_rate")
+    for f ∈ (:mut_rate, :rec_rate, :effective_pop_size)
         @eval export $f
 
-        @eval $f($Gargname::$G, scaled = true) = $f(sam($Gargname), scaled)
+        @eval $f($Gargname::$G, haploid = true) = $f(sam($Gargname), haploid)
     end
 
 # -- MRCA --------------------------------------------------------------
