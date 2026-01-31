@@ -112,6 +112,8 @@ end
 
 nrecombinations(arg::Arg) = ne(arg) - nv(arg) + 1
 
+nrecombinations(arg::Arg, ωs) = count(∈(ωs), breakpoints(arg))
+
 mrca(arg::Arg) = arg.mrca[]
 
 mrca(arg, ωs) = mrca(arg, leaves(arg), ωs)
