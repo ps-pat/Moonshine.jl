@@ -76,10 +76,10 @@ function Sample(ts::TreeSequence)
     sequence_length = one(Float64)
 
     ## Retreive relevant genetic parameters.
+    n = pyconvert(Int, ts.obj.num_samples)
+
     for p ∈ provenances(ts)
         parameters = p.record[:parameters]
-
-        n = get(parameters, :samples, n)
         μ = get(parameters, :rate, μ)
         ρ = get(parameters, :recombination_rate, ρ)
         Ne = get(parameters, :population_size, Ne)
