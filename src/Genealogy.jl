@@ -1283,11 +1283,21 @@ edges_interval(genealogy, ωs, buffer, visited;
                root = mrca(genealogy), min_latitude = zero(Float64)) =
     EdgesInterval(genealogy, ωs, buffer, visited, convert(Float64, min_latitude), root)
 
-function edges_interval(genealogy, ωs)
+function edges_interval(genealogy, ωs::Union{AIs, AIsType})
     ωs_e = AIsType()
     flt = function(e)
         ancestral_intervals!(ωs_e, genealogy, e)
         !isdisjoint(ωs_e, ωs)
+    end
+
+    Iterators.filter(flt, edges(genealogy))
+end
+
+function edges_interval(genealogy, x)
+    ωs_e = AIsType()
+    flt = function(e)
+        ancestral_intervals!(ωs_e, genealogy, e)
+        x ∈ ωs_e
     end
 
     Iterators.filter(flt, edges(genealogy))
