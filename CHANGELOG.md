@@ -1,3 +1,28 @@
+## [0.3.9] - 2026-02-02
+
+### 🚀 Features
+
+- *(Arg)* `nrecombinations` for an interval
+
+### 🐛 Bug Fixes
+
+- *(Arg)* Enforce `VertexType` for range returned by `recombinations`
+- Store latitudes on the generation scale
+- *(Sample)* Sample size from `TreeSequence` objects
+- *(Genealogy)* `edges_interval(genealogy, x)` for scalar `x`
+
+### 💼 Other
+
+- Remove `Algebra.jl` & `ArgDensity.jl`
+
+### 📚 Documentation
+
+- Build documentation locally
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump dependencies
+
 ## [0.3.8] - 2026-01-06
 
 ### 🎨 Styling
