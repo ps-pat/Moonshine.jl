@@ -68,7 +68,9 @@ function Sample(H::AbstractVector{Sequence};
     Sample(H, μ, ρ, Ne, sequence_length, positions, (b, m))
 end
 
-function Sample(ts::TreeSequence)
+function Sample(treesequence::Py)
+    @_validate_python_class(treesequence, tskit[].TreeSequence)
+
     n = zero(Int)
     μ = zero(Float64)
     ρ = zero(Float64)
@@ -76,9 +78,11 @@ function Sample(ts::TreeSequence)
     sequence_length = one(Float64)
 
     ## Retreive relevant genetic parameters.
-    n = pyconvert(Int, ts.obj.num_samples)
+    n = pyconvert(Int, treesequence.num_samples)
 
-    for p ∈ provenances(ts)
+    for p_py ∈ treesequence.provenances()
+        p = pyconvert(NamedTuple, p_py)
+
         parameters = p.record[:parameters]
         μ = get(parameters, :rate, μ)
         ρ = get(parameters, :recombination_rate, ρ)
@@ -87,11 +91,11 @@ function Sample(ts::TreeSequence)
     end
 
     ## Retreive positions and reconstruct sequence.
-    nmarkers = pyconvert(Int, ts.obj.num_mutations)
+    nmarkers = pyconvert(Int, treesequence.num_mutations)
     positions = Vector{Float64}(undef, nmarkers)
     H = [zeros(Sequence, nmarkers) for _ ∈ 1:n]
 
-    @inbounds for (mutation, variant) ∈ enumerate(ts.obj.variants())
+    @inbounds for (mutation, variant) ∈ enumerate(treesequence.variants())
         pos = pyconvert(Float64, variant.site.position)
         positions[mutation] = pos
 
@@ -106,7 +110,7 @@ function Sample(ts::TreeSequence)
            sequence_length = sequence_length, positions = positions)
 end
 
-function Sample(rng::AbstractRNG, n, μ, ρ, Ne, sequence_length)
+function _random_simple_treesequence(rng, n, μ, ρ, Ne, sequence_length)
     sim_ancestry = msprime[].sim_ancestry
     sim_mutations = msprime[].sim_mutations
     BinaryMutationModel = msprime[].BinaryMutationModel
@@ -128,8 +132,11 @@ function Sample(rng::AbstractRNG, n, μ, ρ, Ne, sequence_length)
                                model = BinaryMutationModel(false),
                                record_provenance = true)
 
-    Sample(pyconvert(TreeSequence, mutated_ts))
+    mutated_ts
 end
+
+Sample(rng::AbstractRNG, n, μ, ρ, Ne, sequence_length) =
+    (Sample ∘ _random_simple_treesequence)(rng, n, μ, ρ, Ne, sequence_length)
 
 function Sample(mat::BitMatrix, positions::AbstractVector{<:Real};
                 μ = 1e8, ρ = 0, Ne = 10_000)
