@@ -249,7 +249,7 @@ function plot_breakpoints(arg;
                           nbins = clamp(nrecombinations(arg) ÷ 100, 1, 69),
                           height = 7,
                           kwargs...)
-    bins = range(0, sam(arg).sequence_length, length = nbins + 1)
+    bins = range(0, sequence_length(arg), length = nbins + 1)
     bps = (collect ∘ breakpoints)(arg)
     h = fit(Histogram, bps, bins)
     counts = repeat(reshape(h.weights, (1, nbins)), 10)

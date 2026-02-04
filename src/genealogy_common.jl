@@ -38,6 +38,14 @@ for G ∈ (:Tree, :Arg)
     export sam
     @eval sam($Gargname::$G) = getfield($Gargname, :sample)
 
+    for f ∈ (:mut_rate, :rec_rate, :effective_pop_size)
+        @eval export $f
+
+        @eval $f($Gargname::$G, haploid = true) = $f(sam($Gargname), haploid)
+    end
+
+    @eval sequence_length($Gargname::$G) = sequence_length(sam($Gargname))
+
     ## Latitude of a vertex
     @eval function latitude($Gargname::$G, v)
         n = nleaves($Gargname)
@@ -64,12 +72,6 @@ for G ∈ (:Tree, :Arg)
 
     ## Other methods.
     @eval isempty($Gargname::$G) = isempty(getfield($Gargname, :sequences))
-
-    for f ∈ (:mut_rate, :rec_rate, :effective_pop_size)
-        @eval export $f
-
-        @eval $f($Gargname::$G, haploid = true) = $f(sam($Gargname), haploid)
-    end
 
 # -- MRCA --------------------------------------------------------------
 

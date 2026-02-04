@@ -164,7 +164,7 @@ function show(io::IO, m::MIME"text/plain", sample::Sample)
     invoke(show, Tuple{IO, MIME"text/plain", AbstractVector}, io, m, sample)
 
     print(io, "\nsize = " * (string ∘ length)(sample) *
-              ", length = " * string(sample.sequence_length) *
+              ", length = " * string(sequence_length(sample)) *
               ", μ = " * string(sample.μ) *
               ", ρ = " * string(sample.ρ) *
               ", Ne = " * string(sample.Ne))
@@ -198,6 +198,9 @@ positions(sample::Sample) = sample.positions
 nmarkers(sample::Sample) = (length ∘ first)(sample.H)
 
 nmarkers(sample::Sample, ω::Ω) = length(postoidx(sample, ω))
+
+export sequence_length
+sequence_length(sample::Sample) = sample.sequence_length
 
 idxtopos(sample::Sample, idx) =
     iszero(idx) ? zero(Float64) : getindex(positions(sample), idx)
