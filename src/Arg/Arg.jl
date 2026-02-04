@@ -469,3 +469,80 @@ function validate(arg::Arg; check_mutations = true)
 
     flag
 end
+
+#####
+## Tree Sequence
+#####
+
+function _ts_node_table!(table, arg)
+    flags = vcat(
+        fill(tskit[].NODE_IS_SAMPLE, nleaves(arg)),
+        zeros(UInt32, nivertices(arg))
+    )
+    time = vcat(zeros(Float64, nleaves(arg)), latitudes(arg))
+
+    table.set_columns(flags, time)
+    table
+end
+
+function _ts_edge_table!(table, arg)
+    n = sum(length, values(arg.ancestral_intervals))
+    left = Vector{Float64}(undef, n)
+    right = Vector{Float64}(undef, n)
+    parent = Vector{Int32}(undef, n)
+    child = Vector{Int32}(undef, n)
+
+    sbound = sequence_length(arg)
+    k = 0
+    @inbounds for (e, ωs) ∈ arg.ancestral_intervals
+        s, d = src(e) - 1, dst(e) - 1
+        for ω ∈ ωs
+            k += 1
+            parent[k], child[k] = s, d
+            left[k], right[k] = leftendpoint(ω), min(sbound, rightendpoint(ω))
+        end
+    end
+
+    table.set_columns(left, right, parent, child)
+    table
+end
+
+_ts_site_table!(table, arg) = table.set_columns(
+    positions(arg), zeros(Int8, nmarkers(arg)), range(0, nmarkers(arg))
+)
+
+function _ts_mutation_table!(table, arg)
+    n = sum(length, mutation_edges(arg))
+    site = Vector{Int32}(undef, n)
+    node = Vector{Int32}(undef, n)
+
+    i = 0
+    @inbounds for (j, es) ∈ (enumerate ∘ mutation_edges)(arg)
+        for e ∈ es
+            i += 1
+            site[i] = j - 1
+            node[i] = dst(e) - 1
+        end
+    end
+
+    table.set_columns(site, node, nothing, ones(Int8, n), range(0, n))
+    table
+end
+
+export ts
+"""
+    $(SIGNATURES)
+
+Convert an ARG to a `tskit` `TreeSequence`.
+"""
+function ts(arg)
+    tables = tskit[].TableCollection(sequence_length = sequence_length(arg))
+
+    _ts_node_table!(tables.nodes, arg)
+    _ts_edge_table!(tables.edges, arg)
+    _ts_site_table!(tables.sites, arg)
+    _ts_mutation_table!(tables.mutations, arg)
+
+    tables.sort()
+    tables.tree_sequence()
+end
