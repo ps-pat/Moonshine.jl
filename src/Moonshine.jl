@@ -16,8 +16,6 @@ using Base: unsafe_convert
 
 using ProgressMeter
 
-using FunctionWrappers: FunctionWrapper
-
 using CpuId: simdbytes
 
 using SIMD: VecRange
