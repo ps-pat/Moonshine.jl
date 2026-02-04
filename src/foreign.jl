@@ -4,11 +4,6 @@ import PythonCall: Py
 
 import JSON
 
-###########
-# msprime #
-###########
-
-## TODO: finish implementation.
 ## TreeSequence conversion.
 struct TreeSequence
     obj::Py
@@ -30,13 +25,8 @@ function provenances(ts::TreeSequence)
     map(id -> provenance(ts, id), 0:(n-1))
 end
 
-## Variants
-function variants(ts::TreeSequence)
-    ts.obj.variants()
-end
-
 ## Conversion
-pyconvert_TreeSequence(S, ts::Py) = (pyconvert_return ∘ TreeSequence)(ts)
+pyconvert_TreeSequence(::Any, ts::Py) = (pyconvert_return ∘ TreeSequence)(ts)
 
 const msprime = Ref{Py}()
 

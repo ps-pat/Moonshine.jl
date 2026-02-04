@@ -91,7 +91,7 @@ function Sample(ts::TreeSequence)
     positions = Vector{Float64}(undef, nmarkers)
     H = [zeros(Sequence, nmarkers) for _ ∈ 1:n]
 
-    @inbounds for (mutation, variant) ∈ enumerate(variants(ts))
+    @inbounds for (mutation, variant) ∈ enumerate(ts.obj.variants())
         pos = pyconvert(Float64, variant.site.position)
         positions[mutation] = pos
 
