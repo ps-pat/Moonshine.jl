@@ -29,9 +29,12 @@ end
 pyconvert_TreeSequence(::Any, ts::Py) = (pyconvert_return ∘ TreeSequence)(ts)
 
 const msprime = Ref{Py}()
+const tskit = Ref{Py}()
 
 function __init_msprime__()
     msprime[] = pyimport("msprime")
+    tskit[] = pyimport("tskit")
+
     pyconvert_add_rule("tskit.trees:TreeSequence", TreeSequence,
                        pyconvert_TreeSequence)
 end
