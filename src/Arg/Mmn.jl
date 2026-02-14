@@ -108,6 +108,9 @@ function mutation_edges(arg)
     mutation_edges!(ret, arg, Ω(0, ∞))
 end
 
+const mmn_stride = cpufeature(:AVX) ? simd_vecsize : 1
+const mmn_lane = cpufeature(:AVX) ? VecRange{simd_vecsize}(0) : 0
+
 export next_inconsistent_idx
 """
     $(SIGNATURES)
@@ -183,11 +186,9 @@ function next_inconsistent_idx(arg, idx, stack;
             padded_ne = ne_interval + (simd_vecsize - ne_interval % simd_vecsize)
             chunks_s = UnsafeArray(chunks_s_ptr, (padded_ne,))
             chunks_d = UnsafeArray(chunks_d_ptr, (padded_ne,))
-            let lane = VecRange{simd_vecsize}(0)
-                @inbounds for k ∈ 1:simd_vecsize:padded_ne
-                    chunks_s[lane + k] ⊻= chunks_d[lane + k]
-                    chunks_s[lane + k] &= mask
-                end
+            @inbounds for k ∈ 1:mmn_stride:padded_ne
+                chunks_s[mmn_lane + k] ⊻= chunks_d[mmn_lane + k]
+                chunks_s[mmn_lane + k] &= mask
             end
 
             ## Find mutation edges
