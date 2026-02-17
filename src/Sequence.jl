@@ -94,7 +94,7 @@ function cheap_hash(s::Sequence)
         c = unsafe_load(ptr, 2k)
         x *= c + o
 
-        h ⊻= x
+        h += x
     end
 
     h
