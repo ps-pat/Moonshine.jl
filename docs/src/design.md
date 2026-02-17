@@ -36,3 +36,6 @@ CurrentModule = Moonshine
 For a type `T`:
 * `T()` is the empty constructor
 * `T(rng, ...)` is a random constructor
+
+# Others
+* Genomic positions are stored as **floating-point values**. Beware of potential **rounding errors**!
