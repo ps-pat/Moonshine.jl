@@ -1,3 +1,31 @@
+## [0.4.0] - 2026-02-17
+
+### 🚀 Features
+
+- Add getter `sequence_length`
+- Add dependency `tskit`
+- *(Arg)* Implement conversion of `Arg` to `tskit.TreeSequence`
+- *(MMN)* Implement fallback for non-AVX compliant machines
+
+### 🚜 Refactor
+
+- Get rid of the `TreeSequence` type
+
+### 📚 Documentation
+
+- Add guide for interaction with Python & `tskit`
+- Add warning about positions being floats
+- Bump dependencies
+
+### 🎨 Styling
+
+- Parentheses in `docs/make.jl`
+
+### ⚙️ Miscellaneous Tasks
+
+- Cleanup `foreign.jl`
+- Get rid of dependency on `FunctionWrappers`
+
 ## [0.3.9] - 2026-02-02
 
 ### 🚀 Features
