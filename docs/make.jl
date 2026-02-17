@@ -41,7 +41,10 @@ makedocs(sitename = "Moonshine.jl",
              "CheapStack" => "reference/CheapStack.md",
              "ThreeTree" => "reference/ThreeTree.md",
              "Global Values" => "reference/globals.md",
-             "Utilities" => "reference/utilities.md"]])
+             "Utilities" => "reference/utilities.md"
+         ]
+     ]
+ )
 
 if "publish" ∈ ARGS
     deploydocs(repo = "github.com/ps-pat/Moonshine.jl.git")
