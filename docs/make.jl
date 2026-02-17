@@ -29,7 +29,9 @@ makedocs(sitename = "Moonshine.jl",
          "Home" => "index.md",
          "Design & conventions" => "design.md",
          "Guides" => [
-             "QuickStart" => "quickstart.md"],
+             "QuickStart" => "quickstart.md",
+             "Python & tskit" => "python.md"
+         ],
          "Reference" => [
              "AbstractGenealogy" => "reference/AbstractGenealogy.md",
              "Tree & ARG" => "reference/Tree_Arg.md",
