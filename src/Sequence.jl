@@ -16,8 +16,6 @@ using Random
 
 using LinearAlgebra
 
-using SpecialFunctions: loggamma
-
 using UnicodePlots: heatmap, label!, annotate!
 
 using ChunkSplitters: index_chunks

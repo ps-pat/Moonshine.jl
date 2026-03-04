@@ -1,7 +1,5 @@
 module Moonshine
 
-using StatsFuns: logtwo, log2π
-
 using IntervalSets
 
 using DoubleFloats: Double64

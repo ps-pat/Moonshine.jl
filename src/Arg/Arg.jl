@@ -2,7 +2,7 @@ using Graphs
 
 using Random
 
-using StatsBase: samplepair, fit, Histogram
+using StatsBase: fit, Histogram
 
 using StaticArrays: @SVector
 

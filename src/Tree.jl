@@ -2,11 +2,9 @@ using Graphs
 
 using Random
 
-using StatsBase: sample, FrequencyWeights
+using StatsBase: sample
 
 import Base: iterate, length, size, isempty
-
-using SpecialFunctions: loggamma
 
 ###################
 # Tree Definition #

@@ -1,5 +1,3 @@
-using Statistics: mean
-
 import Base:
     ## Iteration interface.
     iterate,
