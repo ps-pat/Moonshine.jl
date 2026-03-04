@@ -57,7 +57,7 @@ an instance of `AbstractGraphs{VertexType}`
 
 --*Internal*--
 """
-const VertexType = @load_preference("VertexType", Int32)
+const VertexType = load_preference("Moonshine", "VertexType", Int32)
 
 """
     const mmn_chunksize = 1
@@ -65,7 +65,7 @@ Size (in *bytes*) of a chunk of markers in [`next_inconsistent_idx`](@ref).
 
 --*Internal*--
 """
-const mmn_chunksize = @load_preference("mmn_chunksize", 1)
+const mmn_chunksize = load_preference("Moonshine", "mmn_chunksize", 1)
 
 """
     const mmn_chunktype = (eval ∘ Symbol)("UInt" * string(8mmn_chunksize))
@@ -103,7 +103,7 @@ Customizable via Preferences.
 
 --*Internal*--
 """
-const clat_gridsize = @load_preference("clat_gridsize", 25)
+const clat_gridsize = load_preference("Moonshine", "clat_gridsize", 25)
 
 #          +----------------------------------------------------------+
 #          |                     Global variables                     |
