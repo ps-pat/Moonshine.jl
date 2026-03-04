@@ -11,8 +11,6 @@ import Distributions: insupport, pdf,
                       _rand!,
                       Bernoulli
 
-using LinearAlgebra
-
 export BernoulliMulti
 """
     BernoulliMulti

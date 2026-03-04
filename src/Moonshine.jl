@@ -4,7 +4,7 @@ using IntervalSets
 
 using DoubleFloats: Double64
 
-using DataStructures: Stack, Queue
+using DataStructures: Stack, Queue, DefaultDict
 
 using Bumper
 
@@ -24,9 +24,19 @@ using DocStringExtensions
 
 using Preferences
 
-using StatsBase: ProbabilityWeights
+using StatsBase: ProbabilityWeights, sample, fit, Histogram
 
 using PythonCall
+
+using Random
+
+using LinearAlgebra
+
+using UnicodePlots: heatmap, label!, annotate!, stairs, histogram
+
+using Graphs
+
+using ChunkSplitters
 
 #          +----------------------------------------------------------+
 #          |                        Constants.                        |

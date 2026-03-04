@@ -14,7 +14,6 @@ import Base:
 using Base.Threads
 using RandomNumbers.PCG: PCGStateSetseq
 
-using ChunkSplitters
 import ChunkSplitters: chunks
 
 #########################

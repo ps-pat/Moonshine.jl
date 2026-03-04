@@ -1,5 +1,4 @@
-using Bumper: UnsafeArrays
-using Graphs: AbstractSimpleGraph, SimpleEdge, AbstractEdgeIter
+using Graphs: AbstractSimpleGraph
 
 import Graphs: edges, vertices, ne, nv,
                eltype, edgetype, is_directed,
@@ -9,13 +8,9 @@ using LayeredLayouts
 
 using GeometryBasics: Point
 
-using DataStructures: DefaultDict
-
 import Base: IteratorSize, eltype, length, isequal
 
 using NetworkLayout
-
-using UnicodePlots: histogram
 
 export AbstractGenealogy
 """

@@ -1,12 +1,4 @@
-using Graphs
-
-using Random
-
-using StatsBase: fit, Histogram
-
 using StaticArrays: @SVector
-
-using UnicodePlots: heatmap, label!, stairs
 
 ##################
 # Arg Definition #

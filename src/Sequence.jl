@@ -12,14 +12,6 @@ import Base: empty,
              copy!,
              sum
 
-using Random
-
-using LinearAlgebra
-
-using UnicodePlots: heatmap, label!, annotate!
-
-using ChunkSplitters: index_chunks
-
 export Sequence
 """
     $(TYPEDEF)

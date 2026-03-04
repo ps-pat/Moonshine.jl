@@ -5,8 +5,6 @@ import Base: iterate,
              getindex,
              IndexStyle
 
-using Graphs: Edge
-
 export Sample
 """
     $(TYPEDEF)
