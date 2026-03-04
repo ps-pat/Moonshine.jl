@@ -7,7 +7,7 @@ Depth = 2:2
 ## Converting to tskit
 An [Arg](@ref) can be converted to a `TreeSequence` using the [`ts`](@ref) method. From there, you have access to the complete [`TreeSequence` API](https://tskit.dev/tskit/docs/stable/python-api.html#treesequence-api).
 
-Conversion of Python objects towards Julia is mainly done by the `pyconvert` methods ([details here](https://juliapy.github.io/PythonCall.jl/stable/conversion-to-julia/)).
+Conversion of Python objects towards Julia is mainly done by the [`PythonCall.pyconvert`](@extref) methods ([details here](https://juliapy.github.io/PythonCall.jl/stable/conversion-to-julia/)).
 
 ## Installing Moonshine From Python
 Moonshine can be installed from Python using the [juliapkg](https://github.com/JuliaPy/pyjuliapkg) package, which is available from pip. After installation, simply run:
@@ -22,7 +22,7 @@ To actually use Moonshine, you will need the [juliacall](https://juliapy.github.
 import juliacall
 juliacall.Main.seval("using Moonshine")
 ```
-You should now have access to the entirety of Moonshine. For instance, you can construct a random arg tree:
+You should now have access to the entirety of Moonshine. For instance, you can construct a random ARG with the following instructions:
 ```python
 M = juliacall.Main.Moonshine
 

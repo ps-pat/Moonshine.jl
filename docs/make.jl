@@ -12,7 +12,8 @@ links = InterLinks(
     "GraphsFlows" => "https://juliagraphs.org/GraphsFlows.jl/dev/objects.inv",
     "Random" => "https://docs.julialang.org/en/v1/objects.inv",
     "Base" => "https://docs.julialang.org/en/v1/objects.inv",
-    "IntervalSets" => "https://juliamath.github.io/IntervalSets.jl/stable/objects.inv")
+    "IntervalSets" => "https://juliamath.github.io/IntervalSets.jl/stable/objects.inv",
+    "PythonCall" => "https://juliapy.github.io/PythonCall.jl/stable/objects.inv")
 
 writter = Documenter.HTMLWriter.HTML(
     assets = ["assets/custom.css"],
