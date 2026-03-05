@@ -631,10 +631,10 @@ branchlength(genealogy, e::Edge) =
 
 branchlength(genealogy) = mapreduce(e -> branchlength(genealogy, e), +, edges(genealogy))
 
-function branchlength(genealogy, ωs; buffer = buffer)
+function branchlength(genealogy, ωs; buffer = default_buffer())
     @no_escape buffer begin
         store = @alloc(Edge{VertexType}, nleaves(genealogy))
-        visited = @alloc(Bool, nrecombinations(arg))
+        visited = @alloc(Bool, nrecombinations(genealogy))
         ret = sum(e -> branchlength(genealogy, e),
                   edges_interval(genealogy, ωs, store, visited))
     end

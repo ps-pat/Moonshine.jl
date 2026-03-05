@@ -80,8 +80,10 @@ for G ∈ (:Tree, :Arg)
         iszero(μ) && return μ
 
         @no_escape buffer begin
-            descendants_ptr = unsafe_convert(Ptr{VertexType},
-                                             @alloc_ptr(nv(arg) * sizeof(VertexType)))
+            descendants_ptr = unsafe_convert(
+                Ptr{VertexType},
+                @alloc_ptr(nv($Gargname) * sizeof(VertexType))
+            )
             while true
                 flag = false
                 for c ∈ children($Gargname, μ, x)
