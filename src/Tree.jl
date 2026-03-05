@@ -293,7 +293,7 @@ function validate(tree::Tree)
         end
     end
 
-    ## Check that the children of every internal vertices are lesser
+    ## Check that the children of every internal vertex are lesser
     ## than itself.
     for v ∈ ivertices(tree)
         _children = children(tree, v)
@@ -314,7 +314,7 @@ function validate(tree::Tree)
         end
     end
 
-    ## Non root internal vertices must have 2 children and 1 parent.
+    ## Non-root internal vertices must have 2 children and 1 parent.
     for v ∈ setdiff(ivertices(tree), mrca(tree))
         isone(length(dads(tree, v))) && length(children(tree, v)) == 2 && continue
 

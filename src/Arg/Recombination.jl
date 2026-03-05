@@ -140,7 +140,7 @@ function recombine!(arg, redge, cedge, breakpoint, rlat, clat, stack;
         _compute_sequence!(arg, cvertex, mask)
     end
 
-    ## Update sequences and ancetral intervals ##
+    ## Update sequences and ancestral intervals ##
     update_upstream!(arg, src(redge), stack, buffer = buffer)
     update_upstream!(arg, src(cedge), stack, buffer = buffer)
 

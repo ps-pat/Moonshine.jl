@@ -75,7 +75,7 @@ function Sample(treesequence::Py)
     Ne = zero(Float64)
     sequence_length = one(Float64)
 
-    ## Retreive relevant genetic parameters.
+    ## Retrieve relevant genetic parameters.
     n = pyconvert(Int, treesequence.num_samples)
 
     for p_py ∈ treesequence.provenances()
@@ -88,7 +88,7 @@ function Sample(treesequence::Py)
         sequence_length = get(parameters, :sequence_length, sequence_length)
     end
 
-    ## Retreive positions and reconstruct sequence.
+    ## Retrieve positions and reconstruct sequence.
     nmarkers = pyconvert(Int, treesequence.num_mutations)
     positions = Vector{Float64}(undef, nmarkers)
     H = [zeros(Sequence, nmarkers) for _ ∈ 1:n]
