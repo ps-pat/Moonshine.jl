@@ -602,95 +602,95 @@ end
 #          |               Unconstrained Recombination                |
 #          +----------------------------------------------------------+
 
-function sample_recombination_unconstrained!(rng, arg, winwidth,
-                                             buffer = default_buffer())
-    ## Sample a recombination edge ##
-    @no_escape buffer begin
-        redges_ptr = convert(Ptr{Edge{VertexType}},
-                             @alloc_ptr(ne(arg) * sizeof(Edge{VertexType})))
-        redges_len = 0
-        for e ∈ edges(arg)
-            (isempty ∘ ancestral_intervals)(arg, e) && continue
-            redges_len += 1
-            unsafe_store!(redges_ptr, e, redges_len)
-        end
-        redges = UnsafeArray{Edge{VertexType}, 1}(redges_ptr, (redges_len,))
+# function sample_recombination_unconstrained!(rng, arg, winwidth,
+#                                              buffer = default_buffer())
+#     ## Sample a recombination edge ##
+#     @no_escape buffer begin
+#         redges_ptr = convert(Ptr{Edge{VertexType}},
+#                              @alloc_ptr(ne(arg) * sizeof(Edge{VertexType})))
+#         redges_len = 0
+#         for e ∈ edges(arg)
+#             (isempty ∘ ancestral_intervals)(arg, e) && continue
+#             redges_len += 1
+#             unsafe_store!(redges_ptr, e, redges_len)
+#         end
+#         redges = UnsafeArray{Edge{VertexType}, 1}(redges_ptr, (redges_len,))
 
-        ws_redges_data = @alloc(Float64, length(redges))
-        map!(e -> branchlength(arg, e), ws_redges_data, redges)
-        ws_redges = ProbabilityWeights(ws_redges_data)
+#         ws_redges_data = @alloc(Float64, length(redges))
+#         map!(e -> branchlength(arg, e), ws_redges_data, redges)
+#         ws_redges = ProbabilityWeights(ws_redges_data)
 
-        breakpoint = 0
-        rlat = 0
-        redge = Edge(0 => 0)
-        valid_redge = false
-        while !valid_redge
-            redge_idx = sample(rng, eachindex(redges), ws_redges)
-            ws_redges[redge_idx] = 0
-            redge = redges[redge_idx]
+#         breakpoint = 0
+#         rlat = 0
+#         redge = Edge(0 => 0)
+#         valid_redge = false
+#         while !valid_redge
+#             redge_idx = sample(rng, eachindex(redges), ws_redges)
+#             ws_redges[redge_idx] = 0
+#             redge = redges[redge_idx]
 
-            ## Sample a breakpoint ##
-            bp_int = (closure ∘ ancestral_intervals)(arg, redge) ∩
-                Ω(0, (last ∘ positions)(arg))
+#             ## Sample a breakpoint ##
+#             bp_int = (closure ∘ ancestral_intervals)(arg, redge) ∩
+#                 Ω(0, (last ∘ positions)(arg))
 
-            breakpoint_dist = Uniform(endpoints(bp_int)...)
-            breakpoint = rand(rng, breakpoint_dist)
-            add_logdensity!(arg, breakpoint_dist, breakpoint)
+#             breakpoint_dist = Uniform(endpoints(bp_int)...)
+#             breakpoint = rand(rng, breakpoint_dist)
+#             add_logdensity!(arg, breakpoint_dist, breakpoint)
 
-            ## Sample the recombination latitude ##
-            rlat_dist = Beta(2)
-            rlat = rand(rng, rlat_dist)
-            add_logdensity!(arg, rlat_dist, rlat)
-            rlat *= branchlength(arg, redge)
-            rlat += latitude(arg, dst(redge))
+#             ## Sample the recombination latitude ##
+#             rlat_dist = Beta(2)
+#             rlat = rand(rng, rlat_dist)
+#             add_logdensity!(arg, rlat_dist, rlat)
+#             rlat *= branchlength(arg, redge)
+#             rlat += latitude(arg, dst(redge))
 
-            ## Cancel the recombination event if it occurs above the mrca of the
-            ## breakpoint.
-            if nlive(arg, rlat, breakpoint, buffer = buffer) > 1
-                valid_redge = true
-            end
-        end
-    end
+#             ## Cancel the recombination event if it occurs above the mrca of the
+#             ## breakpoint.
+#             if nlive!(arg, rlat, breakpoint, buffer = buffer) > 1
+#                 valid_redge = true
+#             end
+#         end
+#     end
 
-    window = breakpoint ± winwidth / 2
+#     window = breakpoint ± winwidth / 2
 
-    ## Sample the recoalescence latitude ##
-    Δclat_dist = Exponential(inv(nlive(arg, rlat, window, buffer = buffer)))
-    Δclat = rand(rng, Δclat_dist)
-    add_logdensity!(arg, Δclat_dist, Δclat)
-    clat = rlat + Δclat
+#     ## Sample the recoalescence latitude ##
+#     Δclat_dist = Exponential(inv(nlive(arg, rlat, window, buffer = buffer)))
+#     Δclat = rand(rng, Δclat_dist)
+#     add_logdensity!(arg, Δclat_dist, Δclat)
+#     clat = rlat + Δclat
 
-    ## Sample the recoalescence edge ##
-    @no_escape buffer begin
-        store = @alloc(Edge{VertexType}, ne(arg))
-        visited = @alloc(Bool, nrecombinations(arg))
-        cedges_data = @alloc(Edge{VertexType}, ne(arg))
-        cedges_ptr = firstindex(cedges_data)
-        for e ∈ edges_interval(arg, window, store, visited, mrca(arg), clat)
-            e == redge && continue
-            cedges_data[cedges_ptr] = e
-            cedges_ptr += 1
-        end
-        cedges = view(cedges_data, 1:(cedges_ptr-1))
+#     ## Sample the recoalescence edge ##
+#     @no_escape buffer begin
+#         store = @alloc(Edge{VertexType}, ne(arg))
+#         visited = @alloc(Bool, nrecombinations(arg))
+#         cedges_data = @alloc(Edge{VertexType}, ne(arg))
+#         cedges_ptr = firstindex(cedges_data)
+#         for e ∈ edges_interval(arg, window, store, visited, mrca(arg), clat)
+#             e == redge && continue
+#             cedges_data[cedges_ptr] = e
+#             cedges_ptr += 1
+#         end
+#         cedges = view(cedges_data, 1:(cedges_ptr-1))
 
-        ws_cedges = @alloc(Float64, length(cedges))
-        map!(e -> latitude(arg, dst(e)) < clat < latitude(arg, src(e)),
-             ws_cedges, cedges)
-        sum_ws = sum(ws_cedges)
+#         ws_cedges = @alloc(Float64, length(cedges))
+#         map!(e -> latitude(arg, dst(e)) < clat < latitude(arg, src(e)),
+#              ws_cedges, cedges)
+#         sum_ws = sum(ws_cedges)
 
-        if clat > tmrca(arg)
-            cedge = Edge(mrca(arg) => mrca(arg))
-        else sum_ws > 0
-            cedge = sample(rng, cedges, ProbabilityWeights(ws_cedges, sum_ws))
-        end
-    end
+#         if clat > tmrca(arg)
+#             cedge = Edge(mrca(arg) => mrca(arg))
+#         else sum_ws > 0
+#             cedge = sample(rng, cedges, ProbabilityWeights(ws_cedges, sum_ws))
+#         end
+#     end
 
-    ## Add recombination event to the graph ##
-    @debug "Unconstrained recombination event" redge cedge breakpoint rlat clat
-    recombine!(arg, redge, cedge, breakpoint, rlat, clat, buffer = buffer)
+#     ## Add recombination event to the graph ##
+#     @debug "Unconstrained recombination event" redge cedge breakpoint rlat clat
+#     recombine!(arg, redge, cedge, breakpoint, rlat, clat, buffer = buffer)
 
-    breakpoint
-end
+#     breakpoint
+# end
 
 #          +----------------------------------------------------------+
 #          |                       ARG Building                       |
