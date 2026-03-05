@@ -309,7 +309,8 @@ end
 
 function _sample_clat(rng, arg, minlat, fedge, nextidx, stack;
                       buffer = default_buffer())
-    local ret
+    clat = Ref{typeof(minlat)}()
+
     @inbounds @no_escape buffer begin
         ## Compute quadrature latitudes & weights
         ws = @alloc(Float64, clat_gridsize)
@@ -340,16 +341,16 @@ function _sample_clat(rng, arg, minlat, fedge, nextidx, stack;
             Λ += w * λt
             lat1 > Λ && continue
 
-            ret = rightlat + (lat1 - Λ) / λt
+            clat[] = rightlat + (lat1 - Λ) / λt
             break
         end
 
         if lat1 > Λ
-            ret = tmrca(arg) + lat1 - Λ
+            clat[] = tmrca(arg) + lat1 - Λ
         end
     end
 
-    ret
+    clat[]
 end
 
 """
