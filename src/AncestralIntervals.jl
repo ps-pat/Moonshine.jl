@@ -217,17 +217,17 @@ union(ωs1::AIs, ωs2::AIs) = union!(copy(ωs1), ωs2)
 
 # -- Intersection ------------------------------------------------------
 
-function intersect!(ωs::AIs, ω::T; simplify = true) where T<:AI
+function intersect!(ωs::AIs, ω::T) where T<:AI
     @inbounds @simd for k ∈ eachindex(ωs)
         ωs[k] = ωs[k] ∩ ω
     end
 
-    simplify && simplify!(ωs)
+    simplify!(ωs)
     ωs
 end
 
 function intersect!(ωs1::AIs{<:AbstractVector{T}}, ωs2::AIs;
-                    simplify = true, buffer = default_buffer()) where T
+                    buffer = default_buffer()) where T
     @no_escape buffer begin
         n1, n2 = length(ωs1), length(ωs2)
         ωbuf_ptr = convert(Ptr{T}, @alloc_ptr(n1 * n2 * sizeof(T)))
@@ -245,13 +245,12 @@ function intersect!(ωs1::AIs{<:AbstractVector{T}}, ωs2::AIs;
             ωs1[k] = unsafe_load(ωbuf_ptr, k)
         end
 
-        simplify && simplify!(ωs1)
-        ωs1
+        simplify!(ωs1)
     end
 end
 
-intersect(ωs1::AIs, ωs2::AIs; simplify = true, buffer = default_buffer()) =
-    intersect!(copy(ωs1), ωs2, simplify = simplify, buffer = buffer)
+intersect(ωs1::AIs, ωs2::AIs; buffer = default_buffer()) =
+    intersect!(copy(ωs1), ωs2, buffer = buffer)
 
 # -- Inclusion & cie ---------------------------------------------------
 
@@ -276,8 +275,7 @@ end
 for f ∈ (:union, :intersect)
     f! = Symbol(string(f) * '!')
 
-    @eval $f(ωs::AIs, x::Union{<:AIs, AI}; simplify = true) =
-        $f!(copy(ωs), x, simplify = simplify)
+    @eval $f(ωs::AIs, x::Union{<:AIs, AI}) = $f!(copy(ωs), x)
 end
 
 #          +----------------------------------------------------------+
