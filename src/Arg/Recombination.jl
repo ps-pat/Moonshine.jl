@@ -363,7 +363,7 @@ function rlat_min end
 
 function rlat_min(arg, e, nextidx)
     nextpos = idxtopos(arg, nextidx)
-    s, d = src(e), dst(e)
+    d = dst(e)
     refstate = sequence(arg, d)[nextidx]
 
     @inbounds while true
@@ -372,7 +372,6 @@ function rlat_min(arg, e, nextidx)
         c = first(_children)
         sequence(arg, c)[nextidx] == refstate || break
 
-        s = d
         d = c
     end
 
@@ -409,8 +408,9 @@ function _update_live_edges!(live_edges, arg, newd, nextidx)
     Edge(dst(e) => lastd)
 end
 
-function _sample_cedge_wild(rng, arg, lat, fedge, nextidx, redge::T, stack;
-                            buffer = default_buffer()) where T
+function _sample_cedge_wild(rng, arg, lat, fedge, nextidx, stack;
+                            buffer = default_buffer())
+    T = Edge{VertexType}
     nextpos = idxtopos(arg, nextidx)
     len = 0
 
@@ -562,7 +562,7 @@ function sample_recombination_constrained!(
             if clat > tmrca(arg)
                 cedge = Edge(mrca(arg) => mrca(arg))
             else
-                cedge = _sample_cedge_wild(rng, arg, clat, fedge, nextidx, redge,
+                cedge = _sample_cedge_wild(rng, arg, clat, fedge, nextidx,
                                            estack, buffer = buffer)
             end
         else
