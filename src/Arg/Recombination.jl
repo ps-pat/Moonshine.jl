@@ -525,10 +525,11 @@ function sample_recombination_constrained!(
         es_min_eu = (iszero ∘ dst)(eu) ? Inf : rlat_min(arg, eu, nextidx)
         es_mins = (rlat_min(arg, e1, nextidx), rlat_min(arg, e2, nextidx), es_min_eu)
         es_max = min(latitude(arg, src(e1)), latitude(arg, src(e2)))
-        rints_width = @SVector [
+        rints_width = (
             max(0, es_max - es_mins[1]),
             max(0, es_max - es_mins[2]),
-            isinf(es_mins[3]) ? zero(Float64) : latitude(arg, src(eu)) - es_mins[3]]
+            isinf(es_mins[3]) ? zero(Float64) : latitude(arg, src(eu)) - es_mins[3]
+        )
 
         ## We proceed in two steps to avoid sampling a location too close to
         ## the ends of the recombination branch, which may cause numerical

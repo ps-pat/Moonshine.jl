@@ -2,7 +2,7 @@
 
 julia_version = "1.12.5"
 manifest_format = "2.0"
-project_hash = "c65ad715281c38810d154c4c50774c3ea971ee81"
+project_hash = "5df4e9b656b73c95192e00a59e7064a9bb6b40d2"
 
 [[deps.AliasTables]]
 deps = ["PtrArrays", "Random"]
@@ -533,7 +533,7 @@ uuid = "a63ad114-7e13-5084-954f-fe012c677804"
 version = "1.11.0"
 
 [[deps.Moonshine]]
-deps = ["Bumper", "ChunkSplitters", "CondaPkg", "CpuId", "DataStructures", "Distributions", "DocStringExtensions", "DoubleFloats", "GeometryBasics", "Graphs", "IntervalSets", "JSON", "LayeredLayouts", "LinearAlgebra", "NetworkLayout", "Preferences", "ProgressMeter", "PythonCall", "Random", "RandomNumbers", "SIMD", "StaticArrays", "StatsBase", "UnicodePlots", "UnsafeArrays"]
+deps = ["Bumper", "ChunkSplitters", "CondaPkg", "CpuId", "DataStructures", "Distributions", "DocStringExtensions", "DoubleFloats", "GeometryBasics", "Graphs", "IntervalSets", "JSON", "LayeredLayouts", "LinearAlgebra", "NetworkLayout", "Preferences", "ProgressMeter", "PythonCall", "Random", "RandomNumbers", "SIMD", "StatsBase", "UnicodePlots", "UnsafeArrays"]
 path = "."
 uuid = "99b31415-443e-43a2-8bf4-ca532bb4a161"
 version = "0.4.0"
