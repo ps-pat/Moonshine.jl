@@ -6,6 +6,19 @@ using Documenter
 
 using DocumenterInterLinks: InterLinks
 
+using Git: git
+
+const draft = "draft" ∈ ARGS
+
+## Determine which version we are building documentation for
+current_version = try
+    gitout = (read ∘ git)(["describe", "--tags", "--abbrev=0", "--exact-match"])
+    version = mapreduce(Char, *, gitout[1:end - 1])
+    match(r"v[0-9]+\.[0-9]+\.[0-9]+", version).match
+catch
+    "dev"
+end
+
 links = InterLinks(
     "Graphs" => "https://juliagraphs.org/Graphs.jl/stable/objects.inv",
     "GraphMakie" => "https://graph.makie.org/stable/objects.inv",
@@ -17,11 +30,15 @@ links = InterLinks(
 
 writter = Documenter.HTMLWriter.HTML(
     assets = ["assets/custom.css"],
-    canonical = "https://moonshine.patrickfournier.ca/stable",
+    canonical = "https://patrickfournier.ca/software/documentation/moonshine/stable",
+    edit_link = :commit,
+    highlights = ["python", "python-repl"],
     size_threshold_warn = 200 * 1024,
     size_threshold = nothing)
 
-makedocs(sitename = "Moonshine.jl",
+makedocs(build = "build/$current_version",
+         draft = draft,
+         sitename = "Moonshine.jl",
          format = Documenter.HTML(;collapselevel = 1),
          doctest = true,
          plugins = [links],
@@ -46,7 +63,3 @@ makedocs(sitename = "Moonshine.jl",
          ]
      ]
  )
-
-if "publish" ∈ ARGS
-    deploydocs(repo = "github.com/ps-pat/Moonshine.jl.git")
-end

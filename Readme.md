@@ -1,12 +1,12 @@
 # Moonshine.jl [![Julia](https://img.shields.io/badge/-Julia-9558B2?style=for-the-badge&logo=julia&logoColor=white)](https://julialang.org/)
 [![Project Status: Active – The project has reached a usable state and is being actively developed.](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
-[![Documentation stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://moonshine.patrickfournier.ca/stable/)
-[![Documentation dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://moonshine.patrickfournier.ca/dev/)
+[![Documentation stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://patrickfournier.ca/software/documentation/moonshine/stable)
+[![Documentation dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://patrickfournier.ca/software/documentation/moonshine/dev)
 [![Aqua QA](https://raw.githubusercontent.com/JuliaTesting/Aqua.jl/master/badge.svg)](https://github.com/JuliaTesting/Aqua.jl)
 [![DOI](https://zenodo.org/badge/974384938.svg)](https://doi.org/10.5281/zenodo.15558973)
 
 ## Overview
-Moonshine.jl is a Julia framework for coalescent modelling oriented towards ancestral recombination graph (ARG) inference. It provides the [`AbstractGenealogy`](https://moonshine.patrickfournier.ca/stable/reference/AbstractGenealogy/#Moonshine.AbstractGenealogy) type which leverages [Graphs.jl](https://github.com/JuliaGraphs/Graphs.jl) for convenient implementation of graph-theoretical models of molecular evolution.
+Moonshine.jl is a Julia framework for coalescent modelling oriented towards ancestral recombination graph (ARG) inference. It provides the [`AbstractGenealogy`](https://patrickfournier.ca/software/documentation/moonshine/stable/reference/AbstractGenealogy/#Moonshine.AbstractGenealogy) type which leverages [Graphs.jl](https://github.com/JuliaGraphs/Graphs.jl) for convenient implementation of graph-theoretical models of molecular evolution.
 
 ## Installation
 As usual, from julia's REPL, enter [Pkg mode](https://docs.julialang.org/en/v1/stdlib/REPL/#Pkg-mode) by pressing `]`. Then,
@@ -15,7 +15,7 @@ pkg> add Moonshine
 ```
 
 ## Documentation
-This readme is austere by design. [Full Documentation](https://moonshine.patrickfournier.ca/stable/) as well as a [quickstart tutorial](https://moonshine.patrickfournier.ca/stable/quickstart) are available on a dedicated website. The tutorial is targeted towards experienced as well as first-time julia users.
+This readme is austere by design. [Full Documentation](https://patrickfournier.ca/software/documentation/moonshine/stable/quickstart) as well as a [quickstart tutorial](https://patrickfournier.ca/software/documentation/moonshine/stable/quickstart) are available on a dedicated website. The tutorial is targeted towards experienced as well as first-time julia users.
 
 ## Roadmap
 - [ ] Fix unconstrained recombinations-and-recoalescence sampling
