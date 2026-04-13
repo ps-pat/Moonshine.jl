@@ -310,7 +310,7 @@ rng = Xoshiro(42)
 
 @time begin
     arg = Arg(rng, 3000, 1e-8, 1e-8, 1e4, 1e6)
-    build!(rng, arg)
+    build!(rng, arg, noprogress = true)
 end
 
 plot_latitudes(arg)
