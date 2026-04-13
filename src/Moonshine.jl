@@ -145,13 +145,6 @@ include("genealogy_common.jl")
 include("Distributions.jl")
 include("ImportanceSampling.jl")
 
-#          +----------------------------------------------------------+
-#          |                      Precompilation                      |
-#          +----------------------------------------------------------+
-
-precompile(Arg, (Xoshiro, Float64, Float64, Float64, Float64, Float64))
-precompile(build!, (Xoshiro, Arg))
-
 # ----------------------------------------------------------------------
 
 function __init__()
