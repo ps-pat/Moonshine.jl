@@ -1,32 +1,32 @@
 cff-version: 1.2.0
-title: Moonshine.jl
-message: "If you use this software, please cite it using the metadata from this file."
+message: "If you use this software, please cite it as below."
 authors:
-  - orcid: 'https://orcid.org/0000-0003-1992-2155'
-    given-names: Patrick
-    family-names: Fournier
-    email: pf@patrickfournier.ca
-    affiliation: Université du Québec à Montréal
-  - given-names: Fabrice
-    family-names: Larribe
-    email: larribe.fabrice@uqam.ca
-    affiliation: Université du Québec à Montréal
+- given-names: "Patrick"
+  family-names: "Fournier"
+  email: "pf@patrickfournier.ca"
+  affiliation: "Université du Québec à Montréal"
+  orcid: "https://orcid.org/0000-0003-1992-2155"
+- given-names: "Fabrice"
+  family-names: "Larribe"
+  email: "larribe.fabrice@uqam.ca"
+  affiliation: "Université du Québec à Montréal"
+title: "Moonshine.jl"
 doi: 10.5281/zenodo.15558973
-url: 'https://patrickfournier.ca/software/documentation/moonshine/stable'
-prefered-citation:
+url: "https://patrickfournier.ca/software/documentation/moonshine/stable"
+preferred-citation:
   type: article
-  title: Moonshine.jl: a Julia package for genome-scale model-based ancestral recombination graph inference
   authors:
-    - orcid: 'https://orcid.org/0000-0003-1992-2155'
-      given-names: Patrick
-      family-names: Fournier
-      email: pf@patrickfournier.ca
-      affiliation: Université du Québec à Montréal
-    - given-names: Fabrice
-      family-names: Larribe
-      email: larribe.fabrice@uqam.ca
-      affiliation: Université du Québec à Montréal
-  journal: Frontiers in Genetics
+  - given-names: "Patrick"
+    family-names: "Fournier"
+    email: "pf@patrickfournier.ca"
+    affiliation: "Université du Québec à Montréal"
+    orcid: "https://orcid.org/0000-0003-1992-2155"
+  - given-names: "Fabrice"
+    family-names: "Larribe"
+    email: "larribe.fabrice@uqam.ca"
+    affiliation: "Université du Québec à Montréal"
+  doi: "10.3389/fgene.2026.1753780"
+  journal: "Frontiers in Genetics"
+  title: "Moonshine.jl: a Julia package for genome-scale model-based ancestral recombination graph inference"
   volume: 17
   year: 2026
-  doi: 10.3389/fgene.2026.1753780
