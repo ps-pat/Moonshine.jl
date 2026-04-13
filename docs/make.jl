@@ -48,7 +48,8 @@ makedocs(build = "build/$current_version",
          "Design & conventions" => "design.md",
          "Guides" => [
              "QuickStart" => "quickstart.md",
-             "Python & tskit" => "python.md"
+             "Python & tskit" => "python.md",
+             "Working with VCF files" => "vcf.md"
          ],
          "Reference" => [
              "AbstractGenealogy" => "reference/AbstractGenealogy.md",
