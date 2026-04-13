@@ -1,3 +1,8 @@
+```@meta
+CurrentModule = Moonshine
+ShareDefaultModule = true
+```
+
 # Python & tskit
 ```@contents
 Pages = ["python.md"]

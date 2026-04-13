@@ -1,5 +1,6 @@
 ```@meta
 CurrentModule = Moonshine
+ShareDefaultModule = true
 ```
 
 # Quick Start
@@ -65,7 +66,7 @@ You only need to:
 4. construct a sample.
 This can be done interactively via [the Julia
 REPL](https://docs.julialang.org/en/v1/stdlib/REPL/):
-```@repl quickstart
+```@repl
 using Moonshine
 using Random: Xoshiro
 rng = Xoshiro(42)
@@ -95,7 +96,7 @@ modern terminal emulator
 If you're new to Julia, yes, we can be fast *and* look good. Sequences are
 displayed as one-dimensional heatmaps for convenience. You can get a slightly
 more detailed output using the [`plot_sequence`](@ref) method:
-```@repl quickstart
+```@repl
 plot_sequence(s[1])
 ```
 The result is a little bit distorted (at least on my browser) but should look
@@ -115,7 +116,7 @@ This means we can basically treat them as arrays (like we did) and as iterables
 Now that we have some data, it's time to build our first coalescent tree. A
 quick look at [`Tree`](@ref)'s documentation reveals that it can be constructed
 from a sample:
-```@repl quickstart
+```@repl
 tree = Tree(s)
 ```
 Conveniently, the REPL displays that `tree` is a coalescent tree with 10 leaves
@@ -127,7 +128,7 @@ graph-theoretical sense, vertices & edges) and *latitudes* (coalescence times).
 Right now, the topology of `tree` is that of an edgeless graph with 10 isolated
 vertices. Let's do something about it. We build a tree with the [`build!`](@ref)
 method:
-```@repl quickstart
+```@repl
 rng_orig = copy(rng)
 build!(rng, tree)
 ```
@@ -146,7 +147,7 @@ We can ignore it for now. Before explaining the building process any further,
 we take a quick break to talk about visualization. First, a neat little
 histogram of `tree`'s latitudes can be obtained via the
 [`plot_latitudes`](@ref) method:
-```@repl quickstart
+```@repl
 plot_latitudes(tree)
 ```
 While it's not going to win any beauty contest soon, it's quick, easy, and since
@@ -194,12 +195,12 @@ the use as described in the [previous section](#Storing-Haplotypes:-the-[Sample]
 Bias can be tuned via the `bias0` *keyword argument* of `build!`. Valid values
 go from `0` (no bias, default value) to `Inf` (strong bias). Let's build a tree
 similar to the previous one but with infinite bias:
-```@repl quickstart
+```@repl
 rng = copy(rng_orig)
 tree0 = Tree(s)
 build!(rng, tree0, bias0 = Inf)
 ```
-```@repl quickstart
+```@repl
 plot_latitudes(tree0)
 ```
 ```julia-repl
@@ -241,7 +242,7 @@ example): a vertex is red if all markers are derived, blue otherwise. This means
 there are three *mutation edges* with respect to the first marker in `tree`:
 ``{17-1}``, ``{14-13}`` and ``{12-11}``. Let's build `tree` again,
 this time using [`LeftM`](@ref) and an infinite bias, and see what happens:
-```@repl quickstart
+```@repl
 tree_left = Tree(s)
 build!(copy(rng_orig), tree_left, Dist = LeftM(), bias0 = Inf)
 ```
@@ -258,7 +259,7 @@ a tree. To make our lives a little easier, there is a constructor that
 transparently calls [`Sample`](@ref)'s random constructor and constructs a new
 tree from the result. Long story short, we could have built `tree` more
 succinctly:
-```@repl quickstart
+```@repl
 rng = Xoshiro(42)
 tree_lazy = Tree(rng, 10, 1e-8, 1e-8, 1e4, 1e6)
 build!(rng, tree_lazy)
@@ -277,18 +278,18 @@ should come as no surprise that instances of [`Arg`](@ref), Moonshine's
 tailor-made type to represent ARGs, are built on top of instances of
 [`Tree`](@ref). You should be equally unsurprised when you learn that they can
 be constructed in much the same way as [`Tree`](@ref) were
-```@repl quickstart
+```@repl
 arg_tree = Arg(tree)
 ```
 and you should literally fall asleep from boredom when I tell you how to build
 them:
-```@repl quickstart
+```@repl
 rng = Xoshiro(42)
 build!(rng, arg_tree)
 ```
 Just to make sure your lack of surprise is total, let me show you how to
 plot its vertices' latitudes:
-```@repl quickstart
+```@repl
 plot_latitudes(arg_tree)
 ```
 I won't `plot_genealogy` it, though, since, as you might have noticed, this is
@@ -305,7 +306,7 @@ coalescent tree, of which they are special cases). This opens the door to
 things like MCMC sampling, which might be implemented in the future. For now,
 let’s illustrate Moonshine’s functionalities further with something more
 substantial:
-```@repl quickstart
+```@repl
 rng = Xoshiro(42)
 
 @time begin
@@ -339,12 +340,12 @@ garbage collection. The next couple of lines are similar to the ones
 displayed for trees and tell us about the number of haplotypes ("leaves") and
 markers associated with `arg`. We can easily plot the distribution of
 breakpoints (recombination positions):
-```@repl quickstart
+```@repl
 plot_breakpoints(arg)
 ```
 
 Another interesting and easily plottable feature are tMRCAs:
-```@repl quickstart
+```@repl
 plot_tmrcas(arg, npoints = 300, noprogress = true)
 ```
 As you may have noticed, computing tMRCAs is a *slow* process. The `npoints`
@@ -376,7 +377,7 @@ controls the window of positions considered when sampling an event. It is
 infinite by default, leading to "exact" sampling. Setting it to 0 leads to
 "approximate" SMC-type sampling with potentially significant speed gains. Let's
 do a quick comparison.
-```@repl quickstart
+```@repl
 rng = Xoshiro(42)
 s = Sample(rng, 1000, 1e-8, 1e-8, 1e4, 1e7);
 
@@ -394,7 +395,7 @@ As you can see, there are significant gains. Memory usage is a little higher
 for approximate sampling due to the increased number of recombination events,
 ultimately leading to, well, more stuff to store in memory. We can actually verify
 that:
-```@repl quickstart
+```@repl
 nrecombinations(arg_exact)
 nrecombinations(arg_smc)
 ```
@@ -413,7 +414,7 @@ interested in computing maximum flow between the first two vertices of `arg`.
 No need to resort to complex code: this can be done in a couple of lines by
 invoking [`GraphsFlows.maximum_flow`](@extref) from
 [GraphFlows.jl](https://juliagraphs.org/GraphsFlows.jl/dev/):
-```@repl quickstart
+```@repl
 using Graphs, GraphsFlows, SparseArrays
 capmat = spzeros(Float64, nv(arg), nv(arg)); # 0-initialized sparse matrix
 for e ∈ edges(arg) # fill capacity matrix
