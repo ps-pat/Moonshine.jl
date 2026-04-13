@@ -1,3 +1,54 @@
+## [0.4.1] - 2026-04-13
+
+### 🚀 Features
+
+- *(Sample)* Implement `sequences` for type `Sample`
+
+### 🐛 Bug Fixes
+
+- Ensure `_sample_clat` returns a defined value
+- Trivial mistakes
+- Remove precompilation directives
+
+### 🚜 Refactor
+
+- Use the function `load_preference` directly
+- Get rid of useless imports/dependencies
+- Use version-specific manifest
+- Consolidate `using` directives
+- Remove unused variables and function arguments
+- Remove argument `simplify` from `intersect/union` methods
+- Comment out `_sample_recombination_unconstrained!`
+- *(Arg)* Remove dependency `StaticArrays`
+
+### 📚 Documentation
+
+- Bump dependencies
+- Minor improvements
+- Build documentation locally
+- Update citation
+- Add Frontiers in Genetics citation
+- Update home page
+- Static genealogy illustrations
+- Disable a progress bar
+- Add guide about VCF files
+- Remove useless dependencies
+- Use `SharedDefaultModule`
+
+### 🎨 Styling
+
+- Fix spelling mistakes in comments
+- Multiline array
+
+### 🧪 Testing
+
+- Bump testing dependencies
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump dependencies
+- Update my email address
+
 ## [0.4.0] - 2026-02-17
 
 ### 🚀 Features
@@ -194,4 +245,20 @@
 - *(mmn)* Exclude outedges of recombination vertices from mmn algorithm
 - Early termination for `isdisjoint`
 - *(mmn)* Implements bottom-up marginal graph traversal with early termination
+
+## [0.2.7] - 2025-08-18
+
+### 💼 Other
+
+- Bump dependencies
+
+## [0.2.6] - 2025-08-05
+
+### 💼 Other
+
+- Minor fixes
+- Enhance wording of "quickstart"
+- Enhance wording of "index"
+
+## [0.2.1] - 2025-05-05
 
