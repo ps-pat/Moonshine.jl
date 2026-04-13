@@ -5,7 +5,8 @@ using Moonshine
 import Aqua
 
 let piracy_allowed = [
-    Moonshine._pointer] # See https://github.com/eschnett/SIMD.jl/issues/121
+        Moonshine._pointer # See https://github.com/eschnett/SIMD.jl/issues/121
+    ]
 
     @time Aqua.test_all(Moonshine, piracies = (treat_as_own = piracy_allowed,))
 end
