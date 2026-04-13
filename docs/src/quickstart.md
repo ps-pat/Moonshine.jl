@@ -2,11 +2,6 @@
 CurrentModule = Moonshine
 ```
 
-```@setup quickstart
-using GraphMakie
-using CairoMakie
-```
-
 # Quick Start
 ```@contents
 Pages = ["quickstart.md"]
@@ -169,9 +164,6 @@ julia> using GLMakie
 
 julia> plot_genealogy(tree)
 ```
-```@setup quickstart
-save("assets/plot_genealogy_tree1.png", plot_genealogy(tree), size = (800, 600))
-```
 After some time, you should obtain the following plot:
 ![](assets/plot_genealogy_tree1.png)
 This is all good and well, but you might wonder about the distribution of
@@ -210,9 +202,6 @@ build!(rng, tree0, bias0 = Inf)
 ```@repl quickstart
 plot_latitudes(tree0)
 ```
-```@setup quickstart
-save("assets/plot_genealogy_tree2.png", plot_genealogy(tree0), size = (800, 600))
-```
 ```julia-repl
 julia> plot_genealogy(tree0)
 ```
@@ -225,11 +214,6 @@ markers. Moonshine ships with the [`LeftM`](@ref) "distance", which is nothing
 more than the discrete metric on the leftmost marker. First, let's have a look
 at the situation on `tree`. We can color vertices according to the status of
 their leftmost marker as follows:
-```@setup quickstart
-let fig = plot_genealogy(tree, Ω(positions(tree)[1:2]...))
-    save("assets/plot_genealogy_tree3.png", fig, size = (800, 600))
-end
-```
 ```julia-repl
 julia> plot_genealogy(tree, Ω(positions(tree)[1:2]...))
 ```
@@ -260,11 +244,6 @@ this time using [`LeftM`](@ref) and an infinite bias, and see what happens:
 ```@repl quickstart
 tree_left = Tree(s)
 build!(copy(rng_orig), tree_left, Dist = LeftM(), bias0 = Inf)
-```
-```@setup quickstart
-let fig = plot_genealogy(tree_left, Ω(positions(tree_left)[1:2]...))
-    save("assets/plot_genealogy_tree_left.png", fig, size = (800, 600))
-end
 ```
 ```julia-repl
 julia> plot_genealogy(tree_left, Ω(positions(tree_left)[1:2]...))
