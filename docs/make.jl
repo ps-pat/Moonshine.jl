@@ -1,5 +1,3 @@
-push!(LOAD_PATH,"../src/")
-
 using Moonshine
 
 using Documenter
@@ -7,8 +5,6 @@ using Documenter
 using DocumenterInterLinks: InterLinks
 
 using Git: git
-
-const draft = "draft" ∈ ARGS
 
 ## Determine which version we are building documentation for
 current_version = try
@@ -37,7 +33,7 @@ writter = Documenter.HTMLWriter.HTML(
     size_threshold = nothing)
 
 makedocs(build = "build/$current_version",
-         draft = draft,
+         draft = "draft" ∈ ARGS,
          sitename = "Moonshine.jl",
          format = Documenter.HTML(;collapselevel = 1),
          doctest = true,
