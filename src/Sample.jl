@@ -69,7 +69,6 @@ end
 function Sample(treesequence::Py)
     @_validate_python_class(treesequence, tskit[].TreeSequence)
 
-    n = zero(Int)
     μ = zero(Float64)
     ρ = zero(Float64)
     Ne = zero(Float64)

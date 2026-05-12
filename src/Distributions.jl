@@ -39,7 +39,7 @@ Bernoulli(d::BernoulliMulti{T}, k) where T = Bernoulli{T}(prob1(d, k))
 
 length(d::BernoulliMulti) = round(Int, log2(length(d.p)))
 
-insupport(d::BernoulliMulti, x::AbstractVector) = all(z -> iszero(z) || isone(z), x)
+insupport(::BernoulliMulti, x::AbstractVector) = all(z -> iszero(z) || isone(z), x)
 
 params(d::BernoulliMulti) = (d.p,)
 @generated partype(::BernoulliMulti{T}) where T = T

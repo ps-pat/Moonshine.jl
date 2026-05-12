@@ -151,7 +151,7 @@ end
 
 idxinchunk(n, x) = mod1(x, n)
 
-for (fun, op) ∈ Dict(:chunkidx => :fld1, :idxinchunk => :mod1)
+for fun ∈ (:chunkidx, :idxinchunk)
     @eval begin
         $fun(::Type{Sequence}, x) = $fun(blocksize(Sequence), x)
         $fun(::Sequence, x) = $fun(Sequence, x)
@@ -285,7 +285,6 @@ function ancestral_mask! end
 
 function ancestral_mask!(mask, h::Int, idx; wipe = true)
     bs = blocksize(Sequence)
-    nchunks = div(h, bs, RoundUp)
 
     wipe && wipe!(mask)
 

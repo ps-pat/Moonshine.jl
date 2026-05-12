@@ -1104,7 +1104,7 @@ eltype(::AbstractEIterMGraph) = Edge{VertexType}
 IteratorSize(::T) where T<:AbstractEIterMGraph = Base.SizeUnknown()
 IteratorSize(::Type{<:AbstractEIterMGraph}) = Base.SizeUnknown()
 
-block_predicate(::Any, e) = true
+block_predicate(::Any, ::Any) = true
 
 """
     $(TYPEDEF)
