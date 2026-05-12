@@ -49,7 +49,7 @@ EdgesIterMMN(arg, ωs, stack, visited, roots, chunk0, mask) =
     true
 end
 
-export mutation_edges!, mutation_edges
+export mutation_edges, mutation_edges!
 function mutation_edges!(mutations, arg, ω::Ω; buffer = default_buffer())
     ## Compute the chunks and indices.
     idx = postoidx(arg, ω)

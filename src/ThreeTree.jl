@@ -1,9 +1,15 @@
 import Graphs:
     AbstractSimpleGraph,
+    SimpleEdge,
+    edges,
+    edgetype,
+    has_edge,
+    has_vertex,
+    inneighbors,
     is_directed,
-    inneighbors, outneighbors,
-    nv, has_vertex,
-    SimpleEdge, edges, edgetype, has_edge, ne, rem_edge!
+    ne,
+    nv,
+    outneighbors
 
 """
     $(TYPEDEF)

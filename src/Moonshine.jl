@@ -12,7 +12,7 @@ using Base: unsafe_convert
 
 using ProgressMeter
 
-using CpuId: simdbytes, cpufeature
+using CpuId: cpufeature, simdbytes
 
 using SIMD: VecRange
 
@@ -22,7 +22,7 @@ using DocStringExtensions
 
 using Preferences
 
-using StatsBase: ProbabilityWeights, sample, fit, Histogram
+using StatsBase: Histogram, ProbabilityWeights, fit, sample
 
 using PythonCall
 
@@ -30,7 +30,7 @@ using Random
 
 using LinearAlgebra
 
-using UnicodePlots: heatmap, label!, annotate!, stairs, histogram
+using UnicodePlots: heatmap, histogram, label!, stairs
 
 using Graphs
 

@@ -2,7 +2,7 @@
 # Multivariate Bernoulli #
 ##########################
 
-import Base: length, eltype
+import Base: eltype, length
 
 import Distributions: insupport, pdf,
                       params, partype,

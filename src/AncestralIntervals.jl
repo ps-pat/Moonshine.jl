@@ -10,7 +10,7 @@ import Base:
     union!, union, intersect!, intersect, join, in, issubset, isdisjoint,
     copy, empty!, ==, !=
 
-import IntervalSets: leftendpoint, rightendpoint, endpoints, width
+import IntervalSets: endpoints, leftendpoint, rightendpoint, width
 
 export Ω
 """

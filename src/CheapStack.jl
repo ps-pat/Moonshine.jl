@@ -6,8 +6,7 @@ import Base: eltype,
              pop!,
              push!,
              show,
-             iterate,
-             vec
+             iterate
 
 export CheapStack
 """

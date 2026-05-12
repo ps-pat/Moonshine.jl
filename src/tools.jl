@@ -1,13 +1,6 @@
-import Base:
-union, union!,
-intersect, intersect!,
-join,
-in,
-issubset,
-isdisjoint,
-==, !=
+import Base: ==, !=, in, isdisjoint, intersect!, join, union, union!
 
-import IntervalSets: leftendpoint, rightendpoint, endpoints, width
+import IntervalSets: endpoints, leftendpoint, rightendpoint
 
 using IntervalSets: TypedEndpointsInterval
 
