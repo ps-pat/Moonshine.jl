@@ -9,4 +9,4 @@ doc-deploy:
 # Build documentation for current commit (set `mode` to `draft` to enable draft mode).
 doc-make mode="":
     julia --project=docs --eval "import Pkg; Pkg.instantiate(); Pkg.precompile()"
-    julia --project=docs -- docs/make.jl {{ mode }}
+    time julia --project=docs -- docs/make.jl {{ mode }}
