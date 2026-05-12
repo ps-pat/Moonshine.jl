@@ -2,7 +2,7 @@
 
 julia_version = "1.12.6"
 manifest_format = "2.0"
-project_hash = "5df4e9b656b73c95192e00a59e7064a9bb6b40d2"
+project_hash = "1f4da33d5b1be2fc7c7cf434963c0db8aa34411e"
 
 [[deps.AliasTables]]
 deps = ["PtrArrays", "Random"]
@@ -499,15 +499,16 @@ uuid = "e1d29d7a-bbdc-5cf2-9ac0-f12de2c33e28"
 version = "1.2.0"
 
 [[deps.Moonshine]]
-deps = ["Bumper", "ChunkSplitters", "CondaPkg", "CpuId", "DataStructures", "Distributions", "DocStringExtensions", "DoubleFloats", "GeometryBasics", "Graphs", "IntervalSets", "JSON", "LayeredLayouts", "LinearAlgebra", "NetworkLayout", "Preferences", "ProgressMeter", "PythonCall", "Random", "RandomNumbers", "SIMD", "StatsBase", "UnicodePlots", "UnsafeArrays"]
+deps = ["Bumper", "ChunkSplitters", "CondaPkg", "CpuId", "Distributions", "DocStringExtensions", "DoubleFloats", "GeometryBasics", "Graphs", "IntervalSets", "JSON", "LayeredLayouts", "LinearAlgebra", "NetworkLayout", "Preferences", "ProgressMeter", "PythonCall", "Random", "RandomNumbers", "SIMD", "StatsBase", "UnicodePlots", "UnsafeArrays"]
 path = "."
 uuid = "99b31415-443e-43a2-8bf4-ca532bb4a161"
-version = "0.4.0"
+version = "0.4.1"
 
     [deps.Moonshine.extensions]
     MoonshineMakie = "GraphMakie"
 
     [deps.Moonshine.weakdeps]
+    DataStructures = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
     GraphMakie = "1ecd5474-83a3-4783-bb4f-06765db800d2"
 
 [[deps.MozillaCACerts_jll]]

@@ -8,7 +8,6 @@ Bumper = "8ce10254-0962-460f-a3d8-1f77fea1446e"
 ChunkSplitters = "ae650224-84b6-46f8-82ea-d812ca08434e"
 CondaPkg = "992eb4ea-22a4-4c89-a5bb-47a3300528ab"
 CpuId = "adafc99b-e345-5852-983c-f28acb93d879"
-DataStructures = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 DocStringExtensions = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
 DoubleFloats = "497a8b3b-efae-58df-a0af-a86822472b78"
@@ -30,6 +29,7 @@ UnicodePlots = "b8865327-cd53-5732-bb35-84acbb429228"
 UnsafeArrays = "c4a57d5a-5b31-53a6-b365-19f8c011fbd6"
 
 [weakdeps]
+DataStructures = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
 GraphMakie = "1ecd5474-83a3-4783-bb4f-06765db800d2"
 
 [extensions]

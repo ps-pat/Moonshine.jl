@@ -4,8 +4,6 @@ using IntervalSets
 
 using DoubleFloats: Double64
 
-using DataStructures: Stack, Queue, DefaultDict
-
 using Bumper
 
 using UnsafeArrays: UnsafeArray
