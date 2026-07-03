@@ -10,3 +10,7 @@ doc-deploy:
 doc-make mode="":
     julia --project=docs --eval "import Pkg; Pkg.instantiate(); Pkg.precompile()"
     time julia --project=docs -- docs/make.jl {{ mode }}
+
+# Serve documentation locally
+doc-serve:
+    julia --project=docs --eval "import LiveServer; LiveServer.serve(dir = \"docs/build\")"
