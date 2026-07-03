@@ -24,10 +24,11 @@ links = InterLinks(
     "IntervalSets" => "https://juliamath.github.io/IntervalSets.jl/stable/objects.inv",
     "PythonCall" => "https://juliapy.github.io/PythonCall.jl/stable/objects.inv")
 
-writter = Documenter.HTMLWriter.HTML(
+writer = Documenter.HTMLWriter.HTML(
     assets = ["assets/custom.css"],
     canonical = "https://patrickfournier.ca/software/documentation/moonshine/stable",
     edit_link = "master",
+    collapselevel = 1,
     highlights = ["python", "python-repl"],
     size_threshold_warn = 200 * 1024,
     size_threshold = nothing)
@@ -35,7 +36,7 @@ writter = Documenter.HTMLWriter.HTML(
 makedocs(build = "build/$current_version",
          draft = "draft" ∈ ARGS,
          sitename = "Moonshine.jl",
-         format = Documenter.HTML(;collapselevel = 1),
+         format = writer,
          doctest = true,
          plugins = [links],
          repo = Remotes.GitHub("ps-pat", "Moonshine.jl"),
