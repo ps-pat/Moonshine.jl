@@ -7,40 +7,6 @@ using IntervalSets: TypedEndpointsInterval
 import SIMD._pointer
 
 #          +----------------------------------------------------------+
-#          |                    Khatri-Rao Product                    |
-#          +----------------------------------------------------------+
-
-"""
-    $(SIGNATURES)
-
-Khatri-Rao (column-wise Kronecker) product.
-
---*Internal*--
-"""
-function ⊙(A::AbstractMatrix{T}, B::AbstractMatrix{T}) where T
-    c = size(A, 2)
-    c == size(B, 2) ||
-        throw(DimensionMismatch(lazy"matrix A has dimension $(size(A)), " *
-                                "matrix B has dimension $(size(B))"))
-
-    p, q = size(A, 1), size(B, 1)
-
-    ret = similar(A, (p * q, c))
-
-    k = 1
-    for j ∈ 1:c
-        for iA ∈ 1:p
-            @inbounds @simd for iB ∈ 1:q
-                ret[k] = A[iA, j] * B[iB, j]
-                k += 1
-            end
-        end
-    end
-
-    ret
-end
-
-#          +----------------------------------------------------------+
 #          |                     Set of intervals                     |
 #          +----------------------------------------------------------+
 

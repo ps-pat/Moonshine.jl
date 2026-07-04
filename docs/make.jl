@@ -56,8 +56,7 @@ makedocs(build = "build/$current_version",
              "Sample" => "reference/Sample.md",
              "CheapStack" => "reference/CheapStack.md",
              "ThreeTree" => "reference/ThreeTree.md",
-             "Global Values" => "reference/globals.md",
-             "Utilities" => "reference/utilities.md"
+             "Global Values" => "reference/globals.md"
          ]
      ]
  )
