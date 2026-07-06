@@ -283,7 +283,7 @@ $(METHODLIST)
 """
 function ancestral_mask! end
 
-function ancestral_mask!(mask, h::Int, idx; wipe = true)
+function ancestral_mask!(mask, idx; wipe = true)
     bs = blocksize(Sequence)
 
     wipe && wipe!(mask)
@@ -421,6 +421,8 @@ function distance(::Hamming{T}, h1::Sequence, h2::Sequence) where T
         d += count_ones(h1.data.chunks[k] ⊻ h2.data.chunks[k])
     end
 
+    ## TODO: probably not necessary since unused entries can be safely assumed
+    ##       to be 0
     lastchunk = last(h1.data.chunks) ⊻ last(h2.data.chunks)
     n_not0 = blocksize(h1) * nblocks - length(h1)
     lastchunk &= 0xffffffffffffffff >> n_not0

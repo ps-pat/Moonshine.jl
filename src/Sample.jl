@@ -282,7 +282,7 @@ function ancestral_mask!(mask, sample::Sample, ω::Ω; wipe = true)
     idx = postoidx(sample, ω)
     (iszero ∘ length)(idx) && return mask
 
-    ancestral_mask!(mask, nmarkers(sample), idx, wipe = false)
+    ancestral_mask!(mask, idx, wipe = false)
 end
 
 ancestral_mask(sample::Sample, ω::Ω) =
