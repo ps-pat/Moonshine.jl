@@ -184,69 +184,31 @@ end
 #          |                        Utilities                         |
 #          +----------------------------------------------------------+
 
-struct EdgesIntervalRec{I}
-    genealogy::Arg
+struct EdgesIntervalRec{T, I, E, P} <: AbstractEIterTD
+    "Genealogy to iterate over"
+    genealogy::T
+    "Interval to consider"
     ωs::I
-    buffer::CheapStack{Edge{VertexType}}
+    "Edges buffer"
+    stack::CheapStack{E}
+    "True is associated recombination vertex has been visited previously"
     visited::UnsafeArray{Bool, 1}
-    min_latitude::Float64
-    breakpoint::Float64
-    nextidx::Int
+    "Parameters for the block predicate"
+    bp_pars::P
 end
 
-function EdgesIntervalRec(arg, ωs, stack, visited, breakpoint, nextidx,
-                          root = mrca(arg), min_latitude = zero(Float64))
-    ##TODO: manage `visited` and `funbuffer` manually.
-    fill!(visited, false)
+EdgesIntervalRec(arg, ωs, stack, visited, bp_pars, root) =
+    EIterTD(EdgesIntervalRec, arg, ωs, stack, visited, bp_pars, root)
 
-    for d ∈ children(arg, root, ωs)
-        e = Edge(root => d)
-        (breakpoint ∈ ancestral_intervals(arg, e) && !sequence(arg, dst(e))[nextidx]) && continue
-        push!(stack, e)
-    end
-
-    EdgesIntervalRec(arg, ωs, stack, visited, min_latitude, breakpoint, nextidx)
-end
-
-IteratorSize(::EdgesIntervalRec) = Base.SizeUnknown()
-
-eltype(::EdgesIntervalRec) = Edge{VertexType}
-
-function iterate(iter::EdgesIntervalRec, state = 1)
-    buffer = iter.buffer
-    isempty(buffer) && return nothing
-
+function block_predicate(iter::EdgesIntervalRec, e)
     arg = iter.genealogy
-    ωs = iter.ωs
-    visited = iter.visited
-    min_latitude = iter.min_latitude
-    breakpoint = iter.breakpoint
-    nextidx = iter.nextidx
+    nextidx, breakpoint, min_latitude = iter.bp_pars
 
-    e = pop!(buffer)
-    s = dst(e)
-    if isrecombination(arg, s)
-        ridx = _recidx(arg, s)
-        visited[ridx] && return e, state + 1
-        visited[ridx] = true
-    end
+    breakpoint ∈ ancestral_intervals(arg, e) && !sequence(arg, dst(e))[nextidx] && return false
+    latitude(arg, src(e)) >= min_latitude || return false
+    isrecombination(arg, dst(e)) && breakpoint ∉ recombination_mask(arg, e) && return false
 
-    if latitude(arg, s) >= min_latitude
-        for d ∈ children(arg, s, ωs)
-            newe = Edge(s => d)
-            if breakpoint ∈ ancestral_intervals(arg, newe)
-                sequence(arg, dst(newe))[nextidx] || continue
-            end
-
-            if isrecombination(arg, d)
-                breakpoint ∈ recombination_mask(arg, Edge(s => d)) || continue
-            end
-
-            push!(buffer, newe)
-        end
-    end
-
-    e, state + 1
+    true
 end
 
 #          +----------------------------------------------------------+
@@ -260,8 +222,15 @@ function _sample_cedge(rng, arg, rlat, idx, window, coalroot, estack, buffer)
 
         ncedges = 0
         visited = @alloc(Bool, nrecombinations(arg))
-        for e ∈ EdgesIntervalRec(arg, window, estack, visited,
-                                 idxtopos(arg, idx), idx, src(coalroot), rlat)
+        edges_iter = EdgesIntervalRec(
+            arg,
+            window,
+            estack,
+            visited,
+            (idx, idxtopos(arg, idx), rlat),
+            src(coalroot)
+        )
+        for e ∈ edges_iter
             ncedges += 1
             cedges[ncedges] = e
             w = latitude(arg, src(e)) - max(rlat, latitude(arg, dst(e)))
