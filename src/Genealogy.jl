@@ -1,4 +1,4 @@
-using Graphs: AbstractSimpleGraph
+using Graphs: AbstractEdgeIter, AbstractSimpleGraph
 
 import Graphs: edges, vertices, ne, nv,
                eltype, edgetype, is_directed,
@@ -10,7 +10,7 @@ using GeometryBasics: Point
 
 import Base: IteratorSize, eltype, length, isequal
 
-using NetworkLayout
+using NetworkLayout: NetworkLayout, Spring
 
 export AbstractGenealogy
 """

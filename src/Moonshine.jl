@@ -20,7 +20,7 @@ using Distributions
 
 using DocStringExtensions
 
-using Preferences
+using Preferences: Preferences, load_preference
 
 using StatsBase: Histogram, ProbabilityWeights, fit, sample
 
