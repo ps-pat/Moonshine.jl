@@ -302,7 +302,7 @@ EdgesIntervalArgCoal(arg, ωs, stack, visited, bp_pars, root) =
 function block_predicate(iter::EdgesIntervalArgCoal, e)
     arg, nextidx, fedge, min_latitude = iter.bp_pars
     sequence(arg, dst(e))[nextidx] && return false
-    latitude(iter.genealogy, src(e)) >= min_latitude
+    latitude(iter.genealogy, src(e)) >= min_latitude || return false
     e == fedge && return false
     true
 end
