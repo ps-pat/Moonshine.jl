@@ -24,7 +24,7 @@ function mutationsidx!(res, arg, e, firstchunk, firstidx, lastchunk; buffer = AI
     res
 end
 
-struct EdgesIterMMN{T, I, E} <: AbstractEIterBU
+struct EdgesIterMMN{T, I, E} <: AbstractEGIterBU
     "Genealogy to iterate over"
     genealogy::T
     "Interval to consider"

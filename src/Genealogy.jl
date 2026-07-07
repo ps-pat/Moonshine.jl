@@ -1097,12 +1097,12 @@ end
 
 Abstract type for iterators over the edges of a marginal graph.
 """
-abstract type AbstractEIterMGraph <: AbstractEdgeIter end
+abstract type AbstractEGIter <: AbstractEdgeIter end
 
-eltype(::AbstractEIterMGraph) = Edge{VertexType}
+eltype(::AbstractEGIter) = Edge{VertexType}
 
-IteratorSize(::T) where T<:AbstractEIterMGraph = Base.SizeUnknown()
-IteratorSize(::Type{<:AbstractEIterMGraph}) = Base.SizeUnknown()
+IteratorSize(::T) where T<:AbstractEGIter = Base.SizeUnknown()
+IteratorSize(::Type{<:AbstractEGIter}) = Base.SizeUnknown()
 
 block_predicate(::Any, ::Any) = true
 
@@ -1111,7 +1111,7 @@ block_predicate(::Any, ::Any) = true
 
 Top down marginal graph edges iterator.
 """
-abstract type AbstractEIterTD <: AbstractEIterMGraph end
+abstract type AbstractEGIterTD <: AbstractEGIter end
 
 function EIterTD(EITD, genealogy, ωs, stack::CheapStack, visited,
     bp_pars, root)
@@ -1131,7 +1131,7 @@ EIterTD(EITD, genealogy, ωs, store::AbstractArray, visited, bp_pars,
     root) =
     EIterTD(EITD, genealogy, ωs, CheapStack(store), visited, bp_pars, root)
 
-function iterate(iter::AbstractEIterTD, state = 1)
+function iterate(iter::AbstractEGIterTD, state = 1)
     stack = iter.stack
     isempty(stack) && return nothing
 
@@ -1166,7 +1166,7 @@ end
 
 Bottom up marginal graph edges iterator.
 """
-abstract type AbstractEIterBU <: AbstractEIterMGraph end
+abstract type AbstractEGIterBU <: AbstractEGIter end
 
 function EIterBU(EIBU, genealogy, ωs, stack::CheapStack, visited, roots, bp_pars...)
     fill!(visited, false)
@@ -1186,7 +1186,7 @@ end
 EIterBU(EIBU, genealogy, ωs, store::AbstractArray, visited, roots, bp_pars...) =
     EIterBU(EIBU, genealogy, ωs, CheapStack(store), visited, roots, bp_pars...)
 
-function iterate(iter::AbstractEIterBU, state = 1)
+function iterate(iter::AbstractEGIterBU, state = 1)
     stack = iter.stack
     isempty(stack) && return nothing
 
@@ -1240,7 +1240,7 @@ $(METHODLIST)
 
 --*Internal*--
 """
-struct EdgesInterval{T, I, E} <: AbstractEIterTD
+struct EdgesInterval{T, I, E} <: AbstractEGIterTD
     "Genealogy to iterate over"
     genealogy::T
     "Interval to consider"

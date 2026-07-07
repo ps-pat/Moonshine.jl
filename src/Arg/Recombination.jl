@@ -184,7 +184,7 @@ end
 #          |                        Utilities                         |
 #          +----------------------------------------------------------+
 
-struct EdgesIntervalRec{T, I, E, P} <: AbstractEIterTD
+struct EdgesIntervalRec{T, I, E, P} <: AbstractEGIterTD
     "Genealogy to iterate over"
     genealogy::T
     "Interval to consider"
@@ -252,7 +252,7 @@ function _sample_cedge(rng, arg, rlat, idx, window, coalroot, estack, buffer)
     cedge, clat
 end
 
-struct EdgesIntervalArgCoal{T, I, E, P} <: AbstractEIterTD
+struct EdgesIntervalArgCoal{T, I, E, P} <: AbstractEGIterTD
     "Genealogy to iterate over"
     genealogy::T
     "Interval to consider"
