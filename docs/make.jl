@@ -41,6 +41,9 @@ makedocs(
     doctest = true,
     plugins = [links],
     repo = Remotes.Forgejo("codeberg.org", "ptrk", "Moonshine.jl"),
+    linkcheck = true,
+    linkcheck_ignore = [r"^file"],
+    warnonly = :linkcheck,
     pagesonly = true,
     pages = [
         "Home" => "index.md",
