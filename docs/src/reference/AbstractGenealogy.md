@@ -60,7 +60,7 @@ mrca
 ```
 
 #### Coalescences
-```@doc
+```@docs
 iscoalescence
 ```
 
