@@ -33,30 +33,32 @@ writer = Documenter.HTMLWriter.HTML(
     size_threshold_warn = 200 * 1024,
     size_threshold = nothing)
 
-makedocs(build = "build/$current_version",
-         draft = "draft" ∈ ARGS,
-         sitename = "Moonshine.jl",
-         format = writer,
-         doctest = true,
-         plugins = [links],
-         repo = Remotes.GitHub("ps-pat", "Moonshine.jl"),
-         pages = [
-         "Home" => "index.md",
-         "Design & conventions" => "design.md",
-         "Guides" => [
-             "QuickStart" => "quickstart.md",
-             "Python & tskit" => "python.md",
-             "Working with VCF files" => "vcf.md"
-         ],
-         "Reference" => [
-             "AbstractGenealogy" => "reference/AbstractGenealogy.md",
-             "Tree & ARG" => "reference/Tree_Arg.md",
-             "Ancestral Intervals" => "reference/AncestralIntervals.md",
-             "Sequence" => "reference/Sequence.md",
-             "Sample" => "reference/Sample.md",
-             "CheapStack" => "reference/CheapStack.md",
-             "ThreeTree" => "reference/ThreeTree.md",
-             "Global Values" => "reference/globals.md"
-         ]
-     ]
- )
+makedocs(
+    build = "build/$current_version",
+    draft = "draft" ∈ ARGS,
+    sitename = "Moonshine.jl",
+    format = writer,
+    doctest = true,
+    plugins = [links],
+    repo = Remotes.GitHub("ps-pat", "Moonshine.jl"),
+    pagesonly = true,
+    pages = [
+        "Home" => "index.md",
+        "Design & conventions" => "design.md",
+        "Guides" => [
+            "QuickStart" => "quickstart.md",
+            "Python & tskit" => "python.md",
+            "Working with VCF files" => "vcf.md"
+        ],
+        "Reference" => [
+            "AbstractGenealogy" => "reference/AbstractGenealogy.md",
+            "Tree & ARG" => "reference/Tree_Arg.md",
+            "Ancestral Intervals" => "reference/AncestralIntervals.md",
+            "Sequence" => "reference/Sequence.md",
+            "Sample" => "reference/Sample.md",
+            "CheapStack" => "reference/CheapStack.md",
+            "ThreeTree" => "reference/ThreeTree.md",
+            "Global Values" => "reference/globals.md"
+        ]
+    ]
+)
