@@ -14,7 +14,7 @@ CurrentModule = Moonshine
 
 [Fournier P and Larribe F (2026). Moonshine.jl: a Julia package for genome-scale model-based ancestral recombination graph inference. Front. Genet. 17:1753780. doi: 10.3389/fgene.2026.1753780](https://doi.org/10.3389/fgene.2026.1753780)
 
-If you use `Moonshine` in your work, please cite this article. References in standard formats are provided with the [HTML version of the paper](https://doi.org/10.3389/fgene.2026.1753780) or on the [GitHub page of the package](https://github.com/ps-pat/Moonshine.jl) ([`CITATION`](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-citation-files) file).
+If you use `Moonshine` in your work, please cite this article. References in standard formats are provided with the [HTML version of the paper](https://doi.org/10.3389/fgene.2026.1753780) or on the repository's [CITATION.cff](https://codeberg.org/ptrk/Moonshine.jl/src/branch/master/CITATION.cff).
 
 ## Inference
 Out of the box, types representing coalescent trees and ancestral recombination
