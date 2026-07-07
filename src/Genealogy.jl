@@ -1095,7 +1095,13 @@ end
 """
     $(TYPEDEF)
 
-Abstract type for iterators over the edges of a marginal graph.
+Iterator over the edges of a genealogy.
+
+# Implementation
+The [`block_predicate`](@ref) method allows for early termination. Its default
+implementation always return `true`.
+
+--*Internal*--
 """
 abstract type AbstractEGIter <: AbstractEdgeIter end
 
@@ -1104,12 +1110,30 @@ eltype(::AbstractEGIter) = Edge{VertexType}
 IteratorSize(::T) where T<:AbstractEGIter = Base.SizeUnknown()
 IteratorSize(::Type{<:AbstractEGIter}) = Base.SizeUnknown()
 
+"""
+    $(FUNCTIONNAME)(edge_iterator, edge)
+
+Returns `true` if `edge` should be iterated over.
+
+See also [`AbstractEGIter`](@ref).
+
+--*Internal*--
+"""
+function block_predicate end
+
 block_predicate(::Any, ::Any) = true
 
 """
     $(TYPEDEF)
 
-Top down marginal graph edges iterator.
+Top-down edge iteration.
+
+See also [`AbstractEGIterBU`](@ref), [`block_predicate`](@ref).
+
+# Implementation
+Subtypes instances can be constructed with a call to [`EIterTD`](@ref).
+
+--*Internal*--
 """
 abstract type AbstractEGIterTD <: AbstractEGIter end
 
@@ -1127,6 +1151,23 @@ function EIterTD(EITD, genealogy, ωs, stack::CheapStack, visited,
     ret
 end
 
+"""
+    $(METHODLIST)
+
+Helper for constructing instances of subtypes of [`AbstractEGIterTD`](@ref).
+
+# Arguments
+* `EITD`: type to instantiate
+* `genealogy`: a genealogy
+* `ωs`: ancestral interval
+* `store`: container for edges
+* `visited`: array of boolean values; the kth entry is true if the kth
+  recombination vertex has been visited
+* `bp_pars`: parameters for the block predicate
+* `root`: source edge of the initial edge
+
+--*Internal*--
+"""
 EIterTD(EITD, genealogy, ωs, store::AbstractArray, visited, bp_pars,
     root) =
     EIterTD(EITD, genealogy, ωs, CheapStack(store), visited, bp_pars, root)
@@ -1164,10 +1205,34 @@ end
 """
     $(TYPEDEF)
 
-Bottom up marginal graph edges iterator.
+Bottom-up edge iteration.
+
+See also [AbstractEGIterTD](@ref), [block_predicate](@ref).
+
+# Implementation
+Subtypes instances can be constructed with a call to [`EIterBU`](@ref).
+
+--*Internal*--
 """
 abstract type AbstractEGIterBU <: AbstractEGIter end
 
+"""
+    $(METHODLIST)
+
+Helper for constructing instances of subtypes of [`AbstractEGIterBU`](@ref).
+
+# Arguments
+* `EIBU`: type to instantiate
+* `genealogy`: a genealogy
+* `ωs`: ancestral interval
+* `stack`: container for edges
+* `visited`: array of boolean values; the kth entry is true if the kth
+  coalescence vertex has been visited
+* `roots`: destination vertices of the initial edges
+* `bp_pars`: parameters for the block predicate
+
+--*Internal*--
+"""
 function EIterBU(EIBU, genealogy, ωs, stack::CheapStack, visited, roots, bp_pars...)
     fill!(visited, false)
 

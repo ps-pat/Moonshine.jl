@@ -14,6 +14,15 @@ AbstractGenealogy
 EdgesInterval
 ```
 
+### Edge Iteration
+```@docs
+AbstractEGIter
+AbstractEGIterTD
+AbstractEGIterBU
+EIterTD
+EIterBU
+```
+
 ## Functions
 ### Interface
 `AbstractGenealogy` interface. Subtypes must implement every method unless
@@ -24,6 +33,7 @@ otherwise specified.
 dens
 describe
 graph
+block_predicate
 ```
 
 #### Vertices/Edges
