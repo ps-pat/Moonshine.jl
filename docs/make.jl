@@ -10,7 +10,7 @@ using Git: git
 current_version = try
     gitout = (read ∘ git)(["describe", "--tags", "--abbrev=0", "--exact-match"])
     version = mapreduce(Char, *, gitout[1:end - 1])
-    match(r"v[0-9]+\.[0-9]+\.[0-9]+", version).match
+    match(r"v\d+\.\d+\.\d+", version).match
 catch
     "dev"
 end
