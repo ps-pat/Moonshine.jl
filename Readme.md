@@ -28,5 +28,5 @@ This readme is austere by design. [Full Documentation](https://patrickfournier.c
 - [X] Write guide on how to import data from `VCF` files
 
 ## People
-* [Patrick Fournier](https://www.patrickfournier.ca) (p_fournier@hushmail.com)
+* [Patrick Fournier](https://patrickfournier.ca) (pf@patrickfournier.ca)
 * [Fabrice Larribe](http://fabricelarribe.uqam.ca) (larribe.fabrice@uqam.ca)
