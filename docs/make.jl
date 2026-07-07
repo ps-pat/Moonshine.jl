@@ -40,7 +40,7 @@ makedocs(
     format = writer,
     doctest = true,
     plugins = [links],
-    repo = Remotes.GitHub("ps-pat", "Moonshine.jl"),
+    repo = Remotes.Forgejo("codeberg.org", "ptrk", "Moonshine.jl"),
     pagesonly = true,
     pages = [
         "Home" => "index.md",
