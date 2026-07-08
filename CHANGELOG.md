@@ -1,3 +1,53 @@
+## [0.4.2] - 2026-07-08
+
+### 🐛 Bug Fixes
+
+- Stop graph traversal on edges below minimum latitude (`EdgesIntervalArgCoal`)
+
+### 💼 Other
+
+- *(MoonshineMakie)* Make `DataStructures` a weak dependency
+
+### 🚜 Refactor
+
+- Remove dead code
+- Remove function for computing Khatri-Rao product
+- Rework imports
+- Remove unused variable
+- Implement `EdgeIntervalRec` as a subtype of `AbstractEIterTD`
+- Rename edge iterator types
+- Cleaner regex (`docs/make.jl`)
+
+### 📚 Documentation
+
+- Change `edit_link` to `master`
+- Enable draft mode via command line argument
+- Time documentation creation
+- Minor fixes to justfile's docstrings
+- Add justfile recipe to serve documentation
+- Use custom documentation writer
+- Edge iterator types
+- Check documentation for common mistakes before compiling
+- Typo: @doc -> @docs
+- Update my contact informations
+- Change repository to Codeberg
+- Png logo
+- Update citation information
+- Check external links
+
+### 🎨 Styling
+
+- Reorganize imports & exports
+- Indentation (`docs/make.jl`)
+
+### ⚙️ Miscellaneous Tasks
+
+- Fix `CITATION.cff`
+- New release pipeline
+- Bump dependencies
+- Bump test dependencies
+- Bump doc dependencies
+
 ## [0.4.1] - 2026-04-13
 
 ### 🚀 Features
