@@ -29,7 +29,7 @@ of noteworthy departures from
 [C/C++](https://docs.julialang.org/en/v1/manual/noteworthy-differences/#Noteworthy-differences-from-C/C),
 [MATLAB](https://docs.julialang.org/en/v1/manual/noteworthy-differences/#Noteworthy-differences-from-MATLAB) and [Common Lisp](https://docs.julialang.org/en/v1/manual/noteworthy-differences/#Noteworthy-differences-from-Common-Lisp).
 
-[Feedback, especially from first-time users, is appreciated](https://codeberg.org/ptrk/Moonshine.jl/issues)
+[Feedback, especially from first-time users, is appreciated](https://code.croquette.club/pfournier/Moonshine.jl/issues)
 
 ## Storing Haplotypes: the [`Sample`](@ref) Type
 !!! note "Julia👶: Type vs Class"
@@ -57,7 +57,7 @@ A neat feature of Moonshine is its ability to transparently call
 [`msprime`](https://tskit.dev/msprime/docs/stable/intro.html) to generate a
 high quality sample. This should work out of the box: if you installed
 Moonshine as described in the
-[README](https://codeberg.org/ptrk/Moonshine.jl/src/branch/master/Readme.md),
+[README](https://code.croquette.club/pfournier/Moonshine.jl/src/branch/master/Readme.md),
 you should have received a pre-packaged version of `msprime` at the same time.
 You only need to:
 1. import Moonshine;

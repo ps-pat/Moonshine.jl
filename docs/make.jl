@@ -40,7 +40,7 @@ makedocs(
     format = writer,
     doctest = true,
     plugins = [links],
-    repo = Remotes.Forgejo("codeberg.org", "ptrk", "Moonshine.jl"),
+    repo = Remotes.Forgejo("code.croquette.club", "pfournier", "Moonshine.jl"),
     linkcheck = true,
     linkcheck_ignore = [r"^file"],
     warnonly = :linkcheck,
