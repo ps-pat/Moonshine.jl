@@ -22,11 +22,17 @@ macro _validate_python_class(obj, class)
     end
 end
 
+## msprime
 const msprime = Ref{Py}()
-const tskit = Ref{Py}()
 
 function __init_msprime__()
     msprime[] = pyimport("msprime")
+end
+
+## tskit
+const tskit = Ref{Py}()
+
+function __init_tskit__()
     tskit[] = pyimport("tskit")
 
     convert_provenance(::Any, provenance) = (
@@ -43,4 +49,9 @@ function __init_msprime__()
         NamedTuple,
         convert_provenance
     )
+end
+
+function __init_foreign__()
+    __init_tskit__()
+    __init_msprime__()
 end

@@ -146,7 +146,7 @@ include("ImportanceSampling.jl")
 # ----------------------------------------------------------------------
 
 function __init__()
-    __init_msprime__()
+    __init_foreign__()
 end
 
 end
