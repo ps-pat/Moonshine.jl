@@ -49,9 +49,9 @@ makedocs(
         "Home" => "index.md",
         "Design & conventions" => "design.md",
         "Guides" => [
-            "QuickStart" => "quickstart.md",
-            "Python & tskit" => "python.md",
-            "Working with VCF files" => "vcf.md"
+            "QuickStart" => "guides/quickstart.md",
+            "Python & tskit" => "guides/python.md",
+            "Working with VCF files" => "guides/vcf.md"
         ],
         "Reference" => [
             "AbstractGenealogy" => "reference/AbstractGenealogy.md",

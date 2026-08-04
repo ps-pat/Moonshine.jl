@@ -166,7 +166,7 @@ julia> using GLMakie
 julia> plot_genealogy(tree)
 ```
 After some time, you should obtain the following plot:
-![](assets/plot_genealogy_tree1.png)
+![](../assets/plot_genealogy_tree1.png)
 This is all good and well, but you might wonder about the distribution of
 `tree`. `tree` is a coalescent tree in the graph-theoretical sense, meaning that
 it is a full binary tree. Since we are working conditional on a sample of
@@ -206,7 +206,7 @@ plot_latitudes(tree0)
 ```julia-repl
 julia> plot_genealogy(tree0)
 ```
-![](assets/plot_genealogy_tree2.png)
+![](../assets/plot_genealogy_tree2.png)
 Notice the difference from the previous plot, even though we used the same sample
 and RNG. Alright, one last tree example. A common requirement for spatial ARG
 inference algorithms is building a tree consistent with the leftmost marker. To
@@ -218,7 +218,7 @@ their leftmost marker as follows:
 ```julia-repl
 julia> plot_genealogy(tree, Ω(positions(tree)[1:2]...))
 ```
-![](assets/plot_genealogy_tree3.png)
+![](../assets/plot_genealogy_tree3.png)
 
 !!! note "Julia👶: Splat..."
     If you've never encountered it before in another language, the ellipsis
@@ -249,7 +249,7 @@ build!(copy(rng_orig), tree_left, Dist = LeftM(), bias0 = Inf)
 ```julia-repl
 julia> plot_genealogy(tree_left, Ω(positions(tree_left)[1:2]...))
 ```
-![](assets/plot_genealogy_tree_left.png)
+![](../assets/plot_genealogy_tree_left.png)
 As expected, the leftmost marker mutates only once.
 
 Before moving on to ARGs, I have to tell you about another handy constructor
