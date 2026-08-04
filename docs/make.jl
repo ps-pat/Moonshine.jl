@@ -42,7 +42,8 @@ makedocs(
     plugins = [links],
     repo = Remotes.Forgejo("code.croquette.club", "pfournier", "Moonshine.jl"),
     linkcheck = true,
-    linkcheck_ignore = [r"^file"],
+    linkcheck_ignore = [r"^file", r"^https://lorax.ucsc.edu"],
+    linkcheck_timeout = 20,
     warnonly = :linkcheck,
     pagesonly = true,
     pages = [
@@ -51,7 +52,8 @@ makedocs(
         "Guides" => [
             "QuickStart" => "guides/quickstart.md",
             "Python & tskit" => "guides/python.md",
-            "Working with VCF files" => "guides/vcf.md"
+            "Working with VCF files" => "guides/vcf.md",
+            "Interactive visualization with Lorax" => "guides/lorax.md"
         ],
         "Reference" => [
             "AbstractGenealogy" => "reference/AbstractGenealogy.md",
