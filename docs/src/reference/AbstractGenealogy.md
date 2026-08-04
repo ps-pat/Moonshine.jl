@@ -114,8 +114,9 @@ sibling
 tmrca
 ```
 
-#### Plotting
+#### Visualization
 ```@docs
+lorax
 plot_genealogy
 plot_latitudes
 ```

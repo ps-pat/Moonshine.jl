@@ -1,3 +1,7 @@
 [deps]
 msprime = "==1.4.2"
 tskit = "==1.0.3"
+numpy = "<2.5"
+
+[pip.deps]
+lorax-arg = ""

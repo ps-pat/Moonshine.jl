@@ -142,6 +142,7 @@ include("Arg/Arg.jl")
 include("genealogy_common.jl")
 include("Distributions.jl")
 include("ImportanceSampling.jl")
+include("lorax.jl")
 
 # ----------------------------------------------------------------------
 
