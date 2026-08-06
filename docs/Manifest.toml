@@ -2,7 +2,7 @@
 
 julia_version = "1.12.6"
 manifest_format = "2.0"
-project_hash = "ea6106fb980aa71c3f86544ae9b515368ec0904a"
+project_hash = "f209afc61a5db8e7a1b8a33f68a41bb0f6a65352"
 
 [[deps.ANSIColoredPrinters]]
 git-tree-sha1 = "574baf8110975760d391c710b6341da1afa48d8c"
@@ -101,6 +101,10 @@ version = "1.0.9+0"
 git-tree-sha1 = "389ad5c84de1ae7cf0e28e381131c98ea87d54fc"
 uuid = "fa961155-64e5-5f13-b03f-caf6b980ea82"
 version = "0.5.0"
+
+[[deps.CRC32c]]
+uuid = "8bf52ea8-c179-5cab-976a-9e18b702a9bc"
+version = "1.11.0"
 
 [[deps.ChunkSplitters]]
 git-tree-sha1 = "1c52c8e2673edc030191177ff1aee42d25149acb"
@@ -302,6 +306,12 @@ deps = ["ANSIColoredPrinters", "AbstractTrees", "Base64", "CodecZlib", "Dates", 
 git-tree-sha1 = "56e9c37b5e7c3b4f080ab1da18d72d5c290e184a"
 uuid = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 version = "1.17.0"
+
+[[deps.DocumenterCodeBlocks]]
+deps = ["CRC32c", "Documenter", "JuliaSyntax"]
+git-tree-sha1 = "eda733b080824166789e043a39f51f28be979233"
+uuid = "b6400b83-267f-4b55-9fd8-bffc853bdfd8"
+version = "1.1.0"
 
 [[deps.DocumenterInterLinks]]
 deps = ["CodecZlib", "DocInventories", "Documenter", "Markdown", "MarkdownAST", "TOML"]
@@ -551,6 +561,11 @@ version = "1.30.1"
     [deps.JuMP.weakdeps]
     DimensionalData = "0703355e-b756-11e9-17c0-8b28908087d0"
 
+[[deps.JuliaSyntax]]
+git-tree-sha1 = "0d4b3dab95018bcf3925204475693d9f09dc45b8"
+uuid = "70703baa-626e-46a2-a12c-08ffd08c73b4"
+version = "1.0.2"
+
 [[deps.JuliaSyntaxHighlighting]]
 deps = ["StyledStrings"]
 uuid = "ac6e5ff7-fb65-4e79-a425-ec3bc9c03011"
@@ -694,7 +709,7 @@ version = "1.11.0"
 deps = ["Bumper", "ChunkSplitters", "CondaPkg", "CpuId", "Distributions", "DocStringExtensions", "DoubleFloats", "GeometryBasics", "Graphs", "IntervalSets", "JSON", "LayeredLayouts", "LinearAlgebra", "NetworkLayout", "Preferences", "ProgressMeter", "PythonCall", "Random", "RandomNumbers", "SIMD", "StatsBase", "UnicodePlots", "UnsafeArrays"]
 path = "/home/pfournier/Documents/Softwares/Moonshine.jl/"
 uuid = "99b31415-443e-43a2-8bf4-ca532bb4a161"
-version = "0.4.1"
+version = "0.4.2"
 
     [deps.Moonshine.extensions]
     MoonshineMakie = "GraphMakie"

@@ -4,6 +4,8 @@ using Documenter
 
 using DocumenterInterLinks: InterLinks
 
+using DocumenterCodeBlocks
+
 using Git: git
 
 ## Determine which version we are building documentation for
@@ -39,7 +41,7 @@ makedocs(
     sitename = "Moonshine.jl",
     format = writer,
     doctest = true,
-    plugins = [links],
+    plugins = [links, CodeBlocks()],
     repo = Remotes.Forgejo("code.croquette.club", "pfournier", "Moonshine.jl"),
     linkcheck = true,
     linkcheck_ignore = [r"^file", r"^https://lorax.ucsc.edu"],
