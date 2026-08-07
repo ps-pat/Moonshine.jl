@@ -339,6 +339,10 @@ ancestral_mask!(mask, h::Sequence, idx; wipe = true) =
     ancestral_mask!(mask, length(h), idx, wipe = wipe)
 
 """
+    $(FUNCTIONNAME)(h, idx)
+    $(FUNCTIONNAME)(sample, ω)
+    $(FUNCTIONNAME)(genealogy, x)
+
 Allocating version of [`ancestral_mask!`](@ref)
 
 # Methods
