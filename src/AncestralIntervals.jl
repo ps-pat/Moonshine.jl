@@ -7,8 +7,8 @@ import Base:
     IndexStyle, deleteat!, resize!,
     strides, unsafe_convert, elsize,
     ## Set operations
-    union!, union, intersect!, intersect, join, in, issubset, isdisjoint,
-    copy, empty!, ==, !=
+    union!, union, intersect!, intersect, in, issubset, isdisjoint,
+    copy, empty!
 
 import IntervalSets: endpoints, leftendpoint, rightendpoint, width
 

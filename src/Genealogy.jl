@@ -10,7 +10,9 @@ using GeometryBasics: Point
 
 import Base: IteratorSize, eltype, length, isequal
 
-using NetworkLayout: NetworkLayout, Spring
+using NetworkLayout: Spring
+
+using UnicodePlots: histogram
 
 export AbstractGenealogy
 """

@@ -8,7 +8,6 @@ import Base:
     firstindex,
     lastindex,
     getindex,
-    setindex!,
     view
 
 using Base.Threads
@@ -71,8 +70,6 @@ lastindex(chain::IsChain) = length(chain)
 firstindex(chain::IsChain) = lastindex(chain) > 0 ? 1 : 0
 
 getindex(chain::IsChain, i) = getindex(chain.genealogies, i)
-
-## No setindex!
 
 ###########
 # Methods #

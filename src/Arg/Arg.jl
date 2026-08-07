@@ -1,3 +1,7 @@
+using StatsBase: Histogram, fit
+
+using UnicodePlots: stairs
+
 ##################
 # Arg Definition #
 ##################

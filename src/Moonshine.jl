@@ -20,9 +20,9 @@ using Distributions
 
 using DocStringExtensions
 
-using Preferences: Preferences, load_preference
+using Preferences: load_preference
 
-using StatsBase: Histogram, ProbabilityWeights, fit, sample
+using StatsBase: sample
 
 using PythonCall
 
@@ -30,7 +30,7 @@ using Random
 
 using LinearAlgebra
 
-using UnicodePlots: heatmap, histogram, label!, stairs
+using UnicodePlots: heatmap, label!
 
 using Graphs
 

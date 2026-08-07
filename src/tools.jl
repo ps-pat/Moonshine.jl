@@ -1,4 +1,4 @@
-import Base: ==, !=, in, isdisjoint, intersect!, join, union, union!
+import Base: isdisjoint
 
 import IntervalSets: endpoints, leftendpoint, rightendpoint
 

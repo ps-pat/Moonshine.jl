@@ -1,4 +1,4 @@
-import Base: isempty, iterate, length, size
+import Base: isempty, length
 
 ###################
 # Tree Definition #
