@@ -523,13 +523,7 @@ function _ts_mutation_table!(table, arg)
     table
 end
 
-export ts
-"""
-    $(SIGNATURES)
-
-Convert an ARG to a `tskit` `TreeSequence`.
-"""
-function ts(arg)
+function ts(arg::Arg)
     tables = tskit[].TableCollection(sequence_length = sequence_length(arg))
 
     _ts_node_table!(tables.nodes, arg)

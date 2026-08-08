@@ -1448,3 +1448,11 @@ function isequal(v1::VertexType, v2::VertexType, genealogy::AbstractGenealogy;
         isequal(h1, h2, m1, m2)
     end
 end
+
+export ts
+"""
+    $(FUNCTIONNAME)(genealogy)
+
+Convert a genealogy to a `tskit.TreeSequence`.
+"""
+function ts end

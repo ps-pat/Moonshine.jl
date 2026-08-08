@@ -120,3 +120,8 @@ lorax
 plot_genealogy
 plot_latitudes
 ```
+
+#### Other
+```@docs
+ts
+```

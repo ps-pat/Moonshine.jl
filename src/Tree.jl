@@ -332,3 +332,5 @@ function validate(tree::Tree)
 
     true
 end
+
+ts(tree::Tree) = (ts ∘ Arg)(tree)
