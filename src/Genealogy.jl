@@ -1454,5 +1454,8 @@ export ts
     $(FUNCTIONNAME)(genealogy)
 
 Convert a genealogy to a `tskit.TreeSequence`.
+
+# Methods
+$(METHODLIST)
 """
 function ts end
