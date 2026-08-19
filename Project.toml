@@ -62,3 +62,6 @@ StatsBase = "0.34.4"
 UnicodePlots = "3.7.2"
 UnsafeArrays = "1.0.7"
 julia = "1.11"
+
+[workspace]
+projects = ["test", "doc"]
