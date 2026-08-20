@@ -1,8 +1,17 @@
 using Graphs: AbstractEdgeIter, AbstractSimpleGraph
 
-import Graphs: edges, vertices, ne, nv,
-               eltype, edgetype, is_directed,
-               has_edge, has_vertex, inneighbors, outneighbors
+import Graphs:
+    edges,
+    vertices,
+    ne,
+    nv,
+    eltype,
+    edgetype,
+    is_directed,
+    has_edge,
+    has_vertex,
+    inneighbors,
+    outneighbors
 
 using LayeredLayouts
 
@@ -40,6 +49,7 @@ export graph
 Return the underlying graph of a genealogy.
 
 # Methods
+
 $(METHODLIST)
 """
 function graph end
@@ -51,6 +61,7 @@ Return a string containing a long or short description of a genealogy.
 Used internally by pretty printing functions.
 
 # Methods
+
 $(METHODLIST)
 """
 function describe end
@@ -64,10 +75,12 @@ Return the latitudes of (a subset of) the internal vertices of a genealogy.
 See also [`latitude`](@ref) to get the latitude of a single vertex.
 
 # Implementation
+
 A default implementation for `latitudes(::AbstractGenealogy, ::Any)` is
 available; only `latitudes(::T)` is required.
 
 # Methods
+
 $(METHODLIST)
 """
 function latitudes end
@@ -84,6 +97,7 @@ See also [`latitudes`](@ref) to get the latitudes of internal vertices stored
 in a genealogy.
 
 # Methods
+
 $(METHODLIST)
 """
 function latitude end
@@ -98,6 +112,7 @@ See also [`ivertices`](@ref) for internal vertices and [`nleaves`](@ref) for
 the number of leaves.
 
 # Implementation
+
 Default implementations assume that the first `nleaves(genealogy)` vertices
 are the leaves of the genealogy. If this is the case for your type, you do not
 need to implement this method.
@@ -114,6 +129,7 @@ See also [`leaves`](@ref) for leaves and [`nivertices`](@ref) for the number
 of leaves and internal vertices.
 
 # Implementation
+
 Default implementations assume that the first `nleaves(genealogy)` vertices
 are the leaves of the genealogy. If this is the case for your type, you do not
 need to implement this method.
@@ -132,17 +148,19 @@ vertices is specified, return the sequences associated with these vertices.
 See also [`sequence`](@ref) to get the sequence associated with a vertex.
 
 # Implementation
+
 Custom types only need to implement `sequences(::T)`.
 
 # Methods
+
 $(METHODLIST)
 """
 function sequences end
 
 sequences(genealogy, vs) = view(sequences(genealogy), vs)
 
-sequences(genealogy, e::Edge) = (sequence(genealogy, src(e)),
-                                     sequence(genealogy, dst(e)))
+sequences(genealogy, e::Edge) =
+    (sequence(genealogy, src(e)), sequence(genealogy, dst(e)))
 
 export mrca
 """
@@ -153,6 +171,7 @@ Most recent common ancestor of a set of vertices.
 See also [`tmrca`](@ref) for the time to the most recent common ancestor.
 
 # Methods
+
 $(METHODLIST)
 """
 function mrca end
@@ -164,9 +183,11 @@ export dens
 Likelihood of a genealogy.
 
 # Implementation
+
 Only mandatory if copulas are to be fitted on the genealogy.
 
 # Methods
+
 $(METHODLIST)
 """
 function dens end
@@ -178,6 +199,7 @@ export positions
 Positions of the markers.
 
 # Methods
+
 $(METHODLIST)
 """
 function positions end
@@ -192,6 +214,7 @@ is ancestral for [0, ∞).
 See also [`ancestral_intervals!`](@ref) for a non-allocating alternative.
 
 # Methods
+
 $(METHODLIST)
 """
 function ancestral_intervals end
@@ -209,6 +232,7 @@ is ancestral for [0, ∞).
 See also [`ancestral_intervals`](@ref).
 
 # Methods
+
 $(METHODLIST)
 """
 function ancestral_intervals! end
@@ -227,9 +251,11 @@ export nrecombinations
 Number of recombinations.
 
 # Implementation
+
 Default implementation returns 0.
 
 # Methods
+
 $(METHODLIST)
 """
 function nrecombinations end
@@ -243,9 +269,11 @@ export recombinations
 Iterator over the recombination vertices of a genealogy.
 
 # Implementation
+
 Default implementation returns an empty iterator.
 
 # Methods
+
 $(METHODLIST)
 """
 function recombinations end
@@ -261,6 +289,7 @@ Returns true if vertex `v` is a recombination vertex for `genealogy`.
 Default implementation always returns `false`.
 
 # Methods
+
 $(METHODLIST)
 """
 function isrecombination end
@@ -274,6 +303,7 @@ export iscoalescence
 Returns true if vertex `v` is a coalescence vertex for `genealogy`.
 
 # Methods
+
 $(METHODLIST)
 """
 function iscoalescence end
@@ -284,9 +314,11 @@ function iscoalescence end
 Layout function for genealogy plotting.
 
 # Implementation
+
 Defaults to `Spring()`.
 
 # Methods
+
 $(METHODLIST)
 
 --*Internal*--
@@ -310,15 +342,16 @@ import [GraphMakie](https://github.com/MakieOrg/GraphMakie.jl) (and a
 See also [`plot_layout`](@ref).
 
 # Arguments
-* `wild_color` (`:blue`): color of wild vertices, that is those having only wild
-  markers in `ω`.
-* `derived_color` (`:red`): color of derived (non-wild) vertices
-* `arrow_show` (`false`): whether or not to draw arrows
-* `edge_color` (`:gray`): color of edges
-* `edge_width` (`3`): width of edges
-* `layout` (`plot_layout(genealogy)`): layout function
-* `attributes...`: attributes passed directly to
-  [`GraphMakie.graphplot`](@extref)
+
+  - `wild_color` (`:blue`): color of wild vertices, that is those having only wild
+    markers in `ω`.
+  - `derived_color` (`:red`): color of derived (non-wild) vertices
+  - `arrow_show` (`false`): whether or not to draw arrows
+  - `edge_color` (`:gray`): color of edges
+  - `edge_width` (`3`): width of edges
+  - `layout` (`plot_layout(genealogy)`): layout function
+  - `attributes...`: attributes passed directly to
+    [`GraphMakie.graphplot`](@extref)
 """
 function plot_genealogy end
 
@@ -328,9 +361,11 @@ function plot_genealogy end
 Maximum possible number of parents for a vertex. See also [`maxchildren`](@ref).
 
 # Implementation
+
 Must be a generated function.
 
 # Methods
+
 $(METHODLIST)
 
 --*Internal*--
@@ -343,9 +378,11 @@ function maxdads end
 Maximum possible number of children for a vertex. See also [`maxdads`](@ref).
 
 # Implementation
+
 Must be a generated function.
 
 # Methods
+
 $(METHODLIST)
 
 --*Internal*--
@@ -368,6 +405,7 @@ export idxtopos
 Return the position of the marker given its index.
 
 # Methods
+
 $(METHODLIST)
 """
 function idxtopos end
@@ -380,6 +418,7 @@ Return the largest marker's index that is at a position lesser than the one
 given.
 
 # Methods
+
 $(METHODLIST)
 """
 function postoidx end
@@ -393,14 +432,20 @@ ancestral_mask!(mask, genealogy::AbstractGenealogy, e::Edge; wipe = true) =
         mask,
         sam(genealogy),
         ancestral_intervals(genealogy, e),
-        wipe = wipe)
+        wipe = wipe
+    )
 
 function ancestral_mask(genealogy::AbstractGenealogy, e::Edge)
     h = sequence(genealogy, dst(e))
     ancestral_mask!(similar(h.data.chunks), genealogy, e)
 end
 
-function ancestral_mask!(mask, genealogy::AbstractGenealogy, v::VertexType; wipe = true)
+function ancestral_mask!(
+    mask,
+    genealogy::AbstractGenealogy,
+    v::VertexType;
+    wipe = true
+)
     wipe && wipe!(mask)
 
     for child ∈ children(genealogy, v)
@@ -435,8 +480,7 @@ function show(io::IO, ::MIME"text/plain", genealogy::AbstractGenealogy)
     end
 
     println(io, describe(genealogy) * ":")
-    println(io, nleaves(genealogy), " leaves, ",
-            nmarkers(genealogy), " markers")
+    println(io, nleaves(genealogy), " leaves, ", nmarkers(genealogy), " markers")
     print(io, "tMRCA: ", tmrca(genealogy))
 end
 
@@ -465,9 +509,8 @@ for fun ∈ [:edges, :vertices, :ne, :nv]
     end
 end
 
-for (fun, ret) ∈ Dict(:eltype => VertexType,
-                      :edgetype => Edge{VertexType},
-                      :is_directed => :true)
+for (fun, ret) ∈
+    Dict(:eltype => VertexType, :edgetype => Edge{VertexType}, :is_directed => :true)
     @eval begin
         @generated $fun(::Type{<:AbstractGenealogy}) = $ret
         @generated $fun(::AbstractGenealogy) = $ret
@@ -477,10 +520,12 @@ end
 let genealogy_edge = Expr(:(::), :e, Edge),
     genealogy_vertex = Expr(:(::), :v, Integer)
 
-    for (fun, a) ∈ Dict(:has_edge => genealogy_edge,
-                        :has_vertex => genealogy_vertex,
-                        :inneighbors => genealogy_vertex,
-                        :outneighbors => genealogy_vertex)
+    for (fun, a) ∈ Dict(
+        :has_edge => genealogy_edge,
+        :has_vertex => genealogy_vertex,
+        :inneighbors => genealogy_vertex,
+        :outneighbors => genealogy_vertex
+    )
         varname = first(a.args)
         @eval function $fun(genealogy::AbstractGenealogy, $a)
             $fun(graph(genealogy), $varname)
@@ -499,9 +544,11 @@ Layout function designed to plot genealogies. Leaves are all placed on the
 same layer.
 """
 GenLayout(leaveslayer, leaves) = function (genealogy_graph)
-    xs, ys, _ = solve_positions(Zarate(),
-                                genealogy_graph,
-                                force_layer = Pair.(leaves, leaveslayer))
+    xs, ys, _ = solve_positions(
+        Zarate(),
+        genealogy_graph,
+        force_layer = Pair.(leaves, leaveslayer)
+    )
 
     ## Rotate by -π/2.
     Point.(zip(ys, -xs))
@@ -517,12 +564,13 @@ passed directly to [`UnicodePlots.histogram`](https://github.com/JuliaPlots/Unic
 
 See also [`latitudes`](@ref), [`latitude`](@ref)
 """
-plot_latitudes(genealogy::AbstractGenealogy; kwargs...) =
-    histogram(latitudes(genealogy),
-              yflip = true,
-              title = "Vertices' Latitudes",
-              xlabel = "";
-              kwargs...)
+plot_latitudes(genealogy::AbstractGenealogy; kwargs...) = histogram(
+    latitudes(genealogy),
+    yflip = true,
+    title = "Vertices' Latitudes",
+    xlabel = "";
+    kwargs...
+)
 
 ##################
 # Common Methods #
@@ -572,6 +620,7 @@ See also [`leaves`](@ref) for an iterable over leaves and [`nivertices`](@ref)
 for an internal vertices counterpart.
 
 # Methods
+
 $(METHODLIST)
 """
 function nleaves end
@@ -607,6 +656,7 @@ Number of markers in the sequences of a genealogy. If an interval `ωs` is
 specified, returns the number of markers contained in that interval.
 
 # Methods
+
 $(METHODLIST)
 """
 function nmarkers end
@@ -624,6 +674,7 @@ branch length of the associated marginal genealogy. If an edge is specified,
 returns the length of that edge.
 
 # Methods
+
 $(METHODLIST)
 """
 function branchlength end
@@ -631,14 +682,17 @@ function branchlength end
 branchlength(genealogy, e::Edge) =
     latitude(genealogy, src(e)) - latitude(genealogy, dst(e))
 
-branchlength(genealogy) = mapreduce(e -> branchlength(genealogy, e), +, edges(genealogy))
+branchlength(genealogy) =
+    mapreduce(e -> branchlength(genealogy, e), +, edges(genealogy))
 
 function branchlength(genealogy, ωs; buffer = default_buffer())
     @no_escape buffer begin
         store = @alloc(Edge{VertexType}, nleaves(genealogy))
         visited = @alloc(Bool, nrecombinations(genealogy))
-        ret = sum(e -> branchlength(genealogy, e),
-                  edges_interval(genealogy, ωs, store, visited))
+        ret = sum(
+            e -> branchlength(genealogy, e),
+            edges_interval(genealogy, ωs, store, visited)
+        )
     end
 
     ret
@@ -651,6 +705,7 @@ export tmrca
 Time to the most recent common ancestor (MRCA) of (a subset of) vertices.
 
 # Methods
+
 $(METHODLIST)
 """
 function tmrca end
@@ -672,17 +727,20 @@ Parents of a vertex, optionally restricted to a marginal genealogy. If you know
 in advance that `v` has a single dad, use [̀̀`dad`](@ref) instead.
 
 The following rules are used to decide if an edge `e` is ancestral:
-- If ωs is a number, the ancestral interval of `e` must cover ωs.
-- If ωs is an Ω or a set of Ωs, the intersection of the ancestral
-  interval of `e` with ωs must be non-empty.
+
+  - If ωs is a number, the ancestral interval of `e` must cover ωs.
+  - If ωs is an Ω or a set of Ωs, the intersection of the ancestral
+    interval of `e` with ωs must be non-empty.
 
 !!! danger
+
     Return a **reference** to the underlying adjacency lists. No touchy!
 
 See also [`child`](@ref), [`children`](@ref), [`sibling`](@ref),
 [`siblings`](@ref), [`descendants`](@ref) and [`ancestors`](@ref).
 
 # Methods
+
 $(METHODLIST)
 """
 function dads end
@@ -694,19 +752,21 @@ export children
 Children of a vertex, optionally restricted to a marginal genealogy. If you know
 in advance that `v` has a single child, use [̀̀`child`](@ref) instead.
 
-
 The following rules are used to decide if an edge `e` is ancestral:
-- If ωs is a number, the ancestral interval of `e` must cover ωs.
-- If ωs is an Ω or a set of Ωs, the intersection of the ancestral
-  interval of `e` with ωs must be non-empty.
+
+  - If ωs is a number, the ancestral interval of `e` must cover ωs.
+  - If ωs is an Ω or a set of Ωs, the intersection of the ancestral
+    interval of `e` with ωs must be non-empty.
 
 !!! danger
+
     Return a **reference** to the underlying adjacency lists. No touchy!
 
 See also [`dad`](@ref), [`dads`](@ref), [`sibling`](@ref),
 [`siblings`](@ref), [`descendants`](@ref) and [`ancestors`](@ref).
 
 # Methods
+
 $(METHODLIST)
 """
 function children end
@@ -722,9 +782,11 @@ All arguments are passed directly to [`children`](@ref).
 See also [`dads3`](@ref).
 
 !!! danger
+
     Return a **reference** to the underlying adjacency lists. No touchy!
 
 # Methods
+
 $(METHODLIST)
 """
 function children3 end
@@ -740,9 +802,11 @@ All arguments are passed directly to [`dads`](@ref).
 See also [`children3`](@ref).
 
 !!! danger
+
     Return a **reference** to the underlying adjacency lists. No touchy!
 
 # Methods
+
 $(METHODLIST)
 """
 function dads3 end
@@ -773,14 +837,16 @@ avoid allocation. In that case, an `UnsafeArray` wrapped around it will be
 returned.
 
 The following rules are used to decide if an edge `e` is ancestral:
-- If ωs is a number, the ancestral interval of `e` must cover ωs.
-- If ωs is an Ω or a set of Ωs, the intersection of the ancestral
-  interval of `e` with ωs must be non-empty.
+
+  - If ωs is a number, the ancestral interval of `e` must cover ωs.
+  - If ωs is an Ω or a set of Ωs, the intersection of the ancestral
+    interval of `e` with ωs must be non-empty.
 
 See also [`child`](@ref), [`dad`](@ref), [`children`](@ref), [`dads`](@ref),
 [`sibling`](@ref), [`siblings`](@ref) and [`descendants`](@ref).
 
 # Methods
+
 $(METHODLIST)
 """
 function ancestors end
@@ -797,14 +863,16 @@ avoid allocation. In that case, an `UnsafeArray` wrapped around it will be
 returned.
 
 The following rules are used to decide if an edge `e` is ancestral:
-- If ωs is a number, the ancestral interval of `e` must cover ωs.
-- If ωs is an Ω or a set of Ωs, the intersection of the ancestral
-  interval of `e` with ωs must be non-empty.
+
+  - If ωs is a number, the ancestral interval of `e` must cover ωs.
+  - If ωs is an Ω or a set of Ωs, the intersection of the ancestral
+    interval of `e` with ωs must be non-empty.
 
 See also [`child`](@ref), [`dad`](@ref), [`children`](@ref), [`dads`](@ref),
 [`sibling`](@ref), [`siblings`](@ref) and [`ancestors`](@ref).
 
 # Methods
+
 $(METHODLIST)
 """
 function descendants end
@@ -826,7 +894,7 @@ let funtrans = Dict(:dads => :ancestors, :children => :descendants)
                 (isleaf(genealogy, v) || isroot(genealogy, v)) && continue
 
                 for u ∈ $fun(genealogy, v)
-                    u ∈ view(buf, 1:(writeptr-1)) && continue
+                    u ∈ view(buf, 1:(writeptr - 1)) && continue
                     buf[writeptr] = u
                     writeptr += 1
                 end
@@ -836,8 +904,7 @@ let funtrans = Dict(:dads => :ancestors, :children => :descendants)
         end
 
         @eval function $transfun(genealogy, v)
-            $transfun!(Vector{VertexType}(undef, nv(genealogy) - 1),
-                       genealogy, v)
+            $transfun!(Vector{VertexType}(undef, nv(genealogy) - 1), genealogy, v)
         end
 
         ## Ancestors & descendants
@@ -869,8 +936,12 @@ let funtrans = Dict(:dads => :ancestors, :children => :descendants)
         end
 
         @eval function $transfun(genealogy, v, ω)
-            $transfun!(pointer(Vector{VertexType}(undef, nv(genealogy) - 1)),
-                       genealogy, v, ω)
+            $transfun!(
+                pointer(Vector{VertexType}(undef, nv(genealogy) - 1)),
+                genealogy,
+                v,
+                ω
+            )
         end
     end
 end
@@ -893,14 +964,16 @@ See also [`child`](@ref), [`dad`](@ref), [`children`](@ref), [`dads`](@ref),
 [`descendants`](@ref) and [`ancestors`](@ref).
 
 # Methods
+
 $(METHODLIST)
 
 # Arguments
-* `x`: pointer to preallocated memory
-* `genealogy`: a genealogy
-* `v`: vertex for which siblings should be computed
-* `u`: parent with respect to which siblings should be computed
-* `args`: arguments for `dads`/`children` calls
+
+  - `x`: pointer to preallocated memory
+  - `genealogy`: a genealogy
+  - `v`: vertex for which siblings should be computed
+  - `u`: parent with respect to which siblings should be computed
+  - `args`: arguments for `dads`/`children` calls
 """
 function siblings! end
 
@@ -941,24 +1014,28 @@ counterpart. It should be used in any performance sensitive code. `siblings`
 is mainly intended for interactive use and quick-and-dirty testing.
 
 # Methods
+
 $(METHODLIST)
 
 # Arguments
-* `genealogy`: a genealogy
-* `v`: vertex for which siblings should be computed
-* `u`: parent with respect to which siblings should be computed
-* `args`: arguments for `dads`/`children` calls
+
+  - `genealogy`: a genealogy
+  - `v`: vertex for which siblings should be computed
+  - `u`: parent with respect to which siblings should be computed
+  - `args`: arguments for `dads`/`children` calls
 """
 function siblings end
 
 function siblings(genealogy, v, u::VertexType, ancargs::Tuple)
-    ret = Vector{VertexType}(undef, maxdads(genealogy) * (maxchildren(genealogy) - 1))
+    ret =
+        Vector{VertexType}(undef, maxdads(genealogy) * (maxchildren(genealogy) - 1))
     len = length(siblings!(pointer(ret), genealogy, v, u, ancargs))
     resize!(ret, len)
 end
 
 function siblings(genealogy, v, ancargs::Tuple)
-    ret = Vector{VertexType}(undef, maxdads(genealogy) * (maxchildren(genealogy) - 1))
+    ret =
+        Vector{VertexType}(undef, maxdads(genealogy) * (maxchildren(genealogy) - 1))
     len = length(siblings!(pointer(ret), genealogy, v, ancargs))
     resize!(ret, len)
 end
@@ -975,13 +1052,15 @@ See also [`child`](@ref), [`dad`](@ref), [`children`](@ref), [`dads`](@ref),
 [`descendants`](@ref) and [`ancestors`](@ref).
 
 # Methods
+
 $(METHODLIST)
 
 # Arguments
-* `genealogy`: a genealogy
-* `v`: vertex for which siblings should be computed
-* `u`: parent with respect to which siblings should be computed
-* `args`: arguments for `dads`/`children` calls
+
+  - `genealogy`: a genealogy
+  - `v`: vertex for which siblings should be computed
+  - `u`: parent with respect to which siblings should be computed
+  - `args`: arguments for `dads`/`children` calls
 """
 function sibling end
 
@@ -1083,8 +1162,12 @@ function nmutations(genealogy::AbstractGenealogy, e; buffer = default_buffer())
 end
 
 function nmutations(genealogy; buffer = default_buffer())
-    mapreduce(e -> nmutations(genealogy, e, buffer = buffer), +, edges(genealogy),
-              init = zero(Int))
+    mapreduce(
+        e -> nmutations(genealogy, e, buffer = buffer),
+        +,
+        edges(genealogy),
+        init = zero(Int)
+    )
 end
 
 ## Edge functions.
@@ -1100,6 +1183,7 @@ end
 Iterator over the edges of a genealogy.
 
 # Implementation
+
 The [`block_predicate`](@ref) method allows for early termination. Its default
 implementation always return `true`.
 
@@ -1109,7 +1193,7 @@ abstract type AbstractEGIter <: AbstractEdgeIter end
 
 eltype(::AbstractEGIter) = Edge{VertexType}
 
-IteratorSize(::T) where T<:AbstractEGIter = Base.SizeUnknown()
+IteratorSize(::T) where T <: AbstractEGIter = Base.SizeUnknown()
 IteratorSize(::Type{<:AbstractEGIter}) = Base.SizeUnknown()
 
 """
@@ -1133,14 +1217,14 @@ Top-down edge iteration.
 See also [`AbstractEGIterBU`](@ref), [`block_predicate`](@ref).
 
 # Implementation
+
 Subtypes instances can be constructed with a call to [`EIterTD`](@ref).
 
 --*Internal*--
 """
 abstract type AbstractEGIterTD <: AbstractEGIter end
 
-function EIterTD(EITD, genealogy, ωs, stack::CheapStack, visited,
-    bp_pars, root)
+function EIterTD(EITD, genealogy, ωs, stack::CheapStack, visited, bp_pars, root)
     fill!(visited, false)
 
     ret = EITD(genealogy, ωs, stack, visited, bp_pars)
@@ -1159,19 +1243,19 @@ end
 Helper for constructing instances of subtypes of [`AbstractEGIterTD`](@ref).
 
 # Arguments
-* `EITD`: type to instantiate
-* `genealogy`: a genealogy
-* `ωs`: ancestral interval
-* `store`: container for edges
-* `visited`: array of boolean values; the kth entry is true if the kth
-  recombination vertex has been visited
-* `bp_pars`: parameters for the block predicate
-* `root`: source edge of the initial edge
+
+  - `EITD`: type to instantiate
+  - `genealogy`: a genealogy
+  - `ωs`: ancestral interval
+  - `store`: container for edges
+  - `visited`: array of boolean values; the kth entry is true if the kth
+    recombination vertex has been visited
+  - `bp_pars`: parameters for the block predicate
+  - `root`: source edge of the initial edge
 
 --*Internal*--
 """
-EIterTD(EITD, genealogy, ωs, store::AbstractArray, visited, bp_pars,
-    root) =
+EIterTD(EITD, genealogy, ωs, store::AbstractArray, visited, bp_pars, root) =
     EIterTD(EITD, genealogy, ωs, CheapStack(store), visited, bp_pars, root)
 
 function iterate(iter::AbstractEGIterTD, state = 1)
@@ -1212,6 +1296,7 @@ Bottom-up edge iteration.
 See also [AbstractEGIterTD](@ref), [block_predicate](@ref).
 
 # Implementation
+
 Subtypes instances can be constructed with a call to [`EIterBU`](@ref).
 
 --*Internal*--
@@ -1224,14 +1309,15 @@ abstract type AbstractEGIterBU <: AbstractEGIter end
 Helper for constructing instances of subtypes of [`AbstractEGIterBU`](@ref).
 
 # Arguments
-* `EIBU`: type to instantiate
-* `genealogy`: a genealogy
-* `ωs`: ancestral interval
-* `stack`: container for edges
-* `visited`: array of boolean values; the kth entry is true if the kth
-  coalescence vertex has been visited
-* `roots`: destination vertices of the initial edges
-* `bp_pars`: parameters for the block predicate
+
+  - `EIBU`: type to instantiate
+  - `genealogy`: a genealogy
+  - `ωs`: ancestral interval
+  - `stack`: container for edges
+  - `visited`: array of boolean values; the kth entry is true if the kth
+    coalescence vertex has been visited
+  - `roots`: destination vertices of the initial edges
+  - `bp_pars`: parameters for the block predicate
 
 --*Internal*--
 """
@@ -1291,32 +1377,45 @@ end
 Flexible edge iterators that supports various constraints.
 
 Possible constraints are any combination of the following:
-* An interval of genetic positions. Any non-ancestral edge is ignored.
-* A minimum latitude. Any edge under that latitude is ignored. An edge `e` is
-  considered under a latitude `l` if `latitude(genealogy, dst(e)) < l`.
-* A set of predicates. If any of the predicates evaluate to true for a given
-  edge, that edge is ignored.
+
+  - An interval of genetic positions. Any non-ancestral edge is ignored.
+  - A minimum latitude. Any edge under that latitude is ignored. An edge `e` is
+    considered under a latitude `l` if `latitude(genealogy, dst(e)) < l`.
+  - A set of predicates. If any of the predicates evaluate to true for a given
+    edge, that edge is ignored.
 
 Do not construct directly, use [`edges_interval`](@ref) instead.
 
 # Fields
+
 $(TYPEDFIELDS)
 
 # Constructors
+
 $(METHODLIST)
 
 --*Internal*--
 """
 struct EdgesInterval{T, I, E} <: AbstractEGIterTD
-    "Genealogy to iterate over"
+    """
+    Genealogy to iterate over
+    """
     genealogy::T
-    "Interval to consider"
+    """
+    Interval to consider
+    """
     ωs::I
-    "Edges buffer"
+    """
+    Edges buffer
+    """
     stack::CheapStack{E}
-    "True is associated recombination vertex has been visited previously"
+    """
+    True is associated recombination vertex has been visited previously
+    """
     visited::UnsafeArray{Bool, 1}
-    "Only consider edges located above this latitude"
+    """
+    Only consider edges located above this latitude
+    """
     min_latitude::Float64
 end
 
@@ -1337,17 +1436,30 @@ Iterage over a genealogy's edges via [`EdgesInterval`](@ref).
 buffer for a newly constructed `CheapStack`.
 
 # Methods
+
 $(METHODLIST)
 """
 function edges_interval end
 
-edges_interval(genealogy, ωs, buffer, visited;
-               root = mrca(genealogy), min_latitude = zero(Float64)) =
-    EdgesInterval(genealogy, ωs, buffer, visited, convert(Float64, min_latitude), root)
+edges_interval(
+    genealogy,
+    ωs,
+    buffer,
+    visited;
+    root = mrca(genealogy),
+    min_latitude = zero(Float64)
+) = EdgesInterval(
+    genealogy,
+    ωs,
+    buffer,
+    visited,
+    convert(Float64, min_latitude),
+    root
+)
 
 function edges_interval(genealogy, ωs::Union{AIs, AIsType})
     ωs_e = AIsType()
-    flt = function(e)
+    flt = function (e)
         ancestral_intervals!(ωs_e, genealogy, e)
         !isdisjoint(ωs_e, ωs)
     end
@@ -1357,7 +1469,7 @@ end
 
 function edges_interval(genealogy, x)
     ωs_e = AIsType()
-    flt = function(e)
+    flt = function (e)
         ancestral_intervals!(ωs_e, genealogy, e)
         x ∈ ωs_e
     end
@@ -1389,6 +1501,7 @@ from each root are added together.
 `block_predicate` and `stack` are passed directly to [`edges_interval`](@ref).
 
 # Methods
+
 $(METHODLIST)
 """
 function nlive! end
@@ -1413,7 +1526,7 @@ function nlive!(counts, genealogy, lats, edges_iterator)
     for e ∈ edges_iterator
         @simd for k ∈ eachindex(lats)
             counts[k] +=
-            latitude(genealogy, dst(e)) <= lats[k] <= latitude(genealogy, src(e))
+                latitude(genealogy, dst(e)) <= lats[k] <= latitude(genealogy, src(e))
         end
     end
 
@@ -1435,8 +1548,12 @@ function ismutation_edge(genealogy, e, idx)
     !iszero((chunk1 ⊻ chunk2) & mask)
 end
 
-function isequal(v1::VertexType, v2::VertexType, genealogy::AbstractGenealogy;
-                 buffer = default_buffer())
+function isequal(
+    v1::VertexType,
+    v2::VertexType,
+    genealogy::AbstractGenealogy;
+    buffer = default_buffer()
+)
     h1, h2 = sequence(genealogy, v1), sequence(genealogy, v2)
     nchunks = length(h1.data.chunks)
 
@@ -1456,6 +1573,7 @@ export ts
 Convert a genealogy to a `tskit.TreeSequence`.
 
 # Methods
+
 $(METHODLIST)
 """
 function ts end

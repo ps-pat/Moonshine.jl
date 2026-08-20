@@ -15,38 +15,59 @@ Ancestral recombination graph.
 See also [`Tree`](@ref).
 
 # Fields
+
 $(TYPEDFIELDS)
 
 # Constructors
+
 !!! info
+
     Random constructor calls [`Sample`](@ref)'s random constructor.
 
 !!! warning
+
     These **do not** actually build the arg. For that, see
     [`build!(rng, arg)`](@ref).
 
 $(METHODLIST)
 
 # Arguments
-* `tree`: coalescent [`Tree`](@ref)
-* other arguments are identical to [`Sample`](@ref)
+
+  - `tree`: coalescent [`Tree`](@ref)
+  - other arguments are identical to [`Sample`](@ref)
 """
 struct Arg <: AbstractGenealogy
-    "Graph's topology"
+    """
+    Graph's topology
+    """
     graph::ThreeTree{VertexType}
-    "Vertices' latitudes"
+    """
+    Vertices' latitudes
+    """
     latitudes::Vector{Float64}
-    "∩-mask for ancestral intervals"
+    """
+    ∩-mask for ancestral intervals
+    """
     recombination_mask::Vector{AIsType}
-    "Arg's grand MRCA"
+    """
+    Arg's grand MRCA
+    """
     mrca::Base.RefValue{VertexType}
-    "Vertices' haplotypes"
+    """
+    Vertices' haplotypes
+    """
     sequences::Vector{Sequence}
-    "Edges' ancestral intervals"
+    """
+    Edges' ancestral intervals
+    """
     ancestral_intervals::Dict{Edge{VertexType}, AIsType}
-    "Associated [`Sample`](@ref)"
+    """
+    Associated [`Sample`](@ref)
+    """
     sample::Sample
-    "Log-value of the associated pdf"
+    """
+    Log-value of the associated pdf
+    """
     logdensity::Base.RefValue{Double64}
 end
 
@@ -56,14 +77,16 @@ function Arg(tree::Tree)
         ancestral_intervals[e] = AIsType([Ω(0, ∞)])
     end
 
-    Arg(graph(tree),
+    Arg(
+        graph(tree),
         latitudes(tree),
         Vector{AIsType}(undef, 0),
         Ref(mrca(tree)),
         sequences(tree),
         ancestral_intervals,
         sam(tree),
-        tree.logdensity)
+        tree.logdensity
+    )
 end
 
 function Arg(rng::AbstractRNG, n, μ, ρ, Ne, sequence_length)
@@ -117,7 +140,11 @@ mrca(arg, ωs) = mrca(arg, leaves(arg), ωs)
 @generated maxchildren(::Type{Arg}) = 2
 
 let funs = (:dads, :children),
-    typesandtests = ((:Real, in), (:AI, !isdisjoint), (:(AIs{<:AbstractVector{<:AI}}), !isdisjoint))
+    typesandtests = (
+        (:Real, in),
+        (:AI, !isdisjoint),
+        (:(AIs{<:AbstractVector{<:AI}}), !isdisjoint)
+    )
 
     for fun ∈ funs
         edge = fun == :dads ? :(Edge(u => v)) : :(Edge(v => u))
@@ -158,10 +185,11 @@ function plot_layout(arg::Arg)
     Spring(
         initialpos = (collect ∘ zip)(initxs, ys),
         # initialpos = vcat(
-            # [(v, 0) for v ∈ leaves(arg)],
-            # [(1, 10) for _ ∈ ivertices(arg)]
+        # [(v, 0) for v ∈ leaves(arg)],
+        # [(1, 10) for _ ∈ ivertices(arg)]
         # ),
-        pin = [(false, true) for _ ∈ vertices(arg)])
+        pin = [(false, true) for _ ∈ vertices(arg)]
+    )
 end
 
 ########################
@@ -189,7 +217,8 @@ function ancestral_intervals!(ωs, arg::Arg, v::VertexType; wipe = true)
     ωs
 end
 
-ancestral_intervals(arg::Arg, v::VertexType) = ancestral_intervals!(AIsType(), arg, v)
+ancestral_intervals(arg::Arg, v::VertexType) =
+    ancestral_intervals!(AIsType(), arg, v)
 
 _recidx(arg, v) = (v - 2(nleaves(arg) - 1)) ÷ 2
 
@@ -233,31 +262,36 @@ Heatmap of recombination events' positions.
 See also [`breakpoints`](@ref)
 
 # Keywords
-* `nbins` (`clamp(nrecombinations(arg) ÷ 100, 1, 69)`): number of bins. Its
-  default maximum value of 69 produces a nice 80 columns wide plot.
-* `height` (`7`): height of the plot.
-* `kwargs...`: additional keywords arguments are passed directly to
-  [`UnicodePlots.histogram`](https://github.com/JuliaPlots/UnicodePlots.jl).
+
+  - `nbins` (`clamp(nrecombinations(arg) ÷ 100, 1, 69)`): number of bins. Its
+    default maximum value of 69 produces a nice 80 columns wide plot.
+  - `height` (`7`): height of the plot.
+  - `kwargs...`: additional keywords arguments are passed directly to
+    [`UnicodePlots.histogram`](https://github.com/JuliaPlots/UnicodePlots.jl).
 """
-function plot_breakpoints(arg;
-                          nbins = clamp(nrecombinations(arg) ÷ 100, 1, 69),
-                          height = 7,
-                          kwargs...)
+function plot_breakpoints(
+    arg;
+    nbins = clamp(nrecombinations(arg) ÷ 100, 1, 69),
+    height = 7,
+    kwargs...
+)
     bins = range(0, sequence_length(arg), length = nbins + 1)
     bps = (collect ∘ breakpoints)(arg)
     h = fit(Histogram, bps, bins)
     counts = repeat(reshape(h.weights, (1, nbins)), 10)
 
-    plt = heatmap(counts,
-                  width = nbins,
-                  border = :none,
-                  margin = 0,
-                  title = "Recombinations' Positions",
-                  height = height,
-                  colorbar = true,
-                  zlabel = "#ρ",
-                  colormap = default_colormap;
-                  kwargs...)
+    plt = heatmap(
+        counts,
+        width = nbins,
+        border = :none,
+        margin = 0,
+        title = "Recombinations' Positions",
+        height = height,
+        colorbar = true,
+        zlabel = "#ρ",
+        colormap = default_colormap;
+        kwargs...
+    )
 
     for k ∈ 1:height
         label!(plt, :l, k, "")
@@ -285,38 +319,45 @@ multithreaded in order to reduce computation time.
 See also [`tmrca`](@ref)
 
 # Keywords
-* `npoints` (`nrecombinations(arg) + 1`): approximate number of points at which
-  to compute the TMRCA. By default, every recombination breakpoint is
-  considered. Use a smaller number of points to reduce computing time.
-* `width` (`76`): width of the plot. Its default maximum value of 76 produces
-  a 80 columns wide plot.
-* `noprogress` (`false`): hide progress meter
-* `kwargs...`: additional keywords arguments are passed directly to
-  [`UnicodePlots.histogram`](https://github.com/JuliaPlots/UnicodePlots.jl).
+
+  - `npoints` (`nrecombinations(arg) + 1`): approximate number of points at which
+    to compute the TMRCA. By default, every recombination breakpoint is
+    considered. Use a smaller number of points to reduce computing time.
+  - `width` (`76`): width of the plot. Its default maximum value of 76 produces
+    a 80 columns wide plot.
+  - `noprogress` (`false`): hide progress meter
+  - `kwargs...`: additional keywords arguments are passed directly to
+    [`UnicodePlots.histogram`](https://github.com/JuliaPlots/UnicodePlots.jl).
 """
-function plot_tmrcas(arg::Arg;
-                     width = 76,
-                     npoints = nrecombinations(arg) + 1,
-                     noprogress = false,
-                     kwargs...)
+function plot_tmrcas(
+    arg::Arg;
+    width = 76,
+    npoints = nrecombinations(arg) + 1,
+    noprogress = false,
+    kwargs...
+)
     lastidx = nrecombinations(arg) + 1
     stride = max(1, div(lastidx, npoints - 1, RoundDown) - 1)
     idx = StepRange(1, stride, lastidx)
 
-    grid = [0.; collect(breakpoints(arg))[idx]]
+    grid = [0.0; collect(breakpoints(arg))[idx]]
     sort!(grid)
     times = similar(grid, Float64)
 
-    @showprogress enabled = !noprogress Threads.@threads :greedy for k ∈ eachindex(grid)
+    @showprogress enabled = !noprogress Threads.@threads :greedy for k ∈
+                                                                     eachindex(grid)
         times[k] = tmrca(arg, leaves(arg), grid[k])
     end
 
-    plt = stairs(grid, times,
-                 width = width,
-                 margin = 0,
-                 title = "TMRCAs",
-                 xlabel = "Position";
-                 kwargs...)
+    plt = stairs(
+        grid,
+        times,
+        width = width,
+        margin = 0,
+        title = "TMRCAs",
+        xlabel = "Position";
+        kwargs...
+    )
 
     plt
 end
@@ -333,6 +374,7 @@ Return the parent of `d` that is not `s` for a recombination vertex `d`. If `d`
 is not a recombination vertex, returns `s`. Can also take an edge as argument.
 
 # Methods
+
 $(METHODLIST)
 
 --*Internal*--
@@ -384,7 +426,8 @@ function validate(arg::Arg; check_mutations = true)
     end
 
     ## Non-root coalescence vertices ##
-    for v ∈ Iterators.flatten((range(n + 1, 2n - 1), range(2n + 1, nv(arg), step = 2)))
+    for v ∈
+        Iterators.flatten((range(n + 1, 2n - 1), range(2n + 1, nv(arg), step = 2)))
         v = VertexType(v)
         v == mrca(arg) && continue
 
@@ -398,9 +441,14 @@ function validate(arg::Arg; check_mutations = true)
             flag = false
         end
 
-        ai_children = mapreduce(x -> ancestral_intervals(arg, Edge(v => x)), ∪, children(arg, v))
+        ai_children = mapreduce(
+            x -> ancestral_intervals(arg, Edge(v => x)),
+            ∪,
+            children(arg, v)
+        )
         if ancestral_intervals(arg, Edge(dad(arg, v) => v)) != ai_children
-            msg = "Coalescence vertex whose parental edge's ancestral interval" *
+            msg =
+                "Coalescence vertex whose parental edge's ancestral interval" *
                 " is not equal to the union of the ancestral intervals of its" *
                 " children's edge."
             @info msg v
@@ -502,7 +550,9 @@ function _ts_edge_table!(table, arg)
 end
 
 _ts_site_table!(table, arg) = table.set_columns(
-    positions(arg), zeros(Int8, nmarkers(arg)), range(0, nmarkers(arg))
+    positions(arg),
+    zeros(Int8, nmarkers(arg)),
+    range(0, nmarkers(arg))
 )
 
 function _ts_mutation_table!(table, arg)

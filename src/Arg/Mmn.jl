@@ -1,4 +1,12 @@
-function mutationsidx!(res, arg, e, firstchunk, firstidx, lastchunk; buffer = AIsType())
+function mutationsidx!(
+    res,
+    arg,
+    e,
+    firstchunk,
+    firstidx,
+    lastchunk;
+    buffer = AIsType()
+)
     η1, η2 = sequences(arg, e)
     marker_mask = one(UInt64) << (firstidx - 1)
     idx = one(Int)
@@ -8,8 +16,7 @@ function mutationsidx!(res, arg, e, firstchunk, firstidx, lastchunk; buffer = AI
         ancestral_mask!(mask, arg, e)
 
         @inbounds for k ∈ range(firstchunk, lastchunk)
-            xored_chunk =
-                (η1.data.chunks[k] ⊻ η2.data.chunks[k]) & mask[k]
+            xored_chunk = (η1.data.chunks[k] ⊻ η2.data.chunks[k]) & mask[k]
 
             while !iszero(marker_mask)
                 iszero(xored_chunk & marker_mask) || push!(res[idx], e)
@@ -25,15 +32,25 @@ function mutationsidx!(res, arg, e, firstchunk, firstidx, lastchunk; buffer = AI
 end
 
 struct EdgesIterMMN{T, I, E} <: AbstractEGIterBU
-    "Genealogy to iterate over"
+    """
+    Genealogy to iterate over
+    """
     genealogy::T
-    "Interval to consider"
+    """
+    Interval to consider
+    """
     ωs::I
-    "Edges buffer"
+    """
+    Edges buffer
+    """
     stack::CheapStack{E}
-    "True is associated recombination vertex has been visited previously"
+    """
+    True is associated recombination vertex has been visited previously
+    """
     visited::UnsafeArray{Bool, 1}
-    "Chunk on which to block when equal to 0"
+    """
+    Chunk on which to block when equal to 0
+    """
     block_parameters::Tuple{Int, mmn_chunktype}
 end
 
@@ -67,8 +84,15 @@ function mutation_edges!(mutations, arg, ω::Ω; buffer = default_buffer())
         store = @alloc(Edge{VertexType}, nleaves(arg) + nrecombinations(arg))
         visited = @alloc(Bool, nrecombinations(arg))
         @inbounds for e ∈ edges_interval(arg, ω, store, visited)
-            mutationsidx!(mutations, arg, e, firstchunk, firstidx, lastchunk,
-                          buffer = buffer)
+            mutationsidx!(
+                mutations,
+                arg,
+                e,
+                firstchunk,
+                firstidx,
+                lastchunk,
+                buffer = buffer
+            )
         end
     end
 
@@ -121,9 +145,13 @@ once in a given ancestral recombination graph.
 `stack` must be of type `CheapStack{Edge{VertexType}}` (see
 [`CheapStack`](@ref)).
 """
-function next_inconsistent_idx(arg, idx, stack;
-                               mutations_edges = ntuple(_ -> Edge{VertexType}[], 8mmn_chunksize),
-                               buffer = default_buffer())
+function next_inconsistent_idx(
+    arg,
+    idx,
+    stack;
+    mutations_edges = ntuple(_ -> Edge{VertexType}[], 8mmn_chunksize),
+    buffer = default_buffer()
+)
     chunksize = 8mmn_chunksize
     ## The mask restricts search to markers in (original) `idx` and
     ## `nmarkers(arg)` inclusively.
@@ -152,27 +180,41 @@ function next_inconsistent_idx(arg, idx, stack;
             visited = @alloc(Bool, nv(arg) - nleaves(arg) - nrecombinations(arg))
             ei_ptr = unsafe_convert(
                 Ptr{Edge{VertexType}},
-                @alloc_ptr(_ne * sizeof(Edge{VertexType})))
+                @alloc_ptr(_ne * sizeof(Edge{VertexType}))
+            )
 
             padded_ne = _ne + (simd_vecsize - _ne % simd_vecsize)
             chunks_s_ptr = unsafe_convert(
                 Ptr{mmn_chunktype},
-                @alloc_ptr(padded_ne * sizeof(mmn_chunktype)))
+                @alloc_ptr(padded_ne * sizeof(mmn_chunktype))
+            )
             chunks_d_ptr = unsafe_convert(
                 Ptr{mmn_chunktype},
-                @alloc_ptr(padded_ne * sizeof(mmn_chunktype)))
+                @alloc_ptr(padded_ne * sizeof(mmn_chunktype))
+            )
 
             ## Collect edges
             ne_interval = zero(Int)
-            edges_iterator = EdgesIterMMN(arg, base_ω, stack, visited, leaves(arg),
-                                          idx_chunk, mask)
+            edges_iterator = EdgesIterMMN(
+                arg,
+                base_ω,
+                stack,
+                visited,
+                leaves(arg),
+                idx_chunk,
+                mask
+            )
             @inbounds for e ∈ edges_iterator
                 isrecombination(arg, src(e)) && continue
 
-                s_ptr = unsafe_convert(Ptr{mmn_chunktype},
-                                       pointer(sequence(arg, src(e)).data.chunks))
-                d_ptr = unsafe_convert(Ptr{mmn_chunktype},
-                                       pointer(sequence(arg, dst(e)).data.chunks))
+                s_ptr = unsafe_convert(
+                    Ptr{mmn_chunktype},
+                    pointer(sequence(arg, src(e)).data.chunks)
+                )
+                d_ptr = unsafe_convert(
+                    Ptr{mmn_chunktype},
+                    pointer(sequence(arg, dst(e)).data.chunks)
+                )
                 schunk = unsafe_load(s_ptr, idx_chunk)
                 dchunk = unsafe_load(d_ptr, idx_chunk)
 

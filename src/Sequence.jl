@@ -1,16 +1,27 @@
-import Base: empty,
-             similar,
-             ~, &, |, xor, >>>, >>, <<, *,
-             ==, isequal,
-             show,
-             isempty,
-             string,
-             convert,
-             hash,
-             zeros, ones,
-             firstindex, lastindex,
-             copy!,
-             sum
+import Base:
+    empty,
+    similar,
+    ~,
+    &,
+    |,
+    xor,
+    >>>,
+    >>,
+    <<,
+    *,
+    ==,
+    isequal,
+    show,
+    isempty,
+    string,
+    convert,
+    hash,
+    zeros,
+    ones,
+    firstindex,
+    lastindex,
+    copy!,
+    sum
 
 export Sequence
 """
@@ -21,18 +32,22 @@ Sequence of biallelic genetic markers (haplotype).
 Implement [the iteration interface](https://docs.julialang.org/en/v1/manual/interfaces/#man-interface-iteration) as well as standard bitwise operations.
 
 !!! info
+
     Random constructors sample marker's states via [`Random.bitrand`](@extref).
 
 # Fields
+
 $(TYPEDFIELDS)
 
 # Constructors
+
 $(METHODLIST)
 
 where:
-* `n`: number of markers
-* `rng`: random number generator
-* `minLength, maxLength`: bounds for sequence length
+
+  - `n`: number of markers
+  - `rng`: random number generator
+  - `minLength, maxLength`: bounds for sequence length
 """
 struct Sequence
     data::BitVector
@@ -51,8 +66,12 @@ end
 
 # isequal(h1::Sequence, h2::Sequence) = isequal(h1.data, h2.data)
 
-function isequal(h1::Sequence, h2::Sequence,
-                 m1::AbstractVector{UInt64}, m2::AbstractVector{UInt64})
+function isequal(
+    h1::Sequence,
+    h2::Sequence,
+    m1::AbstractVector{UInt64},
+    m2::AbstractVector{UInt64}
+)
     @inbounds for k ∈ eachindex(m1)
         mask = m1[k] & m2[k]
         iszero((h1.data.chunks[k] ⊻ h2.data.chunks[k]) & mask) || return false
@@ -97,8 +116,10 @@ string(sequence::Sequence) = replace(bitstring(sequence.data), r"[ :]" => "")
 show(io::IO, ::MIME"text/plain", h::Sequence) =
     print(io, plot_sequence(h, height = 2, colorbar = false))
 
-show(io::IO, h::Sequence) =
-    print(io, plot_sequence(h, height = 2, colorbar = false, title = "", labels = false))
+show(io::IO, h::Sequence) = print(
+    io,
+    plot_sequence(h, height = 2, colorbar = false, title = "", labels = false)
+)
 
 """
     $(FUNCTIONNAME)(::Type{Sequence})
@@ -107,6 +128,7 @@ show(io::IO, h::Sequence) =
 Size (in *bits*) of the blocks (chunks) of a sequence.
 
 # Methods
+
 $(METHODLIST)
 
 --*Internal*--
@@ -173,7 +195,6 @@ for fun ∈ [:&, :|, :xor]
     @eval ($fun)(h1, h2::Sequence) = ($fun)(h2, h1)
 
     @eval ($fun)(h1::Sequence, h2::Sequence) = ($fun)(h1, h2.data.chunks)
-
 end
 
 for fun ∈ [:<<, :>>, :>>>]
@@ -277,6 +298,7 @@ For convenience, each method has an allocating counterpart; see
 See also [`wipe!`](@ref).
 
 # Methods
+
 $(METHODLIST)
 
 --*Internal*--
@@ -298,8 +320,11 @@ function ancestral_mask!(mask, idx; wipe = true)
     ## First chunk
     ormask = typemax(UInt)
     let nleading0 = idxinchunk(Sequence, idx.start) - 1,
-        ntrailing0 = bs - (first(chunks_idx) == last(chunks_idx) ?
-            idxinchunk(Sequence, idx.stop) : bs)
+        ntrailing0 =
+            bs - (
+                first(chunks_idx) == last(chunks_idx) ?
+                idxinchunk(Sequence, idx.stop) : bs
+            )
 
         ormask >>>= ntrailing0
         ormask &= typemax(UInt) << nleading0
@@ -315,7 +340,11 @@ function ancestral_mask!(mask, idx; wipe = true)
         extra_chunks = nchunks % simd_chunksize,
         lane = VecRange{simd_chunksize}(0)
 
-        for k ∈ range(first(chunks_idx) + 1, last(chunks_idx) - 1 - extra_chunks, step = simd_chunksize)
+        for k ∈ range(
+            first(chunks_idx) + 1,
+            last(chunks_idx) - 1 - extra_chunks,
+            step = simd_chunksize
+        )
             mask[lane + k] |= typemax(UInt)
         end
 
@@ -346,17 +375,16 @@ ancestral_mask!(mask, h::Sequence, idx; wipe = true) =
 Allocating version of [`ancestral_mask!`](@ref)
 
 # Methods
+
 $(METHODLIST)
 
 --*Internal*--
 """
 function ancestral_mask end
 
-ancestral_mask(h::Sequence, idx) =
-    ancestral_mask!(similar(h.data.chunks), h, idx)
+ancestral_mask(h::Sequence, idx) = ancestral_mask!(similar(h.data.chunks), h, idx)
 
-ancestral_mask(h::Int, idx) =
-    ancestral_mask!(BitVector(undef, h), h, idx)
+ancestral_mask(h::Int, idx) = ancestral_mask!(BitVector(undef, h), h, idx)
 
 #############
 # Distances #
@@ -369,6 +397,7 @@ export Distance
 Distance between two [`Sequence`](@ref)s.
 
 # Implementation
+
 The only required method for a distance `D<:Distance` to be usable for tree
 contruction is
 
@@ -389,6 +418,7 @@ export distance
 Compute distances between sequences.
 
 # Methods
+
 $(METHODLIST)
 """
 function distance end
@@ -421,7 +451,7 @@ function distance(::Hamming{T}, h1::Sequence, h2::Sequence) where T
     d = zero(T)
     nblocks = length(h1.data.chunks)
 
-    @inbounds @simd for k ∈ 1:(nblocks-1)
+    @inbounds @simd for k ∈ 1:(nblocks - 1)
         d += count_ones(h1.data.chunks[k] ⊻ h2.data.chunks[k])
     end
 
@@ -493,27 +523,32 @@ export plot_sequence
 Unicode-graphic representation of an haplotype.
 
 # Arguments
-* `nbins` (`clamp(length(h), 1, 69)`): number of bins
-* ̀`height` (`7`): number of rows
-* `kwargs`: arguments passed directly to `UnicodePlots.heatmap`
+
+  - `nbins` (`clamp(length(h), 1, 69)`): number of bins
+  - ̀`height` (`7`): number of rows
+  - `kwargs`: arguments passed directly to `UnicodePlots.heatmap`
 """
-function plot_sequence(h::Sequence;
-                       nbins = clamp(length(h), 1, 69),
-                       height = 7,
-                       kwargs...)
+function plot_sequence(
+    h::Sequence;
+    nbins = clamp(length(h), 1, 69),
+    height = 7,
+    kwargs...
+)
     counts_vec = map(idx -> count(h[idx]), index_chunks(1:length(h), n = nbins))
     counts = repeat(reshape(counts_vec, (1, length(counts_vec))), height)
 
-    plt = heatmap(counts,
-                  width = nbins,
-                  border = :none,
-                  margin = 0,
-                  title = (string ∘ length)(h) * "-markers Sequence",
-                  height = height,
-                  colorbar = true,
-                  zlabel = "#1",
-                  colormap = default_colormap;
-                  kwargs...)
+    plt = heatmap(
+        counts,
+        width = nbins,
+        border = :none,
+        margin = 0,
+        title = (string ∘ length)(h) * "-markers Sequence",
+        height = height,
+        colorbar = true,
+        zlabel = "#1",
+        colormap = default_colormap;
+        kwargs...
+    )
 
     for k ∈ 1:height
         label!(plt, :l, k, "")

@@ -8,8 +8,7 @@ import JCheck: specialcases, generate
 
 specialcases(::Type{Sequence}) = [Sequence()]
 
-generate(rng::AbstractRNG, ::Type{Sequence}, n) =
-    [Sequence(rng, 1, 200) for _ ∈ 1:n]
+generate(rng::AbstractRNG, ::Type{Sequence}, n) = [Sequence(rng, 1, 200) for _ ∈ 1:n]
 
 # ## Fixed length sequences.
 # struct SequenceN{N}

@@ -56,6 +56,7 @@ const AI = AbstractInterval
 
 """
     const VertexType = Int32
+
 Type of the vertices. Any `genealogy` that is an instance of
 [`AbstractGenealogy`](@ref) should be constructed so that `graph(genealogy)` is
 an instance of `AbstractGraphs{VertexType}`
@@ -67,6 +68,7 @@ const VertexType = load_preference("Moonshine", "VertexType", Int32)
 
 """
     const mmn_chunksize = 1
+
 Size (in *bytes*) of a chunk of markers in [`next_inconsistent_idx`](@ref).
 
 --*Internal*--
@@ -75,6 +77,7 @@ const mmn_chunksize = load_preference("Moonshine", "mmn_chunksize", 1)
 
 """
     const mmn_chunktype = (eval ∘ Symbol)("UInt" * string(8mmn_chunksize))
+
 Type of a chunk of markers in [`next_inconsistent_idx`](@ref).
 
 --*Internal*--

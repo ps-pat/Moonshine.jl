@@ -4,12 +4,18 @@
 
 import Base: eltype, length
 
-import Distributions: insupport, pdf,
-                      params, partype,
-                      mean, var, cov, entropy,
-                      _logpdf,
-                      _rand!,
-                      Bernoulli
+import Distributions:
+    insupport,
+    pdf,
+    params,
+    partype,
+    mean,
+    var,
+    cov,
+    entropy,
+    _logpdf,
+    _rand!,
+    Bernoulli
 
 export BernoulliMulti
 """
@@ -28,7 +34,7 @@ Distribution of a 0-1 vector.
 Due to implementation, the dimensionality of the distribution cannot exceed the
 word size of the machine, i.e. `Sys.WORD_SIZE`.
 """
-struct BernoulliMulti{T<:Real} <: DiscreteMultivariateDistribution
+struct BernoulliMulti{T <: Real} <: DiscreteMultivariateDistribution
     p::Vector{T}
 end
 
@@ -70,8 +76,7 @@ distribution.
 """
 function marginal end
 
-marginal(d::BernoulliMulti{T}, idx::Integer) where T =
-    Bernoulli{T}(prob1(d, idx))
+marginal(d::BernoulliMulti{T}, idx::Integer) where T = Bernoulli{T}(prob1(d, idx))
 
 function marginal(d::BernoulliMulti{T}, idx) where T
     sort!(idx, rev = true)
@@ -157,9 +162,7 @@ end
 
 entropy(d::BernoulliMulti{T}) where T = sum(p -> -p * log(p), d.p, init = zero(T))
 
-function _rand!(rng::AbstractRNG,
-                d::BernoulliMulti,
-                x::AbstractArray{<:Real})
+function _rand!(rng::AbstractRNG, d::BernoulliMulti, x::AbstractArray{<:Real})
     n = length(d)
     m = length(x) ÷ n
 

@@ -11,7 +11,7 @@ using Git: git
 ## Determine which version we are building documentation for
 current_version = try
     gitout = (read ∘ git)(["describe", "--tags", "--abbrev=0", "--exact-match"])
-    version = mapreduce(Char, *, gitout[1:end - 1])
+    version = mapreduce(Char, *, gitout[1:(end - 1)])
     match(r"v\d+\.\d+\.\d+", version).match
 catch
     "dev"
@@ -24,7 +24,8 @@ links = InterLinks(
     "Random" => "https://docs.julialang.org/en/v1/objects.inv",
     "Base" => "https://docs.julialang.org/en/v1/objects.inv",
     "IntervalSets" => "https://juliamath.github.io/IntervalSets.jl/stable/objects.inv",
-    "PythonCall" => "https://juliapy.github.io/PythonCall.jl/stable/objects.inv")
+    "PythonCall" => "https://juliapy.github.io/PythonCall.jl/stable/objects.inv"
+)
 
 writer = Documenter.HTMLWriter.HTML(
     assets = ["assets/custom.css"],
@@ -33,7 +34,8 @@ writer = Documenter.HTMLWriter.HTML(
     collapselevel = 1,
     highlights = ["python", "python-repl"],
     size_threshold_warn = 200 * 1024,
-    size_threshold = nothing)
+    size_threshold = nothing
+)
 
 makedocs(
     build = "build/$current_version",
