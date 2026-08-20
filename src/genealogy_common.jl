@@ -9,15 +9,17 @@ export build!
 Build a genealogy.
 
 # Methods
+
 $(METHODLIST)
 
 # Arguments
-* `winwidth` (`∞`): width of the window of positions to consider
-* `noprogress` (`false`): hide progress bar
-* `Dist` (`Hamming{Int}()`): distance used to compute coalescence probabilities
-* `bias0` (`10`): distance multiplier: higher values favour coalescence events
-  between similar haplotypes
-* `threshold_prop` (`1`): proportion of events to consider when sampling
+
+  - `winwidth` (`∞`): width of the window of positions to consider
+  - `noprogress` (`false`): hide progress bar
+  - `Dist` (`Hamming{Int}()`): distance used to compute coalescence probabilities
+  - `bias0` (`10`): distance multiplier: higher values favour coalescence events
+    between similar haplotypes
+  - `threshold_prop` (`1`): proportion of events to consider when sampling
 """
 function build! end
 
@@ -73,7 +75,7 @@ for G ∈ (:Tree, :Arg)
     ## Other methods.
     @eval isempty($Gargname::$G) = isempty(getfield($Gargname, :sequences))
 
-# -- MRCA --------------------------------------------------------------
+    # -- MRCA --------------------------------------------------------------
 
     @eval function mrca($Gargname::$G, vs, x; buffer = default_buffer())
         μ = mrca($Gargname)
@@ -100,6 +102,5 @@ for G ∈ (:Tree, :Arg)
         μ
     end
 
-    @eval tmrca($Gargname::$G, vs, ωs) =
-        latitude($Gargname, mrca($Gargname, vs, ωs))
+    @eval tmrca($Gargname::$G, vs, ωs) = latitude($Gargname, mrca($Gargname, vs, ωs))
 end

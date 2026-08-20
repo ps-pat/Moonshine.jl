@@ -13,31 +13,46 @@ Coalescent tree.
 See also [`Arg`](@ref).
 
 # Fields
+
 $(TYPEDFIELDS)
 
 # Constructors
+
 !!! info
+
     Random constructor calls [`Sample`](@ref)'s random constructor.
 
 !!! warning
+
     These **do not** actually build the tree. For that, see
     [`build!(rng, tree)`](@ref).
 
 $(METHODLIST)
 
 # Arguments
+
 Arguments are the same as for [`Sample`](@ref).
 """
 struct Tree <: AbstractGenealogy
-    "Tree's topology"
+    """
+    Tree's topology
+    """
     graph::ThreeTree{VertexType}
-    "Vertices' latitudes"
+    """
+    Vertices' latitudes
+    """
     latitudes::Vector{Float64}
-    "Vertices' haplotypes"
+    """
+    Vertices' haplotypes
+    """
     sequences::Vector{Sequence}
-    "Associated [`Sample`](@ref)"
+    """
+    Associated [`Sample`](@ref)
+    """
     sample::Sample
-    "Log-value of the associated pdf"
+    """
+    Log-value of the associated pdf
+    """
     logdensity::Base.RefValue{Double64}
 end
 
@@ -47,10 +62,13 @@ function Tree(sample::Sample)
     sequences = Vector{Sequence}(undef, 2n - 1)
     sequences[1:n] .= sample.H
 
-    Tree(ThreeTree(VertexType(n)),
-         zeros(Float64, n - 1),
-         sequences,
-         sample, Ref(zero(Double64)))
+    Tree(
+        ThreeTree(VertexType(n)),
+        zeros(Float64, n - 1),
+        sequences,
+        sample,
+        Ref(zero(Double64))
+    )
 end
 
 function Tree(rng::AbstractRNG, n, μ, ρ, Ne, sequence_length)
@@ -162,9 +180,12 @@ function descendants_leaves!(vertices, tree::Tree, v; buffer = default_buffer())
     resize!(vertices, vertices_len)
 end
 
-descendants_leaves(tree::Tree, v; buffer = default_buffer()) =
-    descendants_leaves!(Vector{VertexType}(undef, nleaves(tree)), tree, v,
-                                           buffer = buffer)
+descendants_leaves(tree::Tree, v; buffer = default_buffer()) = descendants_leaves!(
+    Vector{VertexType}(undef, nleaves(tree)),
+    tree,
+    v,
+    buffer = buffer
+)
 
 #################
 # Tree Building #
@@ -210,7 +231,6 @@ function _sample_toilet(rng, xs, potential, threshold_prop)
                 z = newz
                 idx = k
             end
-
         end
 
         k += 1
@@ -225,8 +245,13 @@ function _sample_toilet(rng, xs, potential, threshold_prop)
     idx, logπ - logΣπ
 end
 
-function build!(rng, tree::Tree;
-                Dist::Distance = Hamming{Int}(), bias0 = 1, threshold_prop = 1)
+function build!(
+    rng,
+    tree::Tree;
+    Dist::Distance = Hamming{Int}(),
+    bias0 = 1,
+    threshold_prop = 1
+)
     n = nleaves(tree)
     μ = mut_rate(tree, false)
     Ne = effective_pop_size(tree)
@@ -241,22 +266,23 @@ function build!(rng, tree::Tree;
         nlive -= 1
 
         ## Sample second sequence
-        potential2 =
-            let η1 = sequence(tree, v1)
-                function (η)
-                    d = distance(Dist, η1, η)
-                    iszero(d) && return zero(Float64)
-                    d += d * bias0
+        potential2 = let η1 = sequence(tree, v1)
+            function (η)
+                d = distance(Dist, η1, η)
+                iszero(d) && return zero(Float64)
+                d += d * bias0
 
-                    ## Poisson potential with Stirling's approximation
-                    d * (log(μ) - log(d) + 1)
-                end
+                ## Poisson potential with Stirling's approximation
+                d * (log(μ) - log(d) + 1)
             end
+        end
 
-        v2_idx, logprob = _sample_toilet(rng,
-                                         sequences(tree, view(live, 1:nlive)),
-                                         potential2,
-                                         threshold_prop)
+        v2_idx, logprob = _sample_toilet(
+            rng,
+            sequences(tree, view(live, 1:nlive)),
+            potential2,
+            threshold_prop
+        )
         v2 = live[v2_idx]
         v = 2n - nlive
         live[v2_idx] = v
@@ -309,7 +335,8 @@ function validate(tree::Tree)
     ## The root must have 2 children and no parent.
     let r = mrca(tree)
         if !isempty(dads(tree, r)) || length(children(tree, r)) ≠ 2
-            @info "Invalid tree mrca" mrca = r parents = dads(tree, r) children = children(tree, r)
+            @info "Invalid tree mrca" mrca = r parents = dads(tree, r) children =
+                children(tree, r)
             return false
         end
     end
@@ -318,7 +345,8 @@ function validate(tree::Tree)
     for v ∈ setdiff(ivertices(tree), mrca(tree))
         isone(length(dads(tree, v))) && length(children(tree, v)) == 2 && continue
 
-        @info "Invalid internal vertex" vertex = v parents = dads(tree, v) children = children(tree, v)
+        @info "Invalid internal vertex" vertex = v parents = dads(tree, v) children =
+            children(tree, v)
         return false
     end
 
@@ -326,7 +354,8 @@ function validate(tree::Tree)
     for v ∈ leaves(tree)
         isone(length(dads(tree, v))) && isempty(children(tree, v)) && continue
 
-        @info "Invalid leaf" vertex = v parents = dads(tree, v) children = children(tree, v)
+        @info "Invalid leaf" vertex = v parents = dads(tree, v) children =
+            children(tree, v)
         return false
     end
 

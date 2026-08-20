@@ -1,12 +1,4 @@
-import Base: eltype,
-             isempty,
-             empty!,
-             first,
-             length,
-             pop!,
-             push!,
-             show,
-             iterate
+import Base: eltype, isempty, empty!, first, length, pop!, push!, show, iterate
 
 export CheapStack
 """
@@ -15,17 +7,20 @@ export CheapStack
 Simple stack container.
 
 # Functionalities
+
 The following operations are supported:
-* `isempty`
-* `empty!`
-* `first`
-* `length`
-* `pop!`
-* `push!`
+
+  - `isempty`
+  - `empty!`
+  - `first`
+  - `length`
+  - `pop!`
+  - `push!`
 
 For convenience, `CheapStack` implements [the iteration interface](https://docs.julialang.org/en/v1/manual/interfaces/#man-interface-iteration).
 
 # Fields
+
 $(TYPEDFIELDS)
 """
 struct CheapStack{T}
@@ -38,8 +33,7 @@ end
 
 Construct a [`CheapStack`](@ref) that uses an `UnsafeArray` as store.
 """
-CheapStack(store::UnsafeArray{T, 1}) where T =
-    CheapStack{T}(store, Ref{Int}(0))
+CheapStack(store::UnsafeArray{T, 1}) where T = CheapStack{T}(store, Ref{Int}(0))
 
 isempty(s::CheapStack) = iszero(s.ptr[])
 

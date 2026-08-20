@@ -2,9 +2,7 @@ import JSON
 
 _validate_python_class_macro(objname, classname, obj, class) =
     Bool(pybuiltins.isinstance(obj, class)) ||
-    (throw ∘ ArgumentError)(
-        "$objname must be an instance of $classname"
-    )
+    (throw ∘ ArgumentError)("$objname must be an instance of $classname")
 
 macro _validate_python_class(obj, class)
     objname = string(obj)
@@ -13,12 +11,7 @@ macro _validate_python_class(obj, class)
     eclass = esc(class)
 
     quote
-        _validate_python_class_macro(
-            $objname,
-            $classname,
-            $eobj,
-            $eclass
-        )
+        _validate_python_class_macro($objname, $classname, $eobj, $eclass)
     end
 end
 
@@ -44,11 +37,7 @@ function __init_tskit__()
         )
     )
 
-    pyconvert_add_rule(
-        "tskit.trees:Provenance",
-        NamedTuple,
-        convert_provenance
-    )
+    pyconvert_add_rule("tskit.trees:Provenance", NamedTuple, convert_provenance)
 end
 
 function __init_foreign__()

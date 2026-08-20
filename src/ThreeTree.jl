@@ -29,6 +29,7 @@ parent. The order is reversed for recombination vertices.
 Types [`Tree`](@ref) and [`Arg`](@ref) use this data structure.
 
 # Fields
+
 $(TYPEDFIELDS)
 
 # Constructors
@@ -37,10 +38,14 @@ $(METHODLIST)
 
 --*Internal*--
 """
-struct ThreeTree{T<:Integer} <: AbstractSimpleGraph{T}
-    "Number of leaves (vertices with outdegree 0)"
+struct ThreeTree{T <: Integer} <: AbstractSimpleGraph{T}
+    """
+    Number of leaves (vertices with outdegree 0)
+    """
     nleaves::T
-    "Neighborhood data"
+    """
+    Neighborhood data
+    """
     neig::Vector{T}
 end
 
@@ -98,7 +103,7 @@ end
 
     child1, child2 = minmax(child1, child2)
     new_vertex_idx = length(neig) + 1
-    new_vertex =  n + div(new_vertex_idx - n, 3, RoundUp)
+    new_vertex = n + div(new_vertex_idx - n, 3, RoundUp)
 
     idx1 = _add_coalescence_vertex_idx_helper!(tt, child1, new_vertex)
     iszero(idx1) && return false
@@ -130,7 +135,7 @@ end
     n, neig = tt.nleaves, tt.neig
 
     rvertex_idx = length(neig) + 1
-    rvertex =  n + div(rvertex_idx - n, 3, RoundUp)
+    rvertex = n + div(rvertex_idx - n, 3, RoundUp)
 
     s, d = src(redge), dst(redge)
     sidx = _compute_idx(tt, s, d, _is_tt_coalescence)
@@ -147,11 +152,10 @@ end
     n, neig = tt.nleaves, tt.neig
 
     cvertex_idx = length(neig) + 1
-    cvertex =  n + div(cvertex_idx - n, 3, RoundUp)
+    cvertex = n + div(cvertex_idx - n, 3, RoundUp)
 
     s, d = src(cedge), dst(cedge)
-    sidx = s == d ?
-        (zero ∘ eltype)(tt) : _compute_idx(tt, s, d, _is_tt_coalescence)
+    sidx = s == d ? (zero ∘ eltype)(tt) : _compute_idx(tt, s, d, _is_tt_coalescence)
     didx = _compute_idx(tt, d, s, _is_tt_recombination)
 
     push!(neig, d, rvertex)
@@ -226,7 +230,7 @@ edgetype(::ThreeTree) = SimpleEdge{VertexType}
 function edges(tt::ThreeTree)
     n = tt.nleaves
 
-    build_edges = function(s)
+    build_edges = function (s)
         Iterators.map(d -> SimpleEdge(s => d), outneighbors(tt, s))
     end
 
@@ -240,8 +244,10 @@ function edges(tt::ThreeTree)
     rec_it = range(VertexType(2n), nv(tt), step = VertexType(2))
     rec = Iterators.flatmap(build_edges, rec_it)
 
-    Iterators.filter(e -> !(iszero ∘ src)(e) && (!iszero ∘ dst)(e),
-        Iterators.flatten((coal, rec)))
+    Iterators.filter(
+        e -> !(iszero ∘ src)(e) && (!iszero ∘ dst)(e),
+        Iterators.flatten((coal, rec))
+    )
 end
 
 function has_edge(tt::ThreeTree, e)

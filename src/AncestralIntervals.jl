@@ -1,14 +1,32 @@
 import Base:
     ## Iteration
-    iterate, length, size, eltype, IteratorSize,
+    iterate,
+    length,
+    size,
+    eltype,
+    IteratorSize,
     ## Indexing
-    getindex, setindex!, firstindex, lastindex,
+    getindex,
+    setindex!,
+    firstindex,
+    lastindex,
     ## AbstractArrays
-    IndexStyle, deleteat!, resize!,
-    strides, unsafe_convert, elsize,
+    IndexStyle,
+    deleteat!,
+    resize!,
+    strides,
+    unsafe_convert,
+    elsize,
     ## Set operations
-    union!, union, intersect!, intersect, in, issubset, isdisjoint,
-    copy, empty!
+    union!,
+    union,
+    intersect!,
+    intersect,
+    in,
+    issubset,
+    isdisjoint,
+    copy,
+    empty!
 
 import IntervalSets: endpoints, leftendpoint, rightendpoint, width
 
@@ -40,21 +58,25 @@ Implements [the iteration interface](https://docs.julialang.org/en/v1/manual/int
 See also [`AI`](@ref) and [`Ω`](@ref).
 
 # Fields
+
 $(TYPEDFIELDS)
 
 # Constructors
+
 $(METHODLIST)
 
 # Arguments
+
 If `simplify = true`, intervals contained in data are simplified: see
 [`simplify!`](@ref) for details.
 
 !!! warning
+
     Many methods assume `AIs` to be simplified. You might want to disable
     simplification to optimize a sequence of operation, but you should probably
     simplify the final result.
 """
-struct AncestralIntervals{T<:AbstractVector{<:AI}} <: AbstractVector{AI}
+struct AncestralIntervals{T <: AbstractVector{<:AI}} <: AbstractVector{AI}
     data::T
 
     function AncestralIntervals{T}(data::T; simplify = true) where T
@@ -73,9 +95,9 @@ See also [`AI`](@ref) and [`Ω`](@ref).
 """
 const AIs = AncestralIntervals
 
-AIs{V}() where V<:AbstractVector{T} where T = AIs(T[], simplify = false)
+AIs{V}() where V <: AbstractVector{T} where T = AIs(T[], simplify = false)
 
-AIs(data::V; simplify = true) where V<:AbstractVector{T} where T =
+AIs(data::V; simplify = true) where V <: AbstractVector{T} where T =
     AIs{V}(data, simplify = simplify)
 
 #          +----------------------------------------------------------+
@@ -117,8 +139,7 @@ resize!(ai::AIs, n) = resize!(ai.data, n)
 
 strides(ai::AIs) = strides(ai.data)
 
-unsafe_convert(::Type{Ptr{T}}, ai::AIs) where T =
-    unsafe_convert(Ptr{T}, ai.data)
+unsafe_convert(::Type{Ptr{T}}, ai::AIs) where T = unsafe_convert(Ptr{T}, ai.data)
 
 elsize(::Type{AIs{T}}) where T = elsize(T)
 
@@ -140,8 +161,9 @@ empty!(ωs::AIs) = empty!(ωs.data)
 Simplify an [`AIs`](@ref).
 
 Two operations are performed:
-* connected intervals are merged together (see [`isdisconnected`](@ref));
-* intervals are sorted by left endpoint.
+
+  - connected intervals are merged together (see [`isdisconnected`](@ref));
+  - intervals are sorted by left endpoint.
 
 --*Internal*--
 """
@@ -150,7 +172,7 @@ function simplify!(ωs::AIs)
 
     @label loop
     @inbounds for i ∈ length(ωs):-1:2
-        for j ∈ (i-1):-1:1
+        for j ∈ (i - 1):-1:1
             isdisconnected(ωs[i], ωs[j]) && continue
             ωs[j] = ωs[j] ∪ ωs[i]
             deleteat!(ωs, i)
@@ -200,7 +222,7 @@ function union!(ais::AIs, x)
     l = min(leftendpoint(ais[ai_left_idx]), leftendpoint(x))
     r = max(rightendpoint(ais[ai_right_idx]), rightendpoint(x))
     ais[ai_left_idx] = (eltype)(ais)(l, r)
-    deleteat!(ais, (ai_left_idx+1):ai_right_idx)
+    deleteat!(ais, (ai_left_idx + 1):ai_right_idx)
 
     simplify!(ais)
 end
@@ -217,7 +239,7 @@ union(ωs1::AIs, ωs2::AIs) = union!(copy(ωs1), ωs2)
 
 # -- Intersection ------------------------------------------------------
 
-function intersect!(ωs::AIs, ω::T) where T<:AI
+function intersect!(ωs::AIs, ω::T) where T <: AI
     @inbounds @simd for k ∈ eachindex(ωs)
         ωs[k] = ωs[k] ∩ ω
     end
@@ -226,14 +248,17 @@ function intersect!(ωs::AIs, ω::T) where T<:AI
     ωs
 end
 
-function intersect!(ωs1::AIs{<:AbstractVector{T}}, ωs2::AIs;
-                    buffer = default_buffer()) where T
+function intersect!(
+    ωs1::AIs{<:AbstractVector{T}},
+    ωs2::AIs;
+    buffer = default_buffer()
+) where T
     @no_escape buffer begin
         n1, n2 = length(ωs1), length(ωs2)
         ωbuf_ptr = convert(Ptr{T}, @alloc_ptr(n1 * n2 * sizeof(T)))
         ωbuf_len = 0
 
-        @inbounds for k ∈ (n1*n2):-1:1
+        @inbounds for k ∈ (n1 * n2):-1:1
             newω = ωs1[((k - 1) % n1) + 1] ∩ ωs2[((k - 1) ÷ n1) + 1]
             isempty(newω) && continue
             ωbuf_len += 1
@@ -296,9 +321,10 @@ export closure
 Mathematical closure of `x`
 
 # Methods
+
 $(METHODLIST)
 """
 function closure end
 
-closure(ωs::AIs{V}) where V<:AbstractVector{T} where T<:AI{S} where S =
+closure(ωs::AIs{V}) where V <: AbstractVector{T} where T <: AI{S} where S =
     ClosedInterval{S}(endpoints(ωs)...)

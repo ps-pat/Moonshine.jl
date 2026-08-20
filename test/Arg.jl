@@ -12,10 +12,15 @@ let ftree = CoalDensity(2),
     fφ_false = FrechetCoalDensity(φs_false, α = α, pars = pars),
     fφ_true = FrechetCoalDensity(φs_true, α = α, pars = pars)
 
-    @add_predicate(arg_qc, "Weights equal for 2 leaves.",
-                   a2::A2 -> ≈(ftree(a2.arg, logscale = true),
-                                 dens(a2, logscale = true),
-                                 atol = 1e-5))
+    @add_predicate(
+        arg_qc,
+        "Weights equal for 2 leaves.",
+        a2::A2 -> ≈(
+            ftree(a2.arg, logscale = true),
+            dens(a2, logscale = true),
+            atol = 1e-5
+        )
+    )
 
     # @add_predicate(arg_qc, "Density for 2 leaves (φ = 0)",
     #                a2::A2 -> )

@@ -32,7 +32,7 @@ end
 
 function IsChain{G}(fG, haplotypes::AbstractVector{Sequence}, n, seed) where G
     H = typeof(fG)
-    IsChain{G,H}(fG, haplotypes, Vector{G}(undef, n), seed)
+    IsChain{G, H}(fG, haplotypes, Vector{G}(undef, n), seed)
 end
 
 IsChain{G}(fG, haplotypes::AbstractVector{Sequence}, n) where G =
@@ -104,7 +104,8 @@ Importance samping weights of the chain.
 """
 weights(chain, logscale = false) = Iterators.map(chain) do genealogy
     fG = chain.fG
-    log_weight = fG(genealogy, logscale = true) - dens(genealogy, logscale = true)
+    log_weight =
+        fG(genealogy, logscale = true) - dens(genealogy, logscale = true)
     logscale ? log_weight : exp(log_weight)
 end
 

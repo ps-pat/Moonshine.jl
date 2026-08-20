@@ -11,6 +11,7 @@ interactive mode.
 `host` and `port` default to Lorax default values, see [https://lorax.ucsc.edu/documentation](https://lorax.ucsc.edu/documentation).
 
 # Example
+
 ```@example
 arg = Arg(Xoshiro(42), 10, 1e-7, 1e-7, 10000, 1e6)
 build!(Xoshiro(666), arg)

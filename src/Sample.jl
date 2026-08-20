@@ -1,9 +1,4 @@
-import Base: iterate,
-             eltype,
-             length,
-             size,
-             getindex,
-             IndexStyle
+import Base: iterate, eltype, length, size, getindex, IndexStyle
 
 export Sample
 """
@@ -14,52 +9,75 @@ Contain a sample of haplotypes and informations about them.
 Implements [the iteration interface](https://docs.julialang.org/en/v1/manual/interfaces/#man-interface-iteration) and [the array interface](https://docs.julialang.org/en/v1/manual/interfaces/#man-interface-array).
 
 # Fields
+
 $(TYPEDFIELDS)
 
 # Constructors
+
 !!! info
+
     Random constructor sample sequences via [msprime](https://tskit.dev/msprime/docs/stable/intro.html) using a [binary mutation model](https://tskit.dev/msprime/docs/stable/api.html#msprime.BinaryMutationModel).
 
 $(METHODLIST)
 
 where:
-* `H`: haplotypes
-* `μ` (-1): mutation rate
-* `ρ` (-1): recombination rate
-* `Ne` (1): effective population size
-* `positions`: position of markers
-* `sequence_length` (`maximum(positions)`): sequence length
-* `n`: number of sequences
-* `rng`: random number generator
-* `ts`: [Tree Sequence](https://tskit.dev/tskit/docs/latest/python-api.html#the-treesequence-class)
-* `mat`: matrix of haplotypes (haplotypes -> columns)
+
+  - `H`: haplotypes
+  - `μ` (-1): mutation rate
+  - `ρ` (-1): recombination rate
+  - `Ne` (1): effective population size
+  - `positions`: position of markers
+  - `sequence_length` (`maximum(positions)`): sequence length
+  - `n`: number of sequences
+  - `rng`: random number generator
+  - `ts`: [Tree Sequence](https://tskit.dev/tskit/docs/latest/python-api.html#the-treesequence-class)
+  - `mat`: matrix of haplotypes (haplotypes -> columns)
 """
 struct Sample <: AbstractVector{Sequence}
-    "Vector of haplotypes"
+    """
+    Vector of haplotypes
+    """
     H::Vector{Sequence}
-    "Unscaled (per-locus) mutation rate"
+    """
+    Unscaled (per-locus) mutation rate
+    """
     μ::Float64
-    "Unscaled (per-locus) recombination rate"
+    """
+    Unscaled (per-locus) recombination rate
+    """
     ρ::Float64
-    "Effective population size"
+    """
+    Effective population size
+    """
     Ne::Float64
-    "Sequence length"
+    """
+    Sequence length
+    """
     sequence_length::Float64
-    "Marker's positions"
+    """
+    Marker's positions
+    """
     positions::Vector{Float64}
-    "Coefficients for positions' line"
+    """
+    Coefficients for positions' line
+    """
     coefs::NTuple{2, Float64}
 end
 
-function Sample(H::AbstractVector{Sequence};
-                μ = 1e-8, ρ = 0, Ne = 10_000,
-                positions = 1:(length ∘ first)(H),
-                sequence_length = maximum(positions))
+function Sample(
+    H::AbstractVector{Sequence};
+    μ = 1e-8,
+    ρ = 0,
+    Ne = 10_000,
+    positions = 1:(length ∘ first)(H),
+    sequence_length = maximum(positions)
+)
     ## Compute coefficients.
     n = length(positions)
     sum_positions = sum(positions)
 
-    m = (12 * (1:n)' * positions) / ((n - 1) * n * (n + 1)) -
+    m =
+        (12 * (1:n)' * positions) / ((n - 1) * n * (n + 1)) -
         (6 * sum_positions) / ((n - 1) * n)
     b = sum_positions / n - (n + 1) * m / 2
 
@@ -103,8 +121,14 @@ function Sample(treesequence::Py)
         end
     end
 
-    Sample(H, μ = μ, ρ = ρ, Ne = Ne,
-           sequence_length = sequence_length, positions = positions)
+    Sample(
+        H,
+        μ = μ,
+        ρ = ρ,
+        Ne = Ne,
+        sequence_length = sequence_length,
+        positions = positions
+    )
 end
 
 function _random_simple_treesequence(rng, n, μ, ρ, Ne, sequence_length)
@@ -115,19 +139,24 @@ function _random_simple_treesequence(rng, n, μ, ρ, Ne, sequence_length)
     seed = rand(rng, UInt32)
     seed_mutations = rand(rng, UInt32)
 
-    ts = sim_ancestry(random_seed = seed,
-                      samples = n, ploidy = 1,
-                      sequence_length = sequence_length,
-                      recombination_rate = ρ,
-                      population_size = Ne,
-                      record_provenance = true)
+    ts = sim_ancestry(
+        random_seed = seed,
+        samples = n,
+        ploidy = 1,
+        sequence_length = sequence_length,
+        recombination_rate = ρ,
+        population_size = Ne,
+        record_provenance = true
+    )
 
-    mutated_ts = sim_mutations(ts,
-                               random_seed = seed_mutations,
-                               rate = μ,
-                               discrete_genome = false,
-                               model = BinaryMutationModel(false),
-                               record_provenance = true)
+    mutated_ts = sim_mutations(
+        ts,
+        random_seed = seed_mutations,
+        rate = μ,
+        discrete_genome = false,
+        model = BinaryMutationModel(false),
+        record_provenance = true
+    )
 
     mutated_ts
 end
@@ -135,8 +164,13 @@ end
 Sample(rng::AbstractRNG, n, μ, ρ, Ne, sequence_length) =
     (Sample ∘ _random_simple_treesequence)(rng, n, μ, ρ, Ne, sequence_length)
 
-function Sample(mat::BitMatrix, positions::AbstractVector{<:Real};
-                μ = 1e8, ρ = 0, Ne = 10_000)
+function Sample(
+    mat::BitMatrix,
+    positions::AbstractVector{<:Real};
+    μ = 1e8,
+    ρ = 0,
+    Ne = 10_000
+)
     nmarkers, n = size(mat)
     chunks = mat.chunks
 
@@ -156,8 +190,14 @@ function Sample(mat::BitMatrix, positions::AbstractVector{<:Real};
     end
 
     sequence_length = last(positions) - first(positions) + 1
-    Sample(H, μ = μ, ρ = ρ, Ne = Ne,
-           sequence_length = sequence_length, positions = positions)
+    Sample(
+        H,
+        μ = μ,
+        ρ = ρ,
+        Ne = Ne,
+        sequence_length = sequence_length,
+        positions = positions
+    )
 end
 
 ###################
@@ -167,11 +207,19 @@ end
 function show(io::IO, m::MIME"text/plain", sample::Sample)
     invoke(show, Tuple{IO, MIME"text/plain", AbstractVector}, io, m, sample)
 
-    print(io, "\nsize = " * (string ∘ length)(sample) *
-              ", length = " * string(sequence_length(sample)) *
-              ", μ = " * string(sample.μ) *
-              ", ρ = " * string(sample.ρ) *
-              ", Ne = " * string(sample.Ne))
+    print(
+        io,
+        "\nsize = " *
+        (string ∘ length)(sample) *
+        ", length = " *
+        string(sequence_length(sample)) *
+        ", μ = " *
+        string(sample.μ) *
+        ", ρ = " *
+        string(sample.ρ) *
+        ", Ne = " *
+        string(sample.Ne)
+    )
 end
 
 ##################################
@@ -225,7 +273,7 @@ function postoidx(sample::Sample, pos::Float64)
     idx = _postoidx_approx(sample, pos)
 
     ## One iteration of binary search
-    if idxtopos(sample, idx)< pos
+    if idxtopos(sample, idx) < pos
         lidx = idx
     elseif idxtopos(sample, idx) > pos
         ridx = idx
@@ -236,8 +284,12 @@ function postoidx(sample::Sample, pos::Float64)
     ridx <= lidx + 1 && return ridx
 
     ## Interpolation-sequential search
-    idx = lidx + floor(Int, ((pos - idxtopos(sample, lidx)) * (ridx - lidx)) /
-                (idxtopos(sample, ridx) - idxtopos(sample, lidx)))
+    idx =
+        lidx + floor(
+            Int,
+            ((pos - idxtopos(sample, lidx)) * (ridx - lidx)) /
+            (idxtopos(sample, ridx) - idxtopos(sample, lidx))
+        )
     if idxtopos(sample, idx) < pos
         idx += 1
         @inbounds while idxtopos(sample, idx) < pos
@@ -245,7 +297,7 @@ function postoidx(sample::Sample, pos::Float64)
         end
     elseif idxtopos(sample, idx) > pos
         idx -= 1
-       @inbounds while idxtopos(sample, idx) > pos
+        @inbounds while idxtopos(sample, idx) > pos
             idx -= 1
         end
 
@@ -336,11 +388,7 @@ diploids).
 """
 function rec_rate end
 
-let d = Dict(
-    :mut_rate => :(:μ),
-    :rec_rate => :(:ρ),
-    :effective_pop_size => :(:Ne)
-    )
+let d = Dict(:mut_rate => :(:μ), :rec_rate => :(:ρ), :effective_pop_size => :(:Ne))
     for (f, symb) ∈ d
         @eval export $f
 
