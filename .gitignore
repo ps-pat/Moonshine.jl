@@ -5,3 +5,4 @@ work.jl
 .vscode/
 .CondaPkg/
 .ltex/
+Manifest*.toml
