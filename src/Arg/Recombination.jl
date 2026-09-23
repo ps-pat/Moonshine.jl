@@ -194,7 +194,7 @@ Extend ancestral interval of a recombination vertex upstream edges:
 This is mainly intended to be used within
 [`sample_recombination_constrained!`](@ref).
 """
-function gene_conversion!(
+function mco!(
     arg,
     edge,
     otherdad,
@@ -544,7 +544,7 @@ function sample_recombination_constrained!(
     estack,
     vstack;
     buffer = default_buffer(),
-    conversion = true
+    mco = true
 )
     n = length(live_edges)
     nextpos = idxtopos(arg, nextidx)
@@ -657,11 +657,11 @@ function sample_recombination_constrained!(
         breakpoint = rand(rng, breakpoint_dist)
         add_logdensity!(arg, breakpoint_dist, breakpoint)
 
-        if conversion &&
+        if mco &&
            src(cedge) ∈ dads(arg, dst(redge)) &&
            isrecombination(arg, dst(redge))
-            @debug "Gene conversion event" redge cedge breakpoint wildrec
-            gene_conversion!(
+            @debug "Multiple crossing over event" redge cedge breakpoint wildrec
+            mco!(
                 arg,
                 Edge(src(cedge) => dst(redge)),
                 src(redge),
@@ -796,7 +796,7 @@ function build!(
     winwidth = ∞,
     buffer = default_buffer(),
     noprogress = false,
-    conversion = true
+    mco = true
 )
     progenabled = nleaves(arg) * nmarkers(arg) >= 10000000
     prog = Progress(nmarkers(arg), enabled = progenabled && !noprogress)
@@ -830,7 +830,7 @@ function build!(
                     estack,
                     vstack,
                     buffer = buffer,
-                    conversion = conversion
+                    mco = mco
                 )
             end
 
