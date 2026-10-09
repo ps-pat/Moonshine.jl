@@ -494,19 +494,22 @@ function _breakpoint_bounds(arg, rightidx, redge, cedge, buffer)
     bs = blocksize(Sequence)
 
     @inbounds @no_escape buffer begin
-        m = @alloc(UInt, nchunks)
+        mr = @alloc(UInt, nchunks)
+        ancestral_mask!(mr, arg, redge)
+
+        mc = @alloc(UInt, nchunks)
         if has_edge(arg, cedge)
-            ancestral_mask!(m, arg, cedge)
+            ancestral_mask!(mc, arg, cedge)
         else
-            fill!(m, 0xffffffffffffffff)
+            fill!(mc, 0xffffffffffffffff)
         end
 
         iidx = idxinchunk(Sequence, rightidx)
         cidx = chunkidx(Sequence, rightidx)
 
         c = hr[cidx] ⊻ hc[cidx]
-        c &= m[cidx]
-        c |= ~m[cidx]
+        c &= mc[cidx]
+        c |= ~(mc[cidx] & mr[cidx])
         c &= 0xffffffffffffffff >> (bs - iidx + 1)
         Δidx_chunk = leading_zeros(c) - bs + iidx
         Δidx = Δidx_chunk
@@ -518,8 +521,9 @@ function _breakpoint_bounds(arg, rightidx, redge, cedge, buffer)
             cidx -= 1
 
             c = hr[cidx] ⊻ hc[cidx]
-            c &= m[cidx]
-            c |= ~m[cidx]
+            c &= mc[cidx]
+            c |= ~mc[cidx]
+            c |= ~(mc[cidx] & mr[cidx])
 
             Δidx_chunk = leading_zeros(c)
             Δidx += Δidx_chunk
