@@ -16,7 +16,9 @@ function _compute_sequence!(arg, v, mask)
     η
 end
 
-function update_upstream!(arg, v, stack; buffer = default_buffer())
+function update_upstream!(arg, v, vstore_ptr; buffer = default_buffer())
+    stack = CheapStack{VertexType}(vstore_ptr)
+
     @no_escape buffer begin
         push!(stack, v)
 
@@ -99,7 +101,7 @@ function recombine!(
     breakpoint,
     rlat,
     clat,
-    stack;
+    vstore_ptr;
     buffer = default_buffer()
 )
     ## Adjust recombination masks
@@ -158,8 +160,8 @@ function recombine!(
     end
 
     ## Update sequences and ancestral intervals ##
-    update_upstream!(arg, src(redge), stack, buffer = buffer)
-    update_upstream!(arg, src(cedge), stack, buffer = buffer)
+    update_upstream!(arg, src(redge), vstore_ptr, buffer = buffer)
+    update_upstream!(arg, src(cedge), vstore_ptr, buffer = buffer)
 
     push!(arg.recombination_mask, AIsType([Ω(0, breakpoint)]))
     push!(arg.recombination_mask, AIsType([Ω(breakpoint, ∞)]))
@@ -176,10 +178,9 @@ function recombine!(
     buffer = default_buffer()
 )
     @no_escape buffer begin
-        store = @alloc(VertexType, nleaves(arg) + nrecombinations(arg))
-        stack = CheapStack(store)
+        store_ptr = @alloc_ptr((nleaves(arg) + nrecombinations(arg)) * sizeof(VertexType))
 
-        recombine!(arg, redge, cedge, breakpoint, rlat, clat, stack, buffer = buffer)
+        recombine!(arg, redge, cedge, breakpoint, rlat, clat, store_ptr, buffer = buffer)
     end
 end
 
@@ -199,7 +200,7 @@ function mco!(
     edge,
     otherdad,
     breakpoint,
-    vstack;
+    vstore_ptr;
     buffer = default_buffer()
 )
     d = dst(edge)
@@ -209,7 +210,7 @@ function mco!(
     edge = Edge(otherdad => d)
     intersect!(recombination_mask(arg, edge), Ω(0, breakpoint))
 
-    update_upstream!(arg, d, vstack, buffer = buffer)
+    update_upstream!(arg, d, vstore_ptr, buffer = buffer)
 end
 
 #          +----------------------------------------------------------+
@@ -239,8 +240,8 @@ struct EdgesIntervalRec{T, I, E, P} <: AbstractEGIterTD
     bp_pars::P
 end
 
-EdgesIntervalRec(arg, ωs, stack, visited, bp_pars, root) =
-    EIterTD(EdgesIntervalRec, arg, ωs, stack, visited, bp_pars, root)
+EdgesIntervalRec(arg, ωs, store_ptr, visited, bp_pars, root) =
+    EIterTD(EdgesIntervalRec, arg, ωs, store_ptr, visited, bp_pars, root)
 
 function block_predicate(iter::EdgesIntervalRec, e)
     arg = iter.genealogy
@@ -261,7 +262,7 @@ end
 #          |                Constrained Recombinations                |
 #          +----------------------------------------------------------+
 
-function _sample_cedge(rng, arg, rlat, idx, window, coalroot, estack, buffer)
+function _sample_cedge(rng, arg, rlat, idx, window, coalroot, estore_ptr, buffer)
     @no_escape buffer begin
         cedges = @alloc(Edge{VertexType}, ne(arg))
         ws_ptr = convert(Ptr{Float64}, @alloc_ptr(ne(arg) * sizeof(Float64)))
@@ -271,7 +272,7 @@ function _sample_cedge(rng, arg, rlat, idx, window, coalroot, estack, buffer)
         edges_iter = EdgesIntervalRec(
             arg,
             window,
-            estack,
+            estore_ptr,
             visited,
             (idx, idxtopos(arg, idx), rlat),
             src(coalroot)
@@ -321,8 +322,8 @@ struct EdgesIntervalArgCoal{T, I, E, P} <: AbstractEGIterTD
     bp_pars::P
 end
 
-EdgesIntervalArgCoal(arg, ωs, stack, visited, bp_pars, root) =
-    EIterTD(EdgesIntervalArgCoal, arg, ωs, stack, visited, bp_pars, root)
+EdgesIntervalArgCoal(arg, ωs, store_ptr, visited, bp_pars, root) =
+    EIterTD(EdgesIntervalArgCoal, arg, ωs, store_ptr, visited, bp_pars, root)
 
 function block_predicate(iter::EdgesIntervalArgCoal, e)
     arg, nextidx, fedge, min_latitude = iter.bp_pars
@@ -338,7 +339,7 @@ function _sample_clat(
     minlat,
     fedge,
     nextidx,
-    stack;
+    estore_ptr;
     buffer = default_buffer()
 )
     clat = Ref{typeof(minlat)}()
@@ -361,7 +362,7 @@ function _sample_clat(
         edges_iterator = EdgesIntervalArgCoal(
             arg,
             idxtopos(arg, nextidx),
-            stack,
+            estore_ptr,
             visited,
             (arg, nextidx, fedge, first(clats)),
             mrca(arg)
@@ -452,7 +453,7 @@ function _sample_cedge_wild(
     lat,
     fedge,
     nextidx,
-    stack;
+    estore_ptr;
     buffer = default_buffer()
 )
     T = Edge{VertexType}
@@ -466,7 +467,7 @@ function _sample_cedge_wild(
         edges_iterator = EdgesIntervalArgCoal(
             arg,
             nextpos,
-            stack,
+            estore_ptr,
             visited,
             (arg, nextidx, fedge, lat),
             mrca(arg)
@@ -545,8 +546,8 @@ function sample_recombination_constrained!(
     nextidx,
     winwidth,
     live_edges,
-    estack,
-    vstack;
+    estore_ptr,
+    vstore_ptr;
     buffer = default_buffer(),
     mco = true
 )
@@ -624,7 +625,7 @@ function sample_recombination_constrained!(
 
             ## Sample recoalescence location ##
             clat =
-                _sample_clat(rng, arg, rlat, fedge, nextidx, estack, buffer = buffer)
+                _sample_clat(rng, arg, rlat, fedge, nextidx, estore_ptr, buffer = buffer)
 
             if clat > tmrca(arg)
                 cedge = Edge(mrca(arg) => mrca(arg))
@@ -635,7 +636,7 @@ function sample_recombination_constrained!(
                     clat,
                     fedge,
                     nextidx,
-                    estack,
+                    estore_ptr,
                     buffer = buffer
                 )
             end
@@ -649,7 +650,7 @@ function sample_recombination_constrained!(
                 nextidx,
                 window,
                 coalroot,
-                estack,
+                estore_ptr,
                 buffer
             )
             newd = nv(arg) + VertexType(2)
@@ -670,7 +671,7 @@ function sample_recombination_constrained!(
                 Edge(src(cedge) => dst(redge)),
                 src(redge),
                 breakpoint,
-                vstack,
+                vstore_ptr,
                 buffer = buffer
             )
             if !wildrec
@@ -685,7 +686,7 @@ function sample_recombination_constrained!(
                 breakpoint,
                 rlat,
                 clat,
-                vstack,
+                vstore_ptr,
                 buffer = buffer
             )
         end
@@ -794,6 +795,16 @@ end
 #          |                       ARG Building                       |
 #          +----------------------------------------------------------+
 
+function _alloc_stores(arg, estore_ptr = C_NULL, vstore_ptr = C_NULL)
+    estore_ptr = Libc.realloc(estore_ptr, ne(arg) * sizeof(EdgeType))
+    vstore_ptr = Libc.realloc(vstore_ptr, nv(arg) * sizeof(VertexType))
+    if estore_ptr === C_NULL || vstore_ptr === C_NULL
+        throw(OutOfMemoryError())
+    end
+
+    estore_ptr, vstore_ptr
+end
+
 function build!(
     rng,
     arg::Arg;
@@ -805,24 +816,23 @@ function build!(
     progenabled = nleaves(arg) * nmarkers(arg) >= 10000000
     prog = Progress(nmarkers(arg), enabled = progenabled && !noprogress)
 
-    @no_escape buffer begin
-        estore = @alloc(Edge{VertexType}, max(100, ne(arg)))
-        vstore = @alloc(VertexType, max(100, convert(Int, nv(arg))))
-        estack = CheapStack(estore)
-        vstack = CheapStack(vstore)
+    estore_ptr, vstore_ptr = _alloc_stores(arg)
 
+    @no_escape buffer begin
         ## Constrained recombinations ##
         mutation_edges_buffer = ntuple(_ -> Edge{VertexType}[], 8mmn_chunksize)
         nextidx, live_edges = next_inconsistent_idx(
             arg,
             1,
-            estack,
+            estore_ptr,
             mutations_edges = mutation_edges_buffer,
             buffer = buffer
         )
 
         while !iszero(nextidx)
             update!(prog, nextidx)
+
+            estore_ptr, vstore_ptr = _alloc_stores(arg, estore_ptr, vstore_ptr)
 
             while !(isone ∘ length)(live_edges)
                 sample_recombination_constrained!(
@@ -831,8 +841,8 @@ function build!(
                     nextidx,
                     winwidth,
                     live_edges,
-                    estack,
-                    vstack,
+                    estore_ptr,
+                    vstore_ptr,
                     buffer = buffer,
                     mco = mco
                 )
@@ -841,12 +851,15 @@ function build!(
             nextidx, live_edges = next_inconsistent_idx(
                 arg,
                 nextidx + 1,
-                estack,
+                estore_ptr,
                 mutations_edges = mutation_edges_buffer,
                 buffer = buffer
             )
         end
     end
+
+    Libc.free(estore_ptr)
+    Libc.free(vstore_ptr)
 
     finish!(prog)
     arg

@@ -159,8 +159,7 @@ function descendants_leaves!(vertices, tree::Tree, v; buffer = default_buffer())
     vertices_len = 0
 
     @no_escape buffer begin
-        store = @alloc(VertexType, n)
-        stack = CheapStack(store)
+        stack = CheapStack{VertexType}(@alloc_ptr(n * sizeof(VertexType)))
         push!(stack, v)
 
         while !isempty(stack)

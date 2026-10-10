@@ -54,8 +54,8 @@ struct EdgesIterMMN{T, I, E} <: AbstractEGIterBU
     block_parameters::Tuple{Int, mmn_chunktype}
 end
 
-EdgesIterMMN(arg, ωs, stack, visited, roots, chunk0, mask) =
-    EIterBU(EdgesIterMMN, arg, ωs, stack, visited, roots, chunk0, mask)
+EdgesIterMMN(arg, ωs, store_ptr, visited, roots, chunk0, mask) =
+    EIterBU(EdgesIterMMN, arg, ωs, store_ptr, visited, roots, chunk0, mask)
 
 @inbounds function block_predicate(it::EdgesIterMMN, e)
     chunk0, mask = it.block_parameters
@@ -81,9 +81,9 @@ function mutation_edges!(mutations, arg, ω::Ω; buffer = default_buffer())
     end
 
     @no_escape buffer begin
-        store = @alloc(Edge{VertexType}, nleaves(arg) + nrecombinations(arg))
+        store_ptr = @alloc_ptr((nleaves(arg) + nrecombinations(arg)) * sizeof(EdgeType))
         visited = @alloc(Bool, nrecombinations(arg))
-        @inbounds for e ∈ edges_interval(arg, ω, store, visited)
+        @inbounds for e ∈ edges_interval(arg, ω, store_ptr, visited)
             mutationsidx!(
                 mutations,
                 arg,
@@ -104,8 +104,7 @@ function mutation_edges!(mutations, arg, idx::Int; buffer = default_buffer())
     empty!(mutations)
 
     @no_escape buffer begin
-        store = @alloc(VertexType, nleaves(arg))
-        vstack = CheapStack(store)
+        vstack = CheapStack{VertexType}(@alloc_ptr(nleaves(arg) * sizeof(VertexType)))
 
         push!(vstack, mrca(arg))
         while !isempty(vstack)
@@ -148,7 +147,7 @@ once in a given ancestral recombination graph.
 function next_inconsistent_idx(
     arg,
     idx,
-    stack;
+    store_ptr;
     mutations_edges = ntuple(_ -> Edge{VertexType}[], 8mmn_chunksize),
     buffer = default_buffer()
 )
@@ -198,7 +197,7 @@ function next_inconsistent_idx(
             edges_iterator = EdgesIterMMN(
                 arg,
                 base_ω,
-                stack,
+                store_ptr,
                 visited,
                 leaves(arg),
                 idx_chunk,

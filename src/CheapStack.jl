@@ -23,40 +23,63 @@ For convenience, `CheapStack` implements [the iteration interface](https://docs.
 
 $(TYPEDFIELDS)
 """
-struct CheapStack{T}
-    store::UnsafeArray{T, 1}
-    ptr::Base.RefValue{Int}
+mutable struct CheapStack{T}
+    ptr::Ptr{T}
+    beginning::Ptr{T}
 end
 
 """
     $(SIGNATURES)
 
-Construct a [`CheapStack`](@ref) that uses an `UnsafeArray` as store.
+Construct a [`CheapStack`](@ref).
 """
-CheapStack(store::UnsafeArray{T, 1}) where T = CheapStack{T}(store, Ref{Int}(0))
+function CheapStack end
 
-isempty(s::CheapStack) = iszero(s.ptr[])
+CheapStack(ptr) = CheapStack(typeof(ptr)(0), ptr)
 
-empty!(s::CheapStack) = s.ptr = Ref(0)
+CheapStack{T}(ptr::Ptr{Nothing}) where T = CheapStack(unsafe_convert(Ptr{T}, ptr))
 
-first(s::CheapStack) = s.store[s.ptr[]]
+function update_store!(s::CheapStack, ptr)
+    s.beginning = ptr
+    empty!(s)
+end
 
-length(s::CheapStack) = s.ptr[]
+isempty(s::CheapStack) = s.ptr == typeof(s.ptr)(0)
+
+function empty!(s::CheapStack)
+    s.ptr = typeof(s.ptr)(0)
+    s
+end
+
+first(s::CheapStack) = isempty(s) ? nothing : unsafe_load(s.ptr)
+
+length(s::CheapStack) = isempty(s) ?
+    zero(Int) :
+    convert(Int8, s.ptr - s.beginning) ÷ (sizeof ∘ eltype)(s.ptr) + 1
 
 function pop!(s::CheapStack)
-    @inbounds ret = s.store[s.ptr[]]
-    s.ptr[] -= 1
+    isempty(s) && return nothing
 
-    ret
+    x = unsafe_load(s.ptr)
+    if s.ptr == s.beginning
+        empty!(s)
+    else
+        s.ptr -= (sizeof ∘ eltype)(s.ptr)
+    end
+
+    x
 end
 
 push!(s::CheapStack) = s
 
 function push!(s::CheapStack, x)
-    s.ptr[] += 1
+    if isempty(s)
+        s.ptr = s.beginning
+    else
+        s.ptr += (sizeof ∘ eltype)(s.ptr)
+    end
 
-    @inbounds s.store[s.ptr[]] = x
-
+    unsafe_store!(s.ptr, x)
     s
 end
 
@@ -70,18 +93,19 @@ function push!(s::CheapStack, x, y, rest...)
     s
 end
 
+push!(s::CheapStack, x::AbstractArray) = push!(s, x...)
+
 #############
 # Iteration #
 #############
 
-iterate(s::CheapStack) = isempty(s) ? nothing : (first(s.store), 1)
-function iterate(s::CheapStack, state)
-    state += 1
-    state ≤ s.ptr[] ? (s.store[state], state) : nothing
+function iterate(s::CheapStack, state = 1)
+    length(s) >= state || return nothing
+    unsafe_load(s.ptr, 2 - state), state + 1
 end
 
-@generated eltype(::Type{CheapStack{T}}) where T = T
-@generated eltype(::CheapStack{T}) where T = eltype(CheapStack{T})
+# @generated eltype(::Type{CheapStack{T}}) where T = T
+# @generated eltype(::CheapStack{T}) where T = eltype(CheapStack{T})
 
 ###################
 # Pretty printing #

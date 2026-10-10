@@ -1224,7 +1224,26 @@ Subtypes instances can be constructed with a call to [`EIterTD`](@ref).
 """
 abstract type AbstractEGIterTD <: AbstractEGIter end
 
-function EIterTD(EITD, genealogy, ωs, stack::CheapStack, visited, bp_pars, root)
+"""
+    $(METHODLIST)
+
+Helper for constructing instances of subtypes of [`AbstractEGIterTD`](@ref).
+
+# Arguments
+
+  - `EITD`: type to instantiate
+  - `genealogy`: a genealogy
+  - `ωs`: ancestral interval
+  - `store_ptr`: pointer to a container for edges
+  - `visited`: array of boolean values; the kth entry is true if the kth
+    recombination vertex has been visited
+  - `bp_pars`: parameters for the block predicate
+  - `root`: source edge of the initial edge
+
+--*Internal*--
+"""
+function EIterTD(EITD, genealogy, ωs, store_ptr::Ptr, visited, bp_pars, root)
+    stack = CheapStack{EdgeType}(store_ptr)
     fill!(visited, false)
 
     ret = EITD(genealogy, ωs, stack, visited, bp_pars)
@@ -1236,27 +1255,6 @@ function EIterTD(EITD, genealogy, ωs, stack::CheapStack, visited, bp_pars, root
 
     ret
 end
-
-"""
-    $(METHODLIST)
-
-Helper for constructing instances of subtypes of [`AbstractEGIterTD`](@ref).
-
-# Arguments
-
-  - `EITD`: type to instantiate
-  - `genealogy`: a genealogy
-  - `ωs`: ancestral interval
-  - `store`: container for edges
-  - `visited`: array of boolean values; the kth entry is true if the kth
-    recombination vertex has been visited
-  - `bp_pars`: parameters for the block predicate
-  - `root`: source edge of the initial edge
-
---*Internal*--
-"""
-EIterTD(EITD, genealogy, ωs, store::AbstractArray, visited, bp_pars, root) =
-    EIterTD(EITD, genealogy, ωs, CheapStack(store), visited, bp_pars, root)
 
 function iterate(iter::AbstractEGIterTD, state = 1)
     stack = iter.stack
@@ -1313,7 +1311,7 @@ Helper for constructing instances of subtypes of [`AbstractEGIterBU`](@ref).
   - `EIBU`: type to instantiate
   - `genealogy`: a genealogy
   - `ωs`: ancestral interval
-  - `stack`: container for edges
+  - `store_ptr`: pointer to a container for edges
   - `visited`: array of boolean values; the kth entry is true if the kth
     coalescence vertex has been visited
   - `roots`: destination vertices of the initial edges
@@ -1321,7 +1319,8 @@ Helper for constructing instances of subtypes of [`AbstractEGIterBU`](@ref).
 
 --*Internal*--
 """
-function EIterBU(EIBU, genealogy, ωs, stack::CheapStack, visited, roots, bp_pars...)
+function EIterBU(EIBU, genealogy, ωs, store_ptr::Ptr, visited, roots, bp_pars...)
+    stack = CheapStack{EdgeType}(store_ptr)
     fill!(visited, false)
 
     ret = EIBU(genealogy, ωs, stack, visited, bp_pars)
@@ -1335,9 +1334,6 @@ function EIterBU(EIBU, genealogy, ωs, stack::CheapStack, visited, roots, bp_par
 
     ret
 end
-
-EIterBU(EIBU, genealogy, ωs, store::AbstractArray, visited, roots, bp_pars...) =
-    EIterBU(EIBU, genealogy, ωs, CheapStack(store), visited, roots, bp_pars...)
 
 function iterate(iter::AbstractEGIterBU, state = 1)
     stack = iter.stack
@@ -1419,8 +1415,8 @@ struct EdgesInterval{T, I, E} <: AbstractEGIterTD
     min_latitude::Float64
 end
 
-EdgesInterval(genealogy, ωs, stack, visited, min_latitude, root) =
-    EIterTD(EdgesInterval, genealogy, ωs, stack, visited, min_latitude, root)
+EdgesInterval(genealogy, ωs, store_ptr, visited, min_latitude, root) =
+    EIterTD(EdgesInterval, genealogy, ωs, store_ptr, visited, min_latitude, root)
 
 block_predicate(it::EdgesInterval, e) =
     latitude(it.genealogy, src(e)) >= it.min_latitude
@@ -1444,14 +1440,14 @@ function edges_interval end
 edges_interval(
     genealogy,
     ωs,
-    buffer,
+    store_ptr,
     visited;
     root = mrca(genealogy),
     min_latitude = zero(Float64)
 ) = EdgesInterval(
     genealogy,
     ωs,
-    buffer,
+    store_ptr,
     visited,
     convert(Float64, min_latitude),
     root
