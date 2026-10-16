@@ -465,21 +465,29 @@ function distance(::Hamming{T}, h1::Sequence, h2::Sequence) where T
     d
 end
 
+export DiscreteMetric
+"""
+    $(TYPEDEF)
+
+Discrete metric for the `N`th marker. Generalization of [LeftM](@ref).
+"""
+struct DiscreteMetric{N, T} <: Distance{T} end
+
+DiscreteMetric{N}() where N = DiscreteMetric{N, Int64}()
+
+distance(::DiscreteMetric{N, T}, h1::Sequence, h2::Sequence) where {N, T} =
+    convert(T, h1[N] ⊻ h2[N])
+
 export LeftM
 """
     $(TYPEDEF)
 
 Left marker distance.
 
-This is only the discrete metric for the leftmost marker. Technically not a
-metric for haplotypes, but widely used.
+This is only the discrete metric for the leftmost marker. See
+[DiscreteMetric](@ref) for a generalized version.
 """
-struct LeftM{T} <: Distance{T} end
-
-LeftM() = LeftM{Int64}()
-
-distance(::LeftM{T}, h1::Sequence, h2::Sequence) where {T} =
-    convert(T, first(h1) ⊻ first(h2))
+LeftM{T} = DiscreteMetric{1, T}
 
 #############
 # Iteration #
