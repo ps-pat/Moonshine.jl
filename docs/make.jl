@@ -65,9 +65,9 @@ makedocs(
             "Ancestral Intervals" => "reference/AncestralIntervals.md",
             "Sequence" => "reference/Sequence.md",
             "Sample" => "reference/Sample.md",
-            "CheapStack" => "reference/CheapStack.md",
             "ThreeTree" => "reference/ThreeTree.md",
-            "Global Values" => "reference/globals.md"
+            "Global Values" => "reference/globals.md",
+            "Other" => "reference/other.md"
         ]
     ]
 )
