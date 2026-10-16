@@ -1484,17 +1484,11 @@ edgesmap(genealogy) = Dict(reverse.(enumerate(edges(genealogy))))
 
 export nlive!
 """
-    $(FUNCTIONNAME)(counts, genealogy, lats, ωs,[ root] stack; block_predicates = [], buffer = default_buffer())
+    $(FUNCTIONNAME)(counts, genealogy, lats, edges_iterator)
 
-Number of live edges in a (marginal) genealogy at a given latitude.
-
-Counts are stored in `counts`, which is initially filled with zeros.
-
-Graph traversal is performed downward from `root`. It can be either a single
-vertex or a vector of vertices. If it is a vector, the counts from the traversal
-from each root are added together.
-
-`block_predicate` and `stack` are passed directly to [`edges_interval`](@ref).
+Number of live edges in a (marginal) genealogy at specified latitudes. Counts
+are stored in `counts`, which is initially filled with zeros. Graph
+traversal is performed downward from the mrca.
 
 # Methods
 
