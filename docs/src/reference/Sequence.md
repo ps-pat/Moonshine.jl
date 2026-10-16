@@ -25,6 +25,7 @@ ancestral_mask
 ```@docs
 Distance
 Hamming
+DiscreteMetric
 LeftM
 distance
 ```
