@@ -15,7 +15,12 @@ doc-make mode="": doc-check
 
 # Serve documentation locally
 doc-serve:
-    julia --project=docs --eval "import LiveServer; LiveServer.serve(dir = \"docs/build\")"
+    #!/usr/bin/env julia
+    import Pkg
+    Pkg.activate("liveserver", shared = true)
+
+    using LiveServer
+    serve(dir = "docs/build")
 
 # Check markdown files for dumb mistakes
 [working-directory: "docs"]
