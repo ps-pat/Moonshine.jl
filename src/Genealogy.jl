@@ -724,7 +724,7 @@ export dads
     $(FUNCTIONNAME)(genealogy, v[, ωs])
 
 Parents of a vertex, optionally restricted to a marginal genealogy. If you know
-in advance that `v` has a single dad, use [̀̀`dad`](@ref) instead.
+in advance that `v` has a single dad, use [`dad`](@ref) instead.
 
 The following rules are used to decide if an edge `e` is ancestral:
 
@@ -750,7 +750,7 @@ export children
     $(FUNCTIONNAME)(genealogy, v[, ωs])
 
 Children of a vertex, optionally restricted to a marginal genealogy. If you know
-in advance that `v` has a single child, use [̀̀`child`](@ref) instead.
+in advance that `v` has a single child, use [`child`](@ref) instead.
 
 The following rules are used to decide if an edge `e` is ancestral:
 
@@ -1091,7 +1091,7 @@ use this method if you know `v` has a single parent. Otherwise use
 [`dads`](@ref).
 
 See also [`child`](@ref), [`descendants`](@ref), [`ancestors`](@ref) and
-[̀`siblings`](@ref).
+[`siblings`](@ref).
 """
 function dad end
 
@@ -1104,7 +1104,7 @@ use this method if you know `v` has a single child. Otherwise use
 [`children`](@ref).
 
 See also [`dad`](@ref), [`ancestors`](@ref), [`descendants`](@ref) and
-[̀`siblings`](@ref).
+[`siblings`](@ref).
 """
 function child end
 
