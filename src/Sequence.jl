@@ -469,7 +469,7 @@ export DiscreteMetric
 """
     $(TYPEDEF)
 
-Discrete metric for the `N`th marker. Generalization of [LeftM](@ref).
+Discrete metric for the `N`th marker. Generalization of [`LeftM`](@ref).
 """
 struct DiscreteMetric{N, T} <: Distance{T} end
 
@@ -485,7 +485,7 @@ export LeftM
 Left marker distance.
 
 This is only the discrete metric for the leftmost marker. See
-[DiscreteMetric](@ref) for a generalized version.
+[`DiscreteMetric`](@ref) for a generalized version.
 """
 LeftM{T} = DiscreteMetric{1, T}
 

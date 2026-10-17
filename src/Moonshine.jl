@@ -62,7 +62,7 @@ Type of the vertices. Any `genealogy` that is an instance of
 an instance of `AbstractGraphs{VertexType}`
 (see [`Graphs.AbstractGraph`](@extref).)
 
-See also [VertexPtr](@ref).
+See also [`VertexPtr`](@ref).
 
 --*Internal*--
 """
@@ -73,7 +73,7 @@ const VertexType = load_preference("Moonshine", "VertexType", Int32)
 
 Type of the edges.
 
-See also [EdgePtr](@ref).
+See also [`EdgePtr`](@ref).
 
 --*Internal*--
 """
@@ -84,7 +84,7 @@ const EdgeType = Edge{VertexType}
 
 Type of vertex pointers.
 
-See also [VertexType](@ref).
+See also [`VertexType`](@ref).
 
 --*Internal*--
 """
@@ -95,7 +95,7 @@ const VertexPtr = Ptr{VertexType}
 
 Type of edge pointers.
 
-See also [EdgeType](@ref).
+See also [`EdgeType`](@ref).
 
 --*Internal*--
 """

@@ -1291,7 +1291,7 @@ end
 
 Bottom-up edge iteration.
 
-See also [AbstractEGIterTD](@ref), [block_predicate](@ref).
+See also [`AbstractEGIterTD`](@ref), [`block_predicate`](@ref).
 
 # Implementation
 
