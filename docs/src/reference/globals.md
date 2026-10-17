@@ -5,6 +5,9 @@ CurrentModule = Moonshine
 # Global Values
 ```@docs
 VertexType
+EdgeType
+VertexPtr
+EdgePtr
 AI
 mmn_chunksize
 mmn_chunktype
