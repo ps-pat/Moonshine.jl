@@ -1,3 +1,61 @@
+## [0.4.3] - 2026-10-17
+
+### 🚀 Features
+
+- Add support for visualization with `Lorax`
+- `Tree` -> `TreeSequence` conversion
+- Implement `DiscreteMetric` sequence distance
+
+### 🐛 Bug Fixes
+
+- Make test a workspace
+- Make `doc/` a workspace
+- Avoid type 4 recombination events
+
+### 💼 Other
+
+- Fix weird characters in docstring references
+
+### 🚜 Refactor
+
+- Clean up `msprime` & `tskit` initialization
+- Remove unused imports
+- Rename `conversion` -> `mco`
+- Make `CheapStack` storage backend-agnostic
+
+### 📚 Documentation
+
+- Update package repo
+- Put guides in a subdirectory
+- Guide for Lorax
+- Use `DocumenterCodeBlocks`
+- Add signatures to documentation of `ancestral_mask`
+- Remove roadmap from readme
+- List `ts`'s methods in its documentation
+- Update `nlive!`'s docstring
+- Add documentation for `DiscreteMetric`
+- Create new section Reference/Other and move `CheapStack` to it
+- Fix a bunch of references
+- Add documentation for `EdgeType` and `Vertex`/`Edge` `Ptr`
+- More precise docstring for `CheapStack` constructors.
+
+### 🎨 Styling
+
+- Add justfile receipe for code formatting
+- Update formatting rules
+- Format code
+- Format code
+
+### ⚙️ Miscellaneous Tasks
+
+- Remove github workflows
+- Bump Moonshine version in manifest
+- Bump `msprime` & `tskit`
+- Get rid of manifests
+- Ignore `docs/Manifest.toml`
+- Use LiveServer in own environment
+- Bump `DocStringExtension`
+
 ## [0.4.2] - 2026-07-08
 
 ### 🐛 Bug Fixes
