@@ -29,12 +29,11 @@ mutable struct CheapStack{T}
 end
 
 """
-    $(SIGNATURES)
+    $(FUNCTIONNAME)(ptr::Ptr{T})
+    $(FUNCTIONNAME){T}(ptr::Ptr{Nothing})
 
-Construct a [`CheapStack`](@ref).
+Construct a [`CheapStack`](@ref) for storing objects of type `T`.
 """
-function CheapStack end
-
 CheapStack(ptr) = CheapStack(typeof(ptr)(0), ptr)
 
 CheapStack{T}(ptr::Ptr{Nothing}) where T = CheapStack(unsafe_convert(Ptr{T}, ptr))
