@@ -178,9 +178,19 @@ function recombine!(
     buffer = default_buffer()
 )
     @no_escape buffer begin
-        store_ptr = @alloc_ptr((nleaves(arg) + nrecombinations(arg)) * sizeof(VertexType))
+        store_ptr =
+            @alloc_ptr((nleaves(arg) + nrecombinations(arg)) * sizeof(VertexType))
 
-        recombine!(arg, redge, cedge, breakpoint, rlat, clat, store_ptr, buffer = buffer)
+        recombine!(
+            arg,
+            redge,
+            cedge,
+            breakpoint,
+            rlat,
+            clat,
+            store_ptr,
+            buffer = buffer
+        )
     end
 end
 
@@ -195,14 +205,7 @@ Extend ancestral interval of a recombination vertex upstream edges:
 This is mainly intended to be used within
 [`sample_recombination_constrained!`](@ref).
 """
-function mco!(
-    arg,
-    edge,
-    otherdad,
-    breakpoint,
-    vstore_ptr;
-    buffer = default_buffer()
-)
+function mco!(arg, edge, otherdad, breakpoint, vstore_ptr; buffer = default_buffer())
     d = dst(edge)
 
     union!(recombination_mask(arg, edge), Ω(breakpoint, ∞))
@@ -624,8 +627,15 @@ function sample_recombination_constrained!(
             fedge = Edge((first ∘ dads)(arg, src(eu)) => src(eu))
 
             ## Sample recoalescence location ##
-            clat =
-                _sample_clat(rng, arg, rlat, fedge, nextidx, estore_ptr, buffer = buffer)
+            clat = _sample_clat(
+                rng,
+                arg,
+                rlat,
+                fedge,
+                nextidx,
+                estore_ptr,
+                buffer = buffer
+            )
 
             if clat > tmrca(arg)
                 cedge = Edge(mrca(arg) => mrca(arg))

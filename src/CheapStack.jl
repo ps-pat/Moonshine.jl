@@ -52,8 +52,8 @@ end
 
 first(s::CheapStack) = isempty(s) ? nothing : unsafe_load(s.ptr)
 
-length(s::CheapStack) = isempty(s) ?
-    zero(Int) :
+length(s::CheapStack) =
+    isempty(s) ? zero(Int) :
     convert(Int8, s.ptr - s.beginning) ÷ (sizeof ∘ eltype)(s.ptr) + 1
 
 function pop!(s::CheapStack)

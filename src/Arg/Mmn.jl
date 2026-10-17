@@ -81,7 +81,8 @@ function mutation_edges!(mutations, arg, ω::Ω; buffer = default_buffer())
     end
 
     @no_escape buffer begin
-        store_ptr = @alloc_ptr((nleaves(arg) + nrecombinations(arg)) * sizeof(EdgeType))
+        store_ptr =
+            @alloc_ptr((nleaves(arg) + nrecombinations(arg)) * sizeof(EdgeType))
         visited = @alloc(Bool, nrecombinations(arg))
         @inbounds for e ∈ edges_interval(arg, ω, store_ptr, visited)
             mutationsidx!(
@@ -104,7 +105,8 @@ function mutation_edges!(mutations, arg, idx::Int; buffer = default_buffer())
     empty!(mutations)
 
     @no_escape buffer begin
-        vstack = CheapStack{VertexType}(@alloc_ptr(nleaves(arg) * sizeof(VertexType)))
+        vstack =
+            CheapStack{VertexType}(@alloc_ptr(nleaves(arg) * sizeof(VertexType)))
 
         push!(vstack, mrca(arg))
         while !isempty(vstack)
