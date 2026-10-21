@@ -17,7 +17,7 @@ doc-make mode="": doc-check
 doc-serve:
     #!/usr/bin/env julia
     import Pkg
-    Pkg.activate("liveserver", shared = true)
+    Pkg.activate("LiveServerEnv", shared = true)
 
     using LiveServer
     serve(dir = "docs/build")
