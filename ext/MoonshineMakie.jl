@@ -6,8 +6,6 @@ using Moonshine: ancestral_mask
 
 using Graphs
 
-using DataStructures: DefaultDict
-
 using GraphMakie: graphplot
 
 const ∞ = Inf
@@ -31,17 +29,24 @@ function plot_genealogy(
         ifelse.(any.(sequences(genealogy) .& mask), derived_color, wild_color)
 
     ## Hide non ancestral edges and vertices ##
-    ewidth = DefaultDict{Edge{Moonshine.VertexType}, Int}(edge_width)
+    ewidth = Dict{Edge{Moonshine.VertexType}, Int}()
     for e ∈ edges(genealogy)
-        isdisjoint(ancestral_intervals(genealogy, e), ω) || continue
-        ewidth[e] = 0
+        ewidth[e] = isdisjoint(ancestral_intervals(genealogy, e), ω) ? 0 : edge_width
     end
 
-    vsize = DefaultDict{Moonshine.VertexType, Any}(30)
+    vsize = Dict{Moonshine.VertexType, Any}()
+    default_vsize = 30
+    for v ∈ leaves(genealogy)
+        vsize[v] = default_vsize
+    end
+
     for v ∈ ivertices(genealogy)
-        isdisjoint(ancestral_intervals(genealogy, v), ω) || continue
-        vsize[v] = 0
-        vlabels[v] = ""
+        if isdisjoint(ancestral_intervals(genealogy, v), ω)
+            vsize[v] = 0
+            vlabels[v] = ""
+        else
+            vsize[v] = default_vsize
+        end
     end
 
     graphplot(

@@ -29,7 +29,6 @@ UnicodePlots = "b8865327-cd53-5732-bb35-84acbb429228"
 UnsafeArrays = "c4a57d5a-5b31-53a6-b365-19f8c011fbd6"
 
 [weakdeps]
-DataStructures = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
 GraphMakie = "1ecd5474-83a3-4783-bb4f-06765db800d2"
 
 [extensions]
@@ -40,7 +39,6 @@ Bumper = "0.7.1"
 ChunkSplitters = "3.1.2"
 CondaPkg = "0.2.28"
 CpuId = "0.3.1"
-DataStructures = "0.19.3"
 Distributions = "0.25"
 DocStringExtensions = "0.9, 0.10"
 DoubleFloats = "1.4.3"
