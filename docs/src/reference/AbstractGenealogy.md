@@ -85,6 +85,7 @@ isleaf
 isroot
 isivertex
 branchlength
+edge
 edges_interval
 edgesmap
 nlive!

@@ -449,7 +449,7 @@ function ancestral_mask!(
     wipe && wipe!(mask)
 
     for child ∈ children(genealogy, v)
-        e = Edge(v => child)
+        e = edge(v => child)
         ancestral_mask!(mask, genealogy, e, wipe = false)
     end
 
@@ -532,6 +532,23 @@ let genealogy_edge = Expr(:(::), :e, Edge),
         end
     end
 end
+
+export edge
+"""
+    $(FUNCTIONNAME)([T,] p)
+
+Returns a [`Graphs.Edge`](@extref) with incident vertices of the specified
+type. Defaults to [`VertexType`](@ref) if no type is specified.
+
+# Methods
+
+$(METHODLIST)
+"""
+function edge end
+
+edge(T, p) = Edge(convert(T, first(p)), convert(T, last(p)))
+
+edge(p) = edge(VertexType, p)
 
 ############
 # Plotting #
@@ -1173,7 +1190,7 @@ end
 ## Edge functions.
 for fun ∈ [:branchlength, :nmutations]
     @eval function $fun(genealogy, s, d)
-        $fun(genealogy, Edge(s, d))
+        $fun(genealogy, edge(s, d))
     end
 end
 
@@ -1249,7 +1266,7 @@ function EIterTD(EITD, genealogy, ωs, store_ptr::Ptr, visited, bp_pars, root)
     ret = EITD(genealogy, ωs, stack, visited, bp_pars)
 
     for d ∈ children(genealogy, root, ωs)
-        e = Edge(root => d)
+        e = edge(root => d)
         block_predicate(ret, e) && push!(stack, e)
     end
 
@@ -1274,11 +1291,11 @@ function iterate(iter::AbstractEGIterTD, state = 1)
 
         ## Recombination vertex, no need to check ancestrality of downstream
         ## edge
-        newe = Edge(s => child(genealogy, s))
+        newe = edge(s => child(genealogy, s))
         block_predicate(iter, newe) && push!(stack, newe)
     else
         for d ∈ children(genealogy, s, ωs)
-            newe = Edge(s => d)
+            newe = edge(s => d)
             block_predicate(iter, newe) && push!(stack, newe)
         end
     end
@@ -1327,7 +1344,7 @@ function EIterBU(EIBU, genealogy, ωs, store_ptr::Ptr, visited, roots, bp_pars..
 
     for root ∈ roots
         for d ∈ dads(genealogy, root, ωs)
-            e = Edge(d => root)
+            e = edge(d => root)
             block_predicate(ret, e) && push!(stack, e)
         end
     end
@@ -1354,12 +1371,12 @@ function iterate(iter::AbstractEGIterBU, state = 1)
         ## Coalescence vertex, no need to check ancestrality of upstream edge
         d = dad(genealogy, s)
         if !iszero(d)
-            newe = Edge(d => s)
+            newe = edge(d => s)
             block_predicate(iter, newe) && push!(stack, newe)
         end
     else
         for d ∈ dads(genealogy, s, ωs)
-            newe = Edge(d => s)
+            newe = edge(d => s)
             block_predicate(iter, newe) && push!(stack, newe)
         end
     end

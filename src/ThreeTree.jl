@@ -231,7 +231,7 @@ function edges(tt::ThreeTree)
     n = tt.nleaves
 
     build_edges = function (s)
-        Iterators.map(d -> SimpleEdge(s => d), outneighbors(tt, s))
+        Iterators.map(d -> edge(s => d), outneighbors(tt, s))
     end
 
     ## Coalescence vertices

@@ -113,7 +113,7 @@ function mutation_edges!(mutations, arg, idx::Int; buffer = default_buffer())
             s = pop!(vstack)
             for d ∈ children(arg, s, pos)
                 if sequence(arg, d)[idx]
-                    push!(mutations, Edge(s => d))
+                    push!(mutations, edge(s => d))
                     continue
                 end
 

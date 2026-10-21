@@ -147,7 +147,7 @@ let funs = (:dads, :children),
     )
 
     for fun ∈ funs
-        edge = fun == :dads ? :(Edge(u => v)) : :(Edge(v => u))
+        edge = fun == :dads ? :(edge(u => v)) : :(edge(v => u))
         isrecmodifier = fun == :dads ? :! : :identity
 
         for (Argtype, testfun) ∈ typesandtests
@@ -211,7 +211,7 @@ function ancestral_intervals!(ωs, arg::Arg, v::VertexType; wipe = true)
     isleaf(arg, v) && return push!(ωs, Ω(0, ∞))
 
     for child ∈ children(arg, v)
-        ancestral_intervals!(ωs, arg, Edge(v => child), wipe = false)
+        ancestral_intervals!(ωs, arg, edge(v => child), wipe = false)
     end
 
     ωs
@@ -442,11 +442,11 @@ function validate(arg::Arg; check_mutations = true)
         end
 
         ai_children = mapreduce(
-            x -> ancestral_intervals(arg, Edge(v => x)),
+            x -> ancestral_intervals(arg, edge(v => x)),
             ∪,
             children(arg, v)
         )
-        if ancestral_intervals(arg, Edge(dad(arg, v) => v)) != ai_children
+        if ancestral_intervals(arg, edge(dad(arg, v) => v)) != ai_children
             msg =
                 "Coalescence vertex whose parental edge's ancestral interval" *
                 " is not equal to the union of the ancestral intervals of its" *
@@ -468,9 +468,9 @@ function validate(arg::Arg; check_mutations = true)
             flag = false
         end
 
-        # ai_child = ancestral_intervals(arg, Edge(v => child(arg, v)))
-        # ai_right = ancestral_intervals(arg, Edge(rightdad(arg, v) => v))
-        # ai_left = ancestral_intervals(arg, Edge(leftdad(arg ,v) => v))
+        # ai_child = ancestral_intervals(arg, edge(v => child(arg, v)))
+        # ai_right = ancestral_intervals(arg, edge(rightdad(arg, v) => v))
+        # ai_left = ancestral_intervals(arg, edge(leftdad(arg ,v) => v))
         # if ai_child != ai_left ∪ ai_right
         #     msg = "Recombination vertex whose children edge's ancestral" *
         #         " interval is not equal to the union of it parental edges's" *
@@ -486,7 +486,7 @@ function validate(arg::Arg; check_mutations = true)
         h = sequence(arg, v) & ancestral_mask(arg, v)
 
         ref = mapreduce(&, children(arg, v)) do _child
-            sequence(arg, _child) | .~ancestral_mask(arg, Edge(v => _child))
+            sequence(arg, _child) | .~ancestral_mask(arg, edge(v => _child))
         end
         ref &= ancestral_mask(arg, v)
 

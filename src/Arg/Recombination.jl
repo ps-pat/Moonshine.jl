@@ -9,7 +9,7 @@ function _compute_sequence!(arg, v, mask)
     η = sequence(arg, v)
 
     @inbounds for child ∈ children(arg, v)
-        ancestral_mask!(mask, arg, Edge(v, child))
+        ancestral_mask!(mask, arg, edge(v => child))
         η.data.chunks .&= sequence(arg, child).data.chunks .| .~mask
     end
 
@@ -35,7 +35,7 @@ function update_upstream!(arg, v, vstore_ptr; buffer = default_buffer())
                 ## appropriate interval associated with the breakpoint with ωv.
 
                 @inbounds for dad ∈ dads(arg, v)
-                    e = Edge(dad => v)
+                    e = edge(dad => v)
 
                     ancestral_intervals!(ancestral_intervals(arg, e), arg, v)
                     intersect!(
@@ -56,7 +56,7 @@ function update_upstream!(arg, v, vstore_ptr; buffer = default_buffer())
 
                 ## If `v` is a coalescence vertex the ancestral interval of its
                 ## parental edges is simply ωv.
-                e = Edge(dad(arg, v) => v)
+                e = edge(dad(arg, v) => v)
 
                 oldhash = hash(oldhash, (hash ∘ ancestral_intervals)(arg, e))
 
@@ -130,8 +130,8 @@ function recombine!(
     intersect!(ωr_left, Ω(0, breakpoint))
     intersect!(ωr_right, Ω(breakpoint, ∞))
 
-    arg.ancestral_intervals[Edge(rvertex, dst(redge))] = ωr
-    arg.ancestral_intervals[Edge(src(redge), rvertex)] = ωr_left
+    arg.ancestral_intervals[edge(rvertex => dst(redge))] = ωr
+    arg.ancestral_intervals[edge(src(redge) => rvertex)] = ωr_left
     delete!(arg.ancestral_intervals, redge)
 
     ## Ancestral intervals of `cvertex`'s adjacent edges
@@ -143,12 +143,12 @@ function recombine!(
         ωc = ancestral_intervals(arg, cedge)
         delete!(arg.ancestral_intervals, cedge)
         let ωc_new = union(ωc, ωr_right)
-            arg.ancestral_intervals[Edge(src(cedge), cvertex)] = ωc_new
+            arg.ancestral_intervals[edge(src(cedge) => cvertex)] = ωc_new
         end
     end
 
-    arg.ancestral_intervals[Edge(cvertex, rvertex)] = ωr_right
-    arg.ancestral_intervals[Edge(cvertex, dst(cedge))] = ωc
+    arg.ancestral_intervals[edge(cvertex => rvertex)] = ωr_right
+    arg.ancestral_intervals[edge(cvertex => dst(cedge))] = ωc
 
     ## Update topology
     add_rr_event!(graph(arg), redge, cedge)
@@ -205,13 +205,13 @@ Extend ancestral interval of a recombination vertex upstream edges:
 This is mainly intended to be used within
 [`sample_recombination_constrained!`](@ref).
 """
-function mco!(arg, edge, otherdad, breakpoint, vstore_ptr; buffer = default_buffer())
-    d = dst(edge)
+function mco!(arg, e, otherdad, breakpoint, vstore_ptr; buffer = default_buffer())
+    d = dst(e)
 
-    union!(recombination_mask(arg, edge), Ω(breakpoint, ∞))
+    union!(recombination_mask(arg, e), Ω(breakpoint, ∞))
 
-    edge = Edge(otherdad => d)
-    intersect!(recombination_mask(arg, edge), Ω(0, breakpoint))
+    e = edge(otherdad => d)
+    intersect!(recombination_mask(arg, e), Ω(0, breakpoint))
 
     update_upstream!(arg, d, vstore_ptr, buffer = buffer)
 end
@@ -425,7 +425,7 @@ function _find_actual_edge(arg, e, nextidx, lat)
 
     while true
         latitude(arg, dst(e)) <= lat <= latitude(arg, src(e)) && return e
-        e = Edge(dst(e) => (first ∘ children)(arg, dst(e), nextpos))
+        e = edge(dst(e) => (first ∘ children)(arg, dst(e), nextpos))
     end
 end
 
@@ -433,7 +433,7 @@ function _update_live_edges!(live_edges, arg, newd, nextidx)
     nextpos = idxtopos(arg, nextidx)
 
     lastd = newd
-    e = Edge((first ∘ dads)(arg, newd, nextpos) => newd)
+    e = edge((first ∘ dads)(arg, newd, nextpos) => newd)
     @inbounds while !ismutation_edge(arg, e, nextidx)
         for (k, live_edge) ∈ enumerate(live_edges)
             src(live_edge) == src(e) || continue
@@ -443,11 +443,11 @@ function _update_live_edges!(live_edges, arg, newd, nextidx)
 
         lastd = newd
         newd = src(e)
-        e = Edge((first ∘ dads)(arg, newd, nextpos) => newd)
+        e = edge((first ∘ dads)(arg, newd, nextpos) => newd)
     end
 
     e ∈ live_edges || push!(live_edges, e)
-    Edge(dst(e) => lastd)
+    edge(dst(e) => lastd)
 end
 
 function _sample_cedge_wild(
@@ -570,18 +570,18 @@ function sample_recombination_constrained!(
         deleteat!(live_edges, es_idx)
 
         ## Consider the possibility of a wild recombination
-        eu = Edge(0 => 0) # Uncle edge
+        eu = edge(0 => 0) # Uncle edge
         newd = zero(VertexType)
         let dads_e1 = dads(arg, src(e1), nextpos),
             dads_e2 = dads(arg, src(e2), nextpos)
 
             if !isempty(dads_e1) && first(dads_e1) == src(e2)
                 sibling_e1 = sibling(arg, dst(e1), src(e1), (nextpos,))
-                eu = Edge(src(e1) => sibling_e1)
+                eu = edge(src(e1) => sibling_e1)
                 newd = src(e2)
             elseif !isempty(dads_e2) && first(dads_e2) == src(e1)
                 sibling_e2 = sibling(arg, dst(e2), src(e2), (nextpos,))
-                eu = Edge(src(e2) => sibling_e2)
+                eu = edge(src(e2) => sibling_e2)
                 newd = src(e1)
             end
         end
@@ -624,7 +624,7 @@ function sample_recombination_constrained!(
 
         if wildrec
             redge = _find_actual_edge(arg, eu, nextidx, rlat)
-            fedge = Edge((first ∘ dads)(arg, src(eu)) => src(eu))
+            fedge = edge((first ∘ dads)(arg, src(eu)) => src(eu))
 
             ## Sample recoalescence location ##
             clat = _sample_clat(
@@ -638,7 +638,7 @@ function sample_recombination_constrained!(
             )
 
             if clat > tmrca(arg)
-                cedge = Edge(mrca(arg) => mrca(arg))
+                cedge = edge(mrca(arg) => mrca(arg))
             else
                 cedge = _sample_cedge_wild(
                     rng,
@@ -678,7 +678,7 @@ function sample_recombination_constrained!(
             @debug "Multiple crossing over event" redge cedge breakpoint wildrec
             mco!(
                 arg,
-                Edge(src(cedge) => dst(redge)),
+                edge(src(cedge) => dst(redge)),
                 src(redge),
                 breakpoint,
                 vstore_ptr,
@@ -731,7 +731,7 @@ end
 
 #         breakpoint = 0
 #         rlat = 0
-#         redge = Edge(0 => 0)
+#         redge = edge(0 => 0)
 #         valid_redge = false
 #         while !valid_redge
 #             redge_idx = sample(rng, eachindex(redges), ws_redges)
@@ -788,7 +788,7 @@ end
 #         sum_ws = sum(ws_cedges)
 
 #         if clat > tmrca(arg)
-#             cedge = Edge(mrca(arg) => mrca(arg))
+#             cedge = edge(mrca(arg) => mrca(arg))
 #         else sum_ws > 0
 #             cedge = sample(rng, cedges, ProbabilityWeights(ws_cedges, sum_ws))
 #         end
