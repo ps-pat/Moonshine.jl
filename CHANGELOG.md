@@ -1,3 +1,16 @@
+## [0.4.5] - 2026-10-21
+
+### 🚀 Features
+
+- *(MoonshineMakie)* Get rid of dependency on `DataStructures`
+- Implement new convenience function `edge`
+
+### ⚙️ Miscellaneous Tasks
+
+- Add compatibility with v0.9 of `DocStringExtensions`
+- Ignore `.mem` files
+- Update LiveServer shared env name in justfile
+
 ## [0.4.4] - 2026-10-17
 
 ### 🚀 Features
