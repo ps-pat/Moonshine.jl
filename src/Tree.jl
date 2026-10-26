@@ -306,6 +306,11 @@ end
 function validate(tree::Tree)
     n = nleaves(tree)
 
+    for h ∈ sequences(tree)
+        sum(h) <= nmarkers(tree) && continue
+        @info "Sequence with non-zero unused marker" h
+    end
+
     ## Check that the latitudes of the internal vertices is increasing.
     let (last_latitude, latitudes_iterator) = Iterators.peel(latitudes(tree))
         for (k, latitude) ∈ enumerate(latitudes_iterator)

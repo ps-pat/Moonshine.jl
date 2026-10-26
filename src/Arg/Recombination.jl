@@ -6,14 +6,17 @@ using StatsBase: ProbabilityWeights
 
 function _compute_sequence!(arg, v, mask)
     ## This function assumes that every marker is set to 1!
-    η = sequence(arg, v)
+    h = sequence(arg, v)
 
     @inbounds for child ∈ children(arg, v)
         ancestral_mask!(mask, arg, edge(v => child))
-        η.data.chunks .&= sequence(arg, child).data.chunks .| .~mask
+        h.data.chunks .&= sequence(arg, child).data.chunks .| .~mask
     end
 
-    η
+    ancestral_mask!(mask, arg, v)
+    h.data.chunks .&= mask
+
+    h
 end
 
 function update_upstream!(arg, v, vstore_ptr; buffer = default_buffer())

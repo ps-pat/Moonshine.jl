@@ -407,6 +407,11 @@ function validate(arg::Arg; check_mutations = true)
         flag = false
     end
 
+    for h ∈ sequences(arg)
+        sum(h) <= nmarkers(arg) && continue
+        @info "Sequence with non-zero unused marker" h
+    end
+
     ## Leaves ##
     for v ∈ leaves(arg)
         if (!iszero ∘ length)(children(arg, v))
