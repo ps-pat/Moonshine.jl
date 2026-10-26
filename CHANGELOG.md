@@ -1,3 +1,13 @@
+## [0.4.6] - 2026-10-26
+
+### 💼 Other
+
+- Prevent `_compute_sequence!` from creating sequences with no-zero unused marker
+
+### ⚙️ Miscellaneous Tasks
+
+- Change `JuliaFormatter` shared environment in justfile.
+
 ## [0.4.5] - 2026-10-21
 
 ### 🚀 Features
