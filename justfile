@@ -99,7 +99,7 @@ _tag-commit:
 format:
     #!/usr/bin/env julia
     import Pkg
-    Pkg.activate("juliaformatter", shared = true)
+    Pkg.activate("JuliaFormatterEnv", shared = true)
 
     import JuliaFormatter
 
