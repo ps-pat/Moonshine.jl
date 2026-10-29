@@ -578,6 +578,23 @@ function _ts_mutation_table!(table, arg)
     table
 end
 
+function _ts_provenance_table!(table, arg)
+    software = (name = "Moonshine.jl", version = string(pkgversion(Moonshine)))
+    parameters = (
+        command = "ts",
+        ploidy = 1,
+        population_size = effective_pop_size(arg, false),
+        recombination_rate = rec_rate(arg, false),
+        samples = nleaves(arg),
+        sequence_length = sequence_length(arg),
+        mutation_rate = mut_rate(arg, false)
+    )
+    record = (schema_version = "1.0.0", software = software, parameters = parameters)
+
+    table.add_row(JSON.json(record))
+    table
+end
+
 function ts(arg::Arg)
     tables = tskit[].TableCollection(sequence_length = sequence_length(arg))
 
@@ -585,6 +602,7 @@ function ts(arg::Arg)
     _ts_edge_table!(tables.edges, arg)
     _ts_site_table!(tables.sites, arg)
     _ts_mutation_table!(tables.mutations, arg)
+    _ts_provenance_table!(tables.provenances, arg)
 
     tables.sort()
     tables.tree_sequence()

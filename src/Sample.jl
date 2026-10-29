@@ -96,13 +96,26 @@ function Sample(treesequence::Py)
     n = pyconvert(Int, treesequence.num_samples)
 
     for p_py ∈ treesequence.provenances()
-        p = pyconvert(NamedTuple, p_py)
+        record = pyconvert(NamedTuple, p_py).record
+        parameters = record[:parameters]
+        command = parameters[:command]
+        software = record[:software][:name]
 
-        parameters = p.record[:parameters]
-        μ = get(parameters, :rate, μ)
-        ρ = get(parameters, :recombination_rate, ρ)
-        Ne = get(parameters, :population_size, Ne)
-        sequence_length = get(parameters, :sequence_length, sequence_length)
+        if software ∈ ("msprime", "Moonshine.jl")
+            if command ∈ ("sim_ancestry", "ts")
+                ρ = get(parameters, :recombination_rate, ρ)
+                Ne = get(parameters, :population_size, Ne)
+                sequence_length = get(parameters, :sequence_length, sequence_length)
+            end
+            if command == "sim_mutations"
+                μ = get(parameters, :rate, μ)
+            end
+            if command == "ts"
+                μ = get(parameters, :mutation_rate, μ)
+            end
+        else
+            error(lazy"Unknown software, cannot parse provenance")
+        end
     end
 
     ## Retrieve positions and reconstruct sequence.
